@@ -33,5 +33,9 @@ import './observability/llms-txt-freshness.js';
 import './observability/markdown-content-parity.js';
 import './observability/cache-header-hygiene.js';
 
+// Category 8: Authentication
+import './authentication/auth-gate-detection.js';
+import './authentication/auth-alternative-access.js';
+
 export { getCheck, getAllChecks, getChecksSorted } from './registry.js';
 export { extractMarkdownLinks } from './llms-txt/llms-txt-valid.js';

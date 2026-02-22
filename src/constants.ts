@@ -21,6 +21,7 @@ export const CATEGORIES = [
   { id: 'url-stability', name: 'URL Stability and Redirects', order: 5 },
   { id: 'agent-discoverability', name: 'Agent Discoverability Directives', order: 6 },
   { id: 'observability', name: 'Observability and Content Health', order: 7 },
+  { id: 'authentication', name: 'Authentication and Access', order: 8 },
 ] as const;
 
 export const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(

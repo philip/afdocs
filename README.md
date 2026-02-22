@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 19 checks across 7 categories to evaluate how well your docs serve agent consumers.
+afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers.
 
 ## Quick start
 
@@ -28,7 +28,7 @@ llms-txt
   ✓ llms-txt-links-markdown: 50/50 links point to markdown content (100%)
 
 Summary
-  5 passed, 14 skipped (19 total)
+  5 passed, 16 skipped (21 total)
 ```
 
 ## Install
@@ -128,7 +128,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-19 checks across 7 categories. Checks marked with \* are not yet implemented and will return `skip`.
+21 checks across 8 categories. Checks marked with \* are not yet implemented and will return `skip`.
 
 ### Category 1: llms.txt
 
@@ -184,6 +184,13 @@ describe('agent-friendliness', () => {
 | `markdown-content-parity` \* | Whether markdown and HTML versions match       |
 | `cache-header-hygiene` \*    | Whether cache headers allow timely updates     |
 
+### Category 8: Authentication and Access
+
+| Check                        | Description                                                          |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `auth-gate-detection` \*     | Whether documentation pages require authentication to access content |
+| `auth-alternative-access` \* | Whether auth-gated sites provide alternative access paths for agents |
+
 ## Check dependencies
 
 Some checks depend on others. If a dependency doesn't pass, the dependent check is skipped automatically.
@@ -194,6 +201,7 @@ Some checks depend on others. If a dependency doesn't pass, the dependent check 
 - `markdown-code-fence-validity` requires `markdown-url-support` or `content-negotiation`
 - `llms-txt-freshness` requires `llms-txt-exists`
 - `markdown-content-parity` requires `markdown-url-support` or `content-negotiation`
+- `auth-alternative-access` requires `auth-gate-detection` (warn or fail)
 
 ## Responsible use
 
