@@ -1,0 +1,61 @@
+{
+  "name": "afdocs",
+  "version": "0.1.0",
+  "description": "Test your documentation site against the Agent-Friendly Documentation Spec",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "afdocs": "bin/afdocs.mjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./helpers": {
+      "import": "./dist/helpers/index.js",
+      "types": "./dist/helpers/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint . && tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [
+    "agent",
+    "documentation",
+    "testing",
+    "llms-txt",
+    "agent-friendly"
+  ],
+  "files": [
+    "dist/",
+    "bin/"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.13.4",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^10.0.1",
+    "msw": "^2.7.3",
+    "prettier": "^3.8.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^4.0.18"
+  }
+}

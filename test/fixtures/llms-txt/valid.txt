@@ -1,0 +1,17 @@
+# Example Project
+
+> Example Project is a tool for building great software. This index covers all documentation.
+
+## Getting Started
+
+- [Installation](https://example.com/docs/install): How to install Example Project
+- [Quick Start](https://example.com/docs/quickstart): Get up and running in 5 minutes
+
+## API Reference
+
+- [REST API](https://example.com/docs/api/rest): REST API reference
+- [GraphQL API](https://example.com/docs/api/graphql): GraphQL API reference
+
+## Optional
+
+- [Changelog](https://example.com/docs/changelog): Release notes and changelog

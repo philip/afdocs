@@ -1,0 +1,6 @@
+Some project docs without a proper heading.
+
+## Links
+
+- [Page One](https://example.com/one): First page
+- [Page Two](https://example.com/two): Second page
