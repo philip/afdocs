@@ -1,5 +1,8 @@
 # afdocs
 
+[![CI](https://github.com/agent-ecosystem/afdocs/actions/workflows/ci.yml/badge.svg)](https://github.com/agent-ecosystem/afdocs/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/afdocs)](https://www.npmjs.com/package/afdocs)
+
 Test your documentation site against the [Agent-Friendly Documentation Spec](https://agentdocsspec.com).
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
