@@ -52,15 +52,15 @@ afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--format <format>` | `text` | Output format: `text` or `json` |
-| `--checks <ids>` | all | Comma-separated list of check IDs |
-| `--max-concurrency <n>` | `3` | Maximum concurrent HTTP requests |
-| `--request-delay <ms>` | `200` | Delay between requests |
-| `--max-links <n>` | `50` | Maximum links to test in link checks |
-| `--pass-threshold <n>` | `50000` | Size pass threshold (characters) |
-| `--fail-threshold <n>` | `100000` | Size fail threshold (characters) |
+| Option                  | Default  | Description                          |
+| ----------------------- | -------- | ------------------------------------ |
+| `--format <format>`     | `text`   | Output format: `text` or `json`      |
+| `--checks <ids>`        | all      | Comma-separated list of check IDs    |
+| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests     |
+| `--request-delay <ms>`  | `200`    | Delay between requests               |
+| `--max-links <n>`       | `50`     | Maximum links to test in link checks |
+| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)     |
+| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)     |
 
 ### Exit codes
 
@@ -125,61 +125,61 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-19 checks across 7 categories. Checks marked with * are not yet implemented and will return `skip`.
+19 checks across 7 categories. Checks marked with \* are not yet implemented and will return `skip`.
 
 ### Category 1: llms.txt
 
-| Check | Description |
-|-------|-------------|
-| `llms-txt-exists` | Whether `llms.txt` is discoverable at candidate locations |
-| `llms-txt-valid` | Whether `llms.txt` follows the llmstxt.org structure |
-| `llms-txt-size` | Whether `llms.txt` fits within agent truncation limits |
-| `llms-txt-links-resolve` | Whether URLs in `llms.txt` return 200 |
-| `llms-txt-links-markdown` | Whether URLs in `llms.txt` point to markdown content |
+| Check                     | Description                                               |
+| ------------------------- | --------------------------------------------------------- |
+| `llms-txt-exists`         | Whether `llms.txt` is discoverable at candidate locations |
+| `llms-txt-valid`          | Whether `llms.txt` follows the llmstxt.org structure      |
+| `llms-txt-size`           | Whether `llms.txt` fits within agent truncation limits    |
+| `llms-txt-links-resolve`  | Whether URLs in `llms.txt` return 200                     |
+| `llms-txt-links-markdown` | Whether URLs in `llms.txt` point to markdown content      |
 
 ### Category 2: Markdown Availability
 
-| Check | Description |
-|-------|-------------|
-| `markdown-url-support` * | Whether `.md` URL variants return markdown |
-| `content-negotiation` * | Whether the server honors `Accept: text/markdown` |
+| Check                     | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `markdown-url-support` \* | Whether `.md` URL variants return markdown        |
+| `content-negotiation` \*  | Whether the server honors `Accept: text/markdown` |
 
 ### Category 3: Page Size and Truncation Risk
 
-| Check | Description |
-|-------|-------------|
-| `page-size-markdown` * | Character count when served as markdown |
-| `page-size-html` * | Character count of HTML and post-conversion size |
-| `content-start-position` * | How far into the response actual content begins |
+| Check                       | Description                                      |
+| --------------------------- | ------------------------------------------------ |
+| `page-size-markdown` \*     | Character count when served as markdown          |
+| `page-size-html` \*         | Character count of HTML and post-conversion size |
+| `content-start-position` \* | How far into the response actual content begins  |
 
 ### Category 4: Content Structure
 
-| Check | Description |
-|-------|-------------|
-| `tabbed-content-serialization` * | Whether tabbed content creates oversized output |
-| `section-header-quality` * | Whether headers in tabbed sections include context |
-| `markdown-code-fence-validity` * | Whether markdown has unclosed code fences |
+| Check                             | Description                                        |
+| --------------------------------- | -------------------------------------------------- |
+| `tabbed-content-serialization` \* | Whether tabbed content creates oversized output    |
+| `section-header-quality` \*       | Whether headers in tabbed sections include context |
+| `markdown-code-fence-validity` \* | Whether markdown has unclosed code fences          |
 
 ### Category 5: URL Stability and Redirects
 
-| Check | Description |
-|-------|-------------|
-| `http-status-codes` * | Whether error pages return correct status codes |
-| `redirect-behavior` * | Whether redirects are same-host HTTP redirects |
+| Check                  | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| `http-status-codes` \* | Whether error pages return correct status codes |
+| `redirect-behavior` \* | Whether redirects are same-host HTTP redirects  |
 
 ### Category 6: Agent Discoverability Directives
 
-| Check | Description |
-|-------|-------------|
-| `llms-txt-directive` * | Whether pages include a directive pointing to `llms.txt` |
+| Check                   | Description                                              |
+| ----------------------- | -------------------------------------------------------- |
+| `llms-txt-directive` \* | Whether pages include a directive pointing to `llms.txt` |
 
 ### Category 7: Observability and Content Health
 
-| Check | Description |
-|-------|-------------|
-| `llms-txt-freshness` * | Whether `llms.txt` reflects current site state |
-| `markdown-content-parity` * | Whether markdown and HTML versions match |
-| `cache-header-hygiene` * | Whether cache headers allow timely updates |
+| Check                        | Description                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `llms-txt-freshness` \*      | Whether `llms.txt` reflects current site state |
+| `markdown-content-parity` \* | Whether markdown and HTML versions match       |
+| `cache-header-hygiene` \*    | Whether cache headers allow timely updates     |
 
 ## Check dependencies
 
