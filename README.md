@@ -9,6 +9,11 @@ Agents don't use docs like humans. They hit truncation limits, get walls of CSS 
 
 afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 10 are fully implemented; the rest return `skip` until completed.
 
+> **Status: Early development (0.x)**
+> This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
+>
+> Implements [spec v0.1.0](https://agentdocsspec.com/spec) (2026-02-22).
+
 ## Quick start
 
 ```bash
