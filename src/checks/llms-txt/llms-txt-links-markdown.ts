@@ -1,12 +1,15 @@
 import { registerCheck } from '../registry.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
+import { toMdUrls } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
 
 interface LinkMarkdownResult {
   url: string;
   hasMarkdownExtension: boolean;
   servesMarkdown: boolean;
+  status?: number;
   mdVariantAvailable?: boolean;
+  error?: string;
 }
 
 function hasMarkdownExtension(url: string): boolean {
@@ -55,7 +58,8 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   // Sample if too many
   let linksToTest = Array.from(allLinks);
   const totalLinks = linksToTest.length;
-  if (totalLinks > ctx.options.maxLinksToTest) {
+  const wasSampled = totalLinks > ctx.options.maxLinksToTest;
+  if (wasSampled) {
     for (let i = linksToTest.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [linksToTest[i], linksToTest[j]] = [linksToTest[j], linksToTest[i]];
@@ -84,33 +88,48 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
           });
           const contentType = response.headers.get('content-type') ?? '';
           if (contentType.includes('text/markdown')) {
-            return { url, hasMarkdownExtension: false, servesMarkdown: true };
+            return {
+              url,
+              hasMarkdownExtension: false,
+              servesMarkdown: true,
+              status: response.status,
+            };
           }
 
-          // Try .md variant
-          const mdUrl = url.replace(/\/?$/, '.md');
-          try {
-            const mdResponse = await ctx.http.fetch(mdUrl, { method: 'HEAD' });
-            if (mdResponse.ok) {
-              return {
-                url,
-                hasMarkdownExtension: false,
-                servesMarkdown: false,
-                mdVariantAvailable: true,
-              };
+          // Try .md variant candidates
+          const candidates = toMdUrls(url);
+          for (const mdUrl of candidates) {
+            try {
+              const mdResponse = await ctx.http.fetch(mdUrl, { method: 'HEAD' });
+              if (mdResponse.ok) {
+                return {
+                  url,
+                  hasMarkdownExtension: false,
+                  servesMarkdown: false,
+                  status: response.status,
+                  mdVariantAvailable: true,
+                };
+              }
+            } catch {
+              // Try next candidate
             }
-          } catch {
-            // .md variant not available
           }
 
           return {
             url,
             hasMarkdownExtension: false,
             servesMarkdown: false,
+            status: response.status,
             mdVariantAvailable: false,
           };
-        } catch {
-          return { url, hasMarkdownExtension: false, servesMarkdown: false };
+        } catch (err) {
+          return {
+            url,
+            hasMarkdownExtension: false,
+            servesMarkdown: false,
+            status: 0,
+            error: err instanceof Error ? err.message : String(err),
+          };
         }
       }),
     );
@@ -120,14 +139,24 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   const markdownLinks = results.filter((r) => r.hasMarkdownExtension || r.servesMarkdown).length;
   const mdVariantsAvailable = results.filter((r) => r.mdVariantAvailable).length;
   const markdownRate = results.length > 0 ? markdownLinks / results.length : 0;
+  const fetchErrors = results.filter((r) => r.error).length;
+  const rateLimited = results.filter((r) => r.status === 429).length;
+
+  const linkLabel = wasSampled ? 'sampled links' : 'links';
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
   const details: Record<string, unknown> = {
     totalLinks,
     testedLinks: results.length,
+    sampled: wasSampled,
     markdownLinks,
     htmlLinks: results.length - markdownLinks,
     mdVariantsAvailable,
     markdownRate: Math.round(markdownRate * 100),
+    fetchErrors,
+    rateLimited,
   };
 
   if (markdownRate >= 0.9) {
@@ -135,7 +164,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
       id: 'llms-txt-links-markdown',
       category: 'llms-txt',
       status: 'pass',
-      message: `${markdownLinks}/${results.length} links point to markdown content (${Math.round(markdownRate * 100)}%)`,
+      message: `${markdownLinks}/${results.length} ${linkLabel} point to markdown content (${Math.round(markdownRate * 100)}%)${suffix}`,
       details,
     };
   }
@@ -145,7 +174,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
       id: 'llms-txt-links-markdown',
       category: 'llms-txt',
       status: 'warn',
-      message: `Links point to HTML, but ${mdVariantsAvailable} have .md variants available`,
+      message: `Links point to HTML, but ${mdVariantsAvailable} have .md variants available${suffix}`,
       details,
     };
   }
@@ -154,7 +183,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     id: 'llms-txt-links-markdown',
     category: 'llms-txt',
     status: 'fail',
-    message: 'Links point to HTML and no markdown alternatives detected',
+    message: `Links point to HTML and no markdown alternatives detected${suffix}`,
     details,
   };
 }

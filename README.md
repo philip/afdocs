@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers.
+afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 7 are fully implemented; the rest return `skip` until completed.
 
 ## Quick start
 
@@ -27,8 +27,12 @@ llms-txt
   ✓ llms-txt-links-resolve: All 50 tested links resolve (177 total links)
   ✓ llms-txt-links-markdown: 50/50 links point to markdown content (100%)
 
+Markdown Availability
+  ✗ content-negotiation: Server ignores Accept: text/markdown header (0/50 sampled pages return markdown)
+  ✗ markdown-url-support: No sampled pages support .md URLs (0/50 tested)
+
 Summary
-  5 passed, 16 skipped (21 total)
+  5 passed, 2 failed, 14 skipped (21 total)
 ```
 
 ## Install
@@ -128,7 +132,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-21 checks across 8 categories. Checks marked with \* are not yet implemented and will return `skip`.
+21 checks across 8 categories. Checks marked with \* are stub implementations that return `skip`.
 
 ### Category 1: llms.txt
 
@@ -142,10 +146,10 @@ describe('agent-friendliness', () => {
 
 ### Category 2: Markdown Availability
 
-| Check                     | Description                                       |
-| ------------------------- | ------------------------------------------------- |
-| `markdown-url-support` \* | Whether `.md` URL variants return markdown        |
-| `content-negotiation` \*  | Whether the server honors `Accept: text/markdown` |
+| Check                  | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| `markdown-url-support` | Whether `.md` URL variants return markdown        |
+| `content-negotiation`  | Whether the server honors `Accept: text/markdown` |
 
 ### Category 3: Page Size and Truncation Risk
 

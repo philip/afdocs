@@ -1,7 +1,7 @@
 import { registerCheck } from '../registry.js';
-import { extractMarkdownLinks } from '../llms-txt/llms-txt-valid.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
-import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
+import { getPageUrls } from '../../helpers/get-page-urls.js';
+import type { CheckContext, CheckResult } from '../../types.js';
 
 type Classification = 'markdown-with-correct-type' | 'markdown-with-wrong-type' | 'html';
 
@@ -10,34 +10,15 @@ interface PageResult {
   classification: Classification;
   contentType: string;
   status: number;
-}
-
-function getPageUrls(ctx: CheckContext): string[] {
-  const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
-
-  const urls = new Set<string>();
-  for (const file of discovered) {
-    const links = extractMarkdownLinks(file.content);
-    for (const link of links) {
-      if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-        urls.add(link.url);
-      }
-    }
-  }
-
-  if (urls.size === 0) {
-    urls.add(ctx.baseUrl);
-  }
-
-  return Array.from(urls);
+  error?: string;
 }
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'content-negotiation';
   const category = 'markdown-availability';
 
-  let pageUrls = getPageUrls(ctx);
+  const discovery = await getPageUrls(ctx);
+  let pageUrls = discovery.urls;
   const totalPages = pageUrls.length;
 
   // Sample if too many
@@ -89,8 +70,14 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
           }
 
           return { url, classification, contentType, status: response.status };
-        } catch {
-          return { url, classification: 'html', contentType: '', status: 0 };
+        } catch (err) {
+          return {
+            url,
+            classification: 'html',
+            contentType: '',
+            status: 0,
+            error: err instanceof Error ? err.message : String(err),
+          };
         }
       }),
     );
@@ -105,6 +92,13 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   ).length;
   const htmlOnly = results.filter((r) => r.classification === 'html').length;
   const negotiationRate = Math.round((markdownWithCorrectType / results.length) * 100);
+  const fetchErrors = results.filter((r) => r.error).length;
+  const rateLimited = results.filter((r) => r.status === 429).length;
+
+  const pageLabel = wasSampled ? 'sampled pages' : 'pages';
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
   const details: Record<string, unknown> = {
     totalPages,
@@ -114,7 +108,10 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     markdownWithWrongType,
     htmlOnly,
     negotiationRate,
+    fetchErrors,
+    rateLimited,
     pageResults: results,
+    discoveryWarnings: discovery.warnings,
   };
 
   if (negotiationRate >= 90) {
@@ -122,7 +119,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'pass',
-      message: `${markdownWithCorrectType}/${results.length} pages support content negotiation (${negotiationRate}%)`,
+      message: `${markdownWithCorrectType}/${results.length} ${pageLabel} support content negotiation (${negotiationRate}%)${suffix}`,
       details,
     };
   }
@@ -132,7 +129,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'warn',
-      message: `Content negotiation partially supported: ${markdownWithCorrectType} correct type, ${markdownWithWrongType} wrong type, ${htmlOnly} HTML only`,
+      message: `Content negotiation partially supported: ${markdownWithCorrectType} correct type, ${markdownWithWrongType} wrong type, ${htmlOnly} HTML only${suffix}`,
       details,
     };
   }
@@ -141,7 +138,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     id,
     category,
     status: 'fail',
-    message: `Server ignores Accept: text/markdown header (0/${results.length} pages return markdown)`,
+    message: `Server ignores Accept: text/markdown header (0/${results.length} ${pageLabel} return markdown)${suffix}`,
     details,
   };
 }

@@ -74,4 +74,55 @@ Just text, no links.
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('skip');
   });
+
+  it('reports fetch errors in details', async () => {
+    server.use(
+      http.head('http://err.local/page1', () => HttpResponse.error()),
+      http.get('http://err.local/page1', () => HttpResponse.error()),
+    );
+
+    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://err.local/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.details?.fetchErrors).toBe(1);
+    expect(result.message).toContain('failed to fetch');
+  });
+
+  it('reports rate-limited results (HTTP 429)', async () => {
+    server.use(http.head('http://rl.local/page1', () => new HttpResponse(null, { status: 429 })));
+
+    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://rl.local/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.details?.rateLimited).toBe(1);
+    expect(result.message).toContain('rate-limited (HTTP 429)');
+  });
+
+  it('includes "sampled" in message when results are sampled', async () => {
+    const links = Array.from(
+      { length: 5 },
+      (_, i) => `- [Page ${i}](http://sample-rl.local/page${i}): Page ${i}`,
+    ).join('\n');
+
+    for (let i = 0; i < 5; i++) {
+      server.use(
+        http.head(`http://sample-rl.local/page${i}`, () => new HttpResponse(null, { status: 200 })),
+      );
+    }
+
+    const content = `# Test\n> Summary\n## Links\n${links}\n`;
+    const ctx = createContext('http://test.local', { requestDelay: 0, maxLinksToTest: 2 });
+    const discovered: DiscoveredFile[] = [
+      { url: 'http://test.local/llms.txt', content, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    const result = await check.run(ctx);
+    expect(result.details?.sampled).toBe(true);
+    expect(result.message).toContain('sampled links');
+  });
 });

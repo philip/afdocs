@@ -32,6 +32,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     status: number;
     redirected: boolean;
     finalUrl?: string;
+    error?: string;
   }> = [];
 
   for (const url of candidates) {
@@ -50,8 +51,8 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
       if (response.ok && isText) {
         const content = await response.text();
         // Check it's not an HTML error page
-        const looksLikeHtml =
-          content.trimStart().startsWith('<!') || content.trimStart().startsWith('<html');
+        const trimmed = content.trimStart().toLowerCase();
+        const looksLikeHtml = trimmed.startsWith('<!') || trimmed.startsWith('<html');
         if (!looksLikeHtml && content.trim().length > 0) {
           const crossHost = response.redirected && isCrossHostRedirect(url, response.url);
           discovered.push({
@@ -64,23 +65,106 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
           });
         }
       }
-    } catch {
-      checkedUrls.push({ url, status: 0, redirected: false });
+    } catch (err) {
+      checkedUrls.push({
+        url,
+        status: 0,
+        redirected: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
+
+  // When no llms.txt found, check if any candidates redirected cross-host.
+  // If so, try {redirected_origin}/llms.txt as a fallback.
+  const redirectedOrigins: string[] = [];
+  if (discovered.length === 0) {
+    const checkedSet = new Set(checkedUrls.map((u) => u.url));
+    const seenOrigins = new Set<string>();
+    for (const checked of checkedUrls) {
+      if (checked.finalUrl && isCrossHostRedirect(checked.url, checked.finalUrl)) {
+        try {
+          const redirectedOrigin = new URL(checked.finalUrl).origin;
+          const fallbackUrl = `${redirectedOrigin}/llms.txt`;
+          if (!checkedSet.has(fallbackUrl) && !seenOrigins.has(redirectedOrigin)) {
+            seenOrigins.add(redirectedOrigin);
+            checkedSet.add(fallbackUrl);
+            redirectedOrigins.push(redirectedOrigin);
+          }
+        } catch {
+          /* malformed URL */
+        }
+      }
+    }
+
+    for (const redirectedOrigin of redirectedOrigins) {
+      const fallbackUrl = `${redirectedOrigin}/llms.txt`;
+      try {
+        const response = await ctx.http.fetch(fallbackUrl);
+        const contentType = response.headers.get('content-type') ?? '';
+        const isText = contentType.includes('text/');
+
+        checkedUrls.push({
+          url: fallbackUrl,
+          status: response.status,
+          redirected: response.redirected,
+          finalUrl: response.redirected ? response.url : undefined,
+        });
+
+        if (response.ok && isText) {
+          const content = await response.text();
+          const trimmed = content.trimStart().toLowerCase();
+          const looksLikeHtml = trimmed.startsWith('<!') || trimmed.startsWith('<html');
+          if (!looksLikeHtml && content.trim().length > 0) {
+            discovered.push({
+              url: fallbackUrl,
+              content,
+              status: response.status,
+              redirected: false,
+              crossHostRedirect: true,
+            });
+          }
+        }
+      } catch (err) {
+        checkedUrls.push({
+          url: fallbackUrl,
+          status: 0,
+          redirected: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  const fetchErrors = checkedUrls.filter((u) => u.error).length;
+  const rateLimited = checkedUrls.filter((u) => u.status === 429).length;
+
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
   // Store discovered files for downstream checks
   const details: Record<string, unknown> = {
     candidateUrls: checkedUrls,
     discoveredFiles: discovered,
+    fetchErrors,
+    rateLimited,
   };
 
+  if (redirectedOrigins.length > 0) {
+    details.redirectedOrigins = redirectedOrigins;
+  }
+
   if (discovered.length === 0) {
+    const redirectNote =
+      redirectedOrigins.length > 0
+        ? `; candidates redirected cross-host to ${redirectedOrigins.join(', ')} (agents can't follow cross-host redirects)`
+        : '';
     return {
       id: 'llms-txt-exists',
       category: 'llms-txt',
       status: 'fail',
-      message: `No llms.txt found at any candidate location (${candidates.join(', ')})`,
+      message: `No llms.txt found at any candidate location (${candidates.join(', ')})${redirectNote}${suffix}`,
       details,
     };
   }
@@ -92,8 +176,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
       id: 'llms-txt-exists',
       category: 'llms-txt',
       status: 'warn',
-      message:
-        'llms.txt found but only reachable via cross-host redirect (agents may not follow it)',
+      message: `llms.txt found but only reachable via cross-host redirect (agents may not follow it)${suffix}`,
       details,
     };
   }
@@ -110,7 +193,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     id: 'llms-txt-exists',
     category: 'llms-txt',
     status: 'pass',
-    message: `llms.txt found at ${discovered.length} location(s)`,
+    message: `llms.txt found at ${discovered.length} location(s)${suffix}`,
     details,
   };
 }

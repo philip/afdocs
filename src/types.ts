@@ -58,7 +58,7 @@ export interface CheckDefinition {
   id: string;
   category: string;
   description: string;
-  /** Check IDs that must pass before this check runs. Array of arrays for OR-groups. */
+  /** Check IDs that must pass or warn before this check runs. Array of arrays for OR-groups. */
   dependsOn: string[][] | string[];
   run: CheckFunction;
 }

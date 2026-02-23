@@ -23,10 +23,10 @@ function checkDependenciesMet(
 ): boolean {
   const normalized = normalizeDeps(deps);
   for (const orGroup of normalized) {
-    // At least one check in the OR-group must have passed
+    // At least one check in the OR-group must have passed (or warned)
     const anyPassed = orGroup.some((id) => {
       const result = previousResults.get(id);
-      return result?.status === 'pass';
+      return result?.status === 'pass' || result?.status === 'warn';
     });
     if (!anyPassed) return false;
   }

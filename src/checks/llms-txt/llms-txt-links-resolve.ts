@@ -89,6 +89,13 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   const resolved = results.filter((r) => r.ok).length;
   const broken = results.filter((r) => !r.ok);
   const resolveRate = resolved / results.length;
+  const fetchErrors = results.filter((r) => r.error).length;
+  const rateLimited = results.filter((r) => r.status === 429).length;
+
+  const linkLabel = wasSampled ? 'sampled links' : 'links';
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
   const details: Record<string, unknown> = {
     totalLinks,
@@ -97,6 +104,8 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
     resolved,
     broken: broken.map((b) => ({ url: b.url, status: b.status, error: b.error })),
     resolveRate: Math.round(resolveRate * 100),
+    fetchErrors,
+    rateLimited,
   };
 
   if (resolveRate === 1) {
@@ -104,7 +113,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
       id: 'llms-txt-links-resolve',
       category: 'llms-txt',
       status: 'pass',
-      message: `All ${results.length} tested links resolve (${totalLinks} total links)`,
+      message: `All ${results.length} tested ${linkLabel} resolve (${totalLinks} total links)${suffix}`,
       details,
     };
   }
@@ -114,7 +123,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
       id: 'llms-txt-links-resolve',
       category: 'llms-txt',
       status: 'warn',
-      message: `${resolved}/${results.length} links resolve (${Math.round(resolveRate * 100)}%); ${broken.length} broken`,
+      message: `${resolved}/${results.length} ${linkLabel} resolve (${Math.round(resolveRate * 100)}%); ${broken.length} broken${suffix}`,
       details,
     };
   }
@@ -123,7 +132,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
     id: 'llms-txt-links-resolve',
     category: 'llms-txt',
     status: 'fail',
-    message: `Only ${resolved}/${results.length} links resolve (${Math.round(resolveRate * 100)}%); ${broken.length} broken`,
+    message: `Only ${resolved}/${results.length} ${linkLabel} resolve (${Math.round(resolveRate * 100)}%); ${broken.length} broken${suffix}`,
     details,
   };
 }

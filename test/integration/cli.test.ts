@@ -49,6 +49,8 @@ describe('CLI', () => {
     server.use(
       http.get('http://cli-all.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
       http.get('http://cli-all.local/docs/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://cli-all.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://cli-all.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
     );
 
     const { runChecks } = await import('../../src/runner.js');

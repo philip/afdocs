@@ -1,70 +1,23 @@
 import { registerCheck } from '../registry.js';
-import { extractMarkdownLinks } from '../llms-txt/llms-txt-valid.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
-import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
+import { getPageUrls } from '../../helpers/get-page-urls.js';
+import { toMdUrls } from '../../helpers/to-md-urls.js';
+import type { CheckContext, CheckResult } from '../../types.js';
 
 interface PageResult {
   url: string;
   mdUrl: string;
   supported: boolean;
   status: number;
-}
-
-function getPageUrls(ctx: CheckContext): string[] {
-  const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
-
-  const urls = new Set<string>();
-  for (const file of discovered) {
-    const links = extractMarkdownLinks(file.content);
-    for (const link of links) {
-      if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-        urls.add(link.url);
-      }
-    }
-  }
-
-  if (urls.size === 0) {
-    urls.add(ctx.baseUrl);
-  }
-
-  return Array.from(urls);
-}
-
-/**
- * Generate candidate .md URLs for a page URL.
- * If the URL already ends in .md, return it as-is.
- * Otherwise try both `/docs/guide.md` and `/docs/guide/index.md`.
- */
-function toMdUrls(url: string): string[] {
-  const parsed = new URL(url);
-
-  // URL already points to a .md file — use it directly
-  if (parsed.pathname.endsWith('.md')) {
-    return [url];
-  }
-
-  const pathname = parsed.pathname.replace(/\/$/, '') || '';
-  const candidates: string[] = [];
-
-  // /docs/guide.md
-  const directMd = new URL(parsed.toString());
-  directMd.pathname = pathname + '.md';
-  candidates.push(directMd.toString());
-
-  // /docs/guide/index.md
-  const indexMd = new URL(parsed.toString());
-  indexMd.pathname = pathname + '/index.md';
-  candidates.push(indexMd.toString());
-
-  return candidates;
+  error?: string;
 }
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'markdown-url-support';
   const category = 'markdown-availability';
 
-  let pageUrls = getPageUrls(ctx);
+  const discovery = await getPageUrls(ctx);
+  let pageUrls = discovery.urls;
   const totalPages = pageUrls.length;
 
   // Sample if too many
@@ -85,6 +38,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     const batchResults = await Promise.all(
       batch.map(async (url): Promise<PageResult> => {
         const candidates = toMdUrls(url);
+        let lastError: string | undefined;
         for (const mdUrl of candidates) {
           try {
             const response = await ctx.http.fetch(mdUrl);
@@ -101,11 +55,12 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
               });
               return { url, mdUrl, supported: true, status: response.status };
             }
-          } catch {
-            // Try next candidate
+            lastError = undefined; // Got a response, not a fetch error
+          } catch (err) {
+            lastError = err instanceof Error ? err.message : String(err);
           }
         }
-        return { url, mdUrl: candidates[0], supported: false, status: 0 };
+        return { url, mdUrl: candidates[0], supported: false, status: 0, error: lastError };
       }),
     );
     results.push(...batchResults);
@@ -114,6 +69,13 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const mdSupported = results.filter((r) => r.supported).length;
   const mdUnsupported = results.length - mdSupported;
   const supportRate = Math.round((mdSupported / results.length) * 100);
+  const fetchErrors = results.filter((r) => r.error).length;
+  const rateLimited = results.filter((r) => r.status === 429).length;
+
+  const pageLabel = wasSampled ? 'sampled pages' : 'pages';
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
   const details: Record<string, unknown> = {
     totalPages,
@@ -122,7 +84,10 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     mdSupported,
     mdUnsupported,
     supportRate,
+    fetchErrors,
+    rateLimited,
     pageResults: results,
+    discoveryWarnings: discovery.warnings,
   };
 
   if (supportRate >= 90) {
@@ -130,7 +95,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'pass',
-      message: `${mdSupported}/${results.length} pages support .md URLs (${supportRate}%)`,
+      message: `${mdSupported}/${results.length} ${pageLabel} support .md URLs (${supportRate}%)${suffix}`,
       details,
     };
   }
@@ -140,7 +105,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'warn',
-      message: `${mdSupported}/${results.length} pages support .md URLs (${supportRate}%); inconsistent support`,
+      message: `${mdSupported}/${results.length} ${pageLabel} support .md URLs (${supportRate}%); inconsistent support${suffix}`,
       details,
     };
   }
@@ -149,7 +114,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     id,
     category,
     status: 'fail',
-    message: `No pages support .md URLs (0/${results.length} tested)`,
+    message: `No ${pageLabel} support .md URLs (0/${results.length} tested)${suffix}`,
     details,
   };
 }

@@ -30,3 +30,6 @@ export const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
 
 /** Link resolution threshold: warn if > 90% resolve, fail if <= 90%. */
 export const LINK_RESOLVE_THRESHOLD = 0.9;
+
+/** Maximum number of URLs to collect from sitemaps before stopping. */
+export const MAX_SITEMAP_URLS = 500;
