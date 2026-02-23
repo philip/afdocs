@@ -1,12 +1,163 @@
 import { registerCheck } from '../registry.js';
-import type { CheckContext, CheckResult } from '../../types.js';
+import { looksLikeHtml } from '../../helpers/detect-markdown.js';
+import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
+import { htmlToMarkdown } from '../../helpers/html-to-markdown.js';
+import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
 
-async function check(_ctx: CheckContext): Promise<CheckResult> {
+interface PageSizeResult {
+  url: string;
+  htmlCharacters: number;
+  convertedCharacters: number;
+  conversionRatio: number;
+  status: CheckStatus;
+  error?: string;
+}
+
+function sizeStatus(chars: number, pass: number, fail: number): CheckStatus {
+  if (chars <= pass) return 'pass';
+  if (chars <= fail) return 'warn';
+  return 'fail';
+}
+
+function worstStatus(statuses: CheckStatus[]): CheckStatus {
+  if (statuses.includes('fail')) return 'fail';
+  if (statuses.includes('warn')) return 'warn';
+  return 'pass';
+}
+
+function formatSize(chars: number): string {
+  if (chars >= 1000) return `${Math.round(chars / 1000)}K`;
+  return String(chars);
+}
+
+async function check(ctx: CheckContext): Promise<CheckResult> {
+  const id = 'page-size-html';
+  const category = 'page-size';
+  const { pass: passThreshold, fail: failThreshold } = ctx.options.thresholds;
+
+  const {
+    urls: pageUrls,
+    totalPages,
+    sampled: wasSampled,
+    warnings,
+  } = await discoverAndSamplePages(ctx);
+
+  const results: PageSizeResult[] = [];
+  const concurrency = ctx.options.maxConcurrency;
+
+  for (let i = 0; i < pageUrls.length; i += concurrency) {
+    const batch = pageUrls.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map(async (url): Promise<PageSizeResult> => {
+        try {
+          const response = await ctx.http.fetch(url);
+          const body = await response.text();
+          const contentType = response.headers.get('content-type') ?? '';
+          const isMarkdownType =
+            contentType.includes('text/markdown') || contentType.includes('text/plain');
+          const isHtml =
+            !isMarkdownType && (contentType.includes('text/html') || looksLikeHtml(body));
+
+          // Skip conversion if the response is already markdown
+          const html = isHtml ? body : '';
+          const htmlChars = html.length;
+          const converted = isHtml ? htmlToMarkdown(body) : body;
+          const convertedChars = converted.length;
+          const ratio = htmlChars > 0 ? Math.round((1 - convertedChars / htmlChars) * 100) : 0;
+
+          return {
+            url,
+            htmlCharacters: htmlChars,
+            convertedCharacters: convertedChars,
+            conversionRatio: ratio,
+            status: sizeStatus(convertedChars, passThreshold, failThreshold),
+          };
+        } catch (err) {
+          return {
+            url,
+            htmlCharacters: 0,
+            convertedCharacters: 0,
+            conversionRatio: 0,
+            status: 'fail',
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    results.push(...batchResults);
+  }
+
+  const successful = results.filter((r) => !r.error);
+  const fetchErrors = results.filter((r) => r.error).length;
+  const rateLimited = results.filter((r) => r.error && r.error.includes('429')).length;
+
+  if (successful.length === 0) {
+    const suffix = fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '';
+    return {
+      id,
+      category,
+      status: 'fail',
+      message: `Could not fetch any pages to measure${suffix}`,
+      details: {
+        totalPages,
+        testedPages: results.length,
+        sampled: wasSampled,
+        fetchErrors,
+        rateLimited,
+        pageResults: results,
+        discoveryWarnings: warnings,
+      },
+    };
+  }
+
+  const convertedSizes = successful.map((r) => r.convertedCharacters).sort((a, b) => a - b);
+  const median = convertedSizes[Math.floor(convertedSizes.length / 2)];
+  const max = convertedSizes[convertedSizes.length - 1];
+  const avgRatio = Math.round(
+    successful.reduce((sum, r) => sum + r.conversionRatio, 0) / successful.length,
+  );
+
+  const overallStatus = worstStatus(successful.map((r) => r.status));
+  const pageLabel = wasSampled ? 'sampled pages' : 'pages';
+
+  const passBucket = successful.filter((r) => r.status === 'pass').length;
+  const warnBucket = successful.filter((r) => r.status === 'warn').length;
+  const failBucket = successful.filter((r) => r.status === 'fail').length;
+
+  const suffix =
+    (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
+
+  let message: string;
+  if (overallStatus === 'pass') {
+    message = `All ${successful.length} ${pageLabel} convert under ${formatSize(passThreshold)} chars (median ${formatSize(median)}, ${avgRatio}% boilerplate)${suffix}`;
+  } else if (overallStatus === 'warn') {
+    message = `${warnBucket} of ${successful.length} ${pageLabel} convert to ${formatSize(passThreshold)}–${formatSize(failThreshold)} chars (max ${formatSize(max)}, ${avgRatio}% boilerplate)${suffix}`;
+  } else {
+    message = `${failBucket} of ${successful.length} ${pageLabel} convert to over ${formatSize(failThreshold)} chars (max ${formatSize(max)}, ${avgRatio}% boilerplate)${suffix}`;
+  }
+
   return {
-    id: 'page-size-html',
-    category: 'page-size',
-    status: 'skip',
-    message: 'Not yet implemented',
+    id,
+    category,
+    status: overallStatus,
+    message,
+    details: {
+      totalPages,
+      testedPages: results.length,
+      sampled: wasSampled,
+      median,
+      max,
+      avgBoilerplatePercent: avgRatio,
+      passBucket,
+      warnBucket,
+      failBucket,
+      fetchErrors,
+      rateLimited,
+      thresholds: { pass: passThreshold, fail: failThreshold },
+      pageResults: results,
+      discoveryWarnings: warnings,
+    },
   };
 }
 

@@ -1,6 +1,6 @@
 import { registerCheck } from '../registry.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
-import { getPageUrls } from '../../helpers/get-page-urls.js';
+import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 type Classification = 'markdown-with-correct-type' | 'markdown-with-wrong-type' | 'html';
@@ -17,19 +17,12 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'content-negotiation';
   const category = 'markdown-availability';
 
-  const discovery = await getPageUrls(ctx);
-  let pageUrls = discovery.urls;
-  const totalPages = pageUrls.length;
-
-  // Sample if too many
-  const wasSampled = totalPages > ctx.options.maxLinksToTest;
-  if (wasSampled) {
-    for (let i = pageUrls.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pageUrls[i], pageUrls[j]] = [pageUrls[j], pageUrls[i]];
-    }
-    pageUrls = pageUrls.slice(0, ctx.options.maxLinksToTest);
-  }
+  const {
+    urls: pageUrls,
+    totalPages,
+    sampled: wasSampled,
+    warnings,
+  } = await discoverAndSamplePages(ctx);
 
   const results: PageResult[] = [];
   const concurrency = ctx.options.maxConcurrency;
@@ -111,7 +104,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     fetchErrors,
     rateLimited,
     pageResults: results,
-    discoveryWarnings: discovery.warnings,
+    discoveryWarnings: warnings,
   };
 
   if (negotiationRate >= 90) {

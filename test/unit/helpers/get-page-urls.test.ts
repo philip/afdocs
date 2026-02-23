@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import {
   getPageUrls,
+  discoverAndSamplePages,
   parseSitemapUrls,
   parseSitemapDirectives,
 } from '../../../src/helpers/get-page-urls.js';
@@ -102,6 +103,16 @@ describe('getPageUrls', () => {
         status: 'pass',
         message: 'Found',
         details: { discoveredFiles: discovered },
+      });
+    } else {
+      // Mark llms-txt-exists as having run (but failed) so getPageUrls
+      // skips the direct llms.txt fetch and falls through to sitemap.
+      ctx.previousResults.set('llms-txt-exists', {
+        id: 'llms-txt-exists',
+        category: 'llms-txt',
+        status: 'fail',
+        message: 'No llms.txt found',
+        details: { discoveredFiles: [] },
       });
     }
 
@@ -403,6 +414,115 @@ describe('getPageUrls', () => {
     expect(result.warnings[0]).toContain('sitemap-docs.xml.gz');
   });
 
+  // ── Direct llms.txt fetch (standalone mode) ──
+
+  it('fetches llms.txt directly when llms-txt-exists has not run', async () => {
+    const llmsTxt = `# Docs\n> Summary\n## Links\n- [Intro](http://direct-llms.local/docs/intro): Intro\n- [Guide](http://direct-llms.local/docs/guide): Guide\n`;
+    server.use(
+      http.get(
+        'http://direct-llms.local/llms.txt',
+        () => new HttpResponse(llmsTxt, { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+      ),
+      http.get(
+        'http://direct-llms.local/docs/llms.txt',
+        () => new HttpResponse('Not found', { status: 404 }),
+      ),
+    );
+
+    // No llms-txt-exists in previousResults → standalone mode
+    const ctx = createContext('http://direct-llms.local', { requestDelay: 0 });
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://direct-llms.local/docs/intro',
+      'http://direct-llms.local/docs/guide',
+    ]);
+  });
+
+  it('skips llms.txt with non-text content-type in standalone mode', async () => {
+    server.use(
+      http.get(
+        'http://nontext-llms.local/llms.txt',
+        () =>
+          new HttpResponse('# Docs', {
+            status: 200,
+            headers: { 'Content-Type': 'application/octet-stream' },
+          }),
+      ),
+      http.get(
+        'http://nontext-llms.local/docs/llms.txt',
+        () => new HttpResponse('Not found', { status: 404 }),
+      ),
+      http.get('http://nontext-llms.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://nontext-llms.local/sitemap.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+    );
+
+    const ctx = createContext('http://nontext-llms.local', { requestDelay: 0 });
+    const result = await getPageUrls(ctx);
+    // Falls through to baseUrl since llms.txt had wrong content-type
+    expect(result.urls).toEqual(['http://nontext-llms.local']);
+  });
+
+  it('skips llms.txt that returns HTML in standalone mode', async () => {
+    server.use(
+      http.get(
+        'http://html-llms.local/llms.txt',
+        () =>
+          new HttpResponse('<!DOCTYPE html><html><body>Not found</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://html-llms.local/docs/llms.txt',
+        () => new HttpResponse('Not found', { status: 404 }),
+      ),
+      http.get('http://html-llms.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://html-llms.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+    );
+
+    const ctx = createContext('http://html-llms.local', { requestDelay: 0 });
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://html-llms.local']);
+  });
+
+  it('skips empty llms.txt in standalone mode', async () => {
+    server.use(
+      http.get(
+        'http://empty-llms.local/llms.txt',
+        () =>
+          new HttpResponse('   \n  ', { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+      ),
+      http.get(
+        'http://empty-llms.local/docs/llms.txt',
+        () => new HttpResponse('Not found', { status: 404 }),
+      ),
+      http.get('http://empty-llms.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://empty-llms.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+    );
+
+    const ctx = createContext('http://empty-llms.local', { requestDelay: 0 });
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://empty-llms.local']);
+  });
+
+  it('handles llms.txt fetch errors gracefully in standalone mode', async () => {
+    server.use(
+      http.get('http://err-llms.local/llms.txt', () => HttpResponse.error()),
+      http.get('http://err-llms.local/docs/llms.txt', () => HttpResponse.error()),
+      http.get('http://err-llms.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://err-llms.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+    );
+
+    const ctx = createContext('http://err-llms.local', { requestDelay: 0 });
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://err-llms.local']);
+  });
+
+  // ── Existing sitemap tests ──
+
   it('processes non-gzipped sitemaps alongside gzipped ones from robots.txt', async () => {
     server.use(
       http.get(
@@ -430,5 +550,76 @@ describe('getPageUrls', () => {
     expect(result.urls).toEqual(['http://gz-mixed.local/page']);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain('sitemap.xml.gz');
+  });
+});
+
+describe('discoverAndSamplePages', () => {
+  function makeCtx(baseUrl: string, llmsTxtContent: string, opts?: Record<string, unknown>) {
+    const ctx = createContext(baseUrl, { requestDelay: 0, ...opts });
+    const discovered: DiscoveredFile[] = [
+      { url: `${baseUrl}/llms.txt`, content: llmsTxtContent, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+    return ctx;
+  }
+
+  it('returns all URLs without sampling when under maxLinksToTest', async () => {
+    const content = `# Docs\n> Summary\n## Links\n- [A](http://sample.local/a): A\n- [B](http://sample.local/b): B\n`;
+    const ctx = makeCtx('http://sample.local', content, { maxLinksToTest: 10 });
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toEqual(['http://sample.local/a', 'http://sample.local/b']);
+    expect(result.totalPages).toBe(2);
+    expect(result.sampled).toBe(false);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('samples down to maxLinksToTest when over limit', async () => {
+    const links = Array.from(
+      { length: 10 },
+      (_, i) => `- [Page ${i}](http://sample-big.local/page${i}): Page ${i}`,
+    ).join('\n');
+    const content = `# Docs\n> Summary\n## Links\n${links}\n`;
+    const ctx = makeCtx('http://sample-big.local', content, { maxLinksToTest: 3 });
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toHaveLength(3);
+    expect(result.totalPages).toBe(10);
+    expect(result.sampled).toBe(true);
+    // All returned URLs should be from the original set
+    for (const url of result.urls) {
+      expect(url).toMatch(/^http:\/\/sample-big\.local\/page\d$/);
+    }
+  });
+
+  it('passes through warnings from discovery', async () => {
+    server.use(
+      http.get(
+        'http://sample-warn.local/robots.txt',
+        () =>
+          new HttpResponse('Sitemap: http://sample-warn.local/sitemap.xml.gz\n', { status: 200 }),
+      ),
+    );
+
+    // No llms.txt content, so discovery falls through to sitemap (which is gzipped → warning → fallback)
+    const ctx = createContext('http://sample-warn.local', { requestDelay: 0 });
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'fail',
+      message: 'No llms.txt found',
+      details: { discoveredFiles: [] },
+    });
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toEqual(['http://sample-warn.local']);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('gzipped sitemap');
   });
 });

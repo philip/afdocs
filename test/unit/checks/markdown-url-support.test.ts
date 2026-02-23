@@ -35,6 +35,14 @@ describe('markdown-url-support', () => {
         message: 'Found',
         details: { discoveredFiles: discovered },
       });
+    } else {
+      ctx.previousResults.set('llms-txt-exists', {
+        id: 'llms-txt-exists',
+        category: 'llms-txt',
+        status: 'fail',
+        message: 'No llms.txt found',
+        details: { discoveredFiles: [] },
+      });
     }
 
     return ctx;

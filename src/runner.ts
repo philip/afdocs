@@ -67,18 +67,26 @@ export async function runChecks(
       continue;
     }
 
-    // Check dependencies
-    if (check.dependsOn.length > 0 && !checkDependenciesMet(check.dependsOn, ctx.previousResults)) {
-      const result: CheckResult = {
-        id: check.id,
-        category: check.category,
-        status: 'skip',
-        message: 'Skipped: dependency check did not pass',
-        dependsOn: normalizeDeps(check.dependsOn).flat(),
-      };
-      results.push(result);
-      ctx.previousResults.set(check.id, result);
-      continue;
+    // Check dependencies — only skip if at least one dependency actually ran and none passed.
+    // If no dependencies ran at all (e.g. filtered out via --checks), let the check handle
+    // standalone mode itself.
+    if (check.dependsOn.length > 0) {
+      const normalized = normalizeDeps(check.dependsOn);
+      const anyDepRan = normalized.some((orGroup) =>
+        orGroup.some((id) => ctx.previousResults.has(id)),
+      );
+      if (anyDepRan && !checkDependenciesMet(check.dependsOn, ctx.previousResults)) {
+        const result: CheckResult = {
+          id: check.id,
+          category: check.category,
+          status: 'skip',
+          message: 'Skipped: dependency check did not pass',
+          dependsOn: normalized.flat(),
+        };
+        results.push(result);
+        ctx.previousResults.set(check.id, result);
+        continue;
+      }
     }
 
     try {

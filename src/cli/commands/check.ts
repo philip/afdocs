@@ -17,8 +17,15 @@ export function registerCheckCommand(program: Command): void {
     .option('--max-links <n>', 'Maximum links to test', '50')
     .option('--pass-threshold <n>', 'Pass threshold in characters', '50000')
     .option('--fail-threshold <n>', 'Fail threshold in characters', '100000')
+    .option('-v, --verbose', 'Show per-page details for checks with issues')
     .action(async (url: string, opts: Record<string, string>) => {
       const checkIds = opts.checks ? opts.checks.split(',').map((s) => s.trim()) : undefined;
+      const isText = opts.format !== 'json';
+
+      if (isText) {
+        const domain = new URL(url).hostname;
+        process.stderr.write(`Running checks on ${domain}...\n`);
+      }
 
       const report = await runChecks(url, {
         checkIds,
@@ -31,7 +38,10 @@ export function registerCheckCommand(program: Command): void {
         },
       });
 
-      const output = opts.format === 'json' ? formatJson(report) : formatText(report);
+      const output =
+        opts.format === 'json'
+          ? formatJson(report)
+          : formatText(report, { verbose: !!opts.verbose });
       process.stdout.write(output + '\n');
 
       // Exit 1 if any check failed

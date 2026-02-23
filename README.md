@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 7 are fully implemented; the rest return `skip` until completed.
+afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 10 are fully implemented; the rest return `skip` until completed.
 
 ## Quick start
 
@@ -59,15 +59,16 @@ afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80
 
 ### Options
 
-| Option                  | Default  | Description                          |
-| ----------------------- | -------- | ------------------------------------ |
-| `--format <format>`     | `text`   | Output format: `text` or `json`      |
-| `--checks <ids>`        | all      | Comma-separated list of check IDs    |
-| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests     |
-| `--request-delay <ms>`  | `200`    | Delay between requests               |
-| `--max-links <n>`       | `50`     | Maximum links to test in link checks |
-| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)     |
-| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)     |
+| Option                  | Default  | Description                                  |
+| ----------------------- | -------- | -------------------------------------------- |
+| `--format <format>`     | `text`   | Output format: `text` or `json`              |
+| `-v, --verbose`         |          | Show per-page details for checks with issues |
+| `--checks <ids>`        | all      | Comma-separated list of check IDs            |
+| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests             |
+| `--request-delay <ms>`  | `200`    | Delay between requests                       |
+| `--max-links <n>`       | `50`     | Maximum links to test in link checks         |
+| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)             |
+| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)             |
 
 ### Exit codes
 
@@ -153,11 +154,11 @@ describe('agent-friendliness', () => {
 
 ### Category 3: Page Size and Truncation Risk
 
-| Check                       | Description                                      |
-| --------------------------- | ------------------------------------------------ |
-| `page-size-markdown` \*     | Character count when served as markdown          |
-| `page-size-html` \*         | Character count of HTML and post-conversion size |
-| `content-start-position` \* | How far into the response actual content begins  |
+| Check                    | Description                                      |
+| ------------------------ | ------------------------------------------------ |
+| `page-size-markdown`     | Character count when served as markdown          |
+| `page-size-html`         | Character count of HTML and post-conversion size |
+| `content-start-position` | How far into the response actual content begins  |
 
 ### Category 4: Content Structure
 
