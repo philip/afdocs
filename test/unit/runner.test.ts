@@ -68,7 +68,7 @@ describe('runner', () => {
 
   it('stub checks return skip with "Not yet implemented"', async () => {
     const report = await runChecks('http://stub.local', {
-      checkIds: ['markdown-url-support'],
+      checkIds: ['auth-gate-detection'],
       requestDelay: 0,
     });
 

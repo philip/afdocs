@@ -47,6 +47,7 @@ export function createContext(baseUrl: string, options?: Partial<RunnerOptions>)
       maxConcurrency: merged.maxConcurrency,
     }),
     options: merged,
+    pageCache: new Map(),
   };
 }
 

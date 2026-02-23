@@ -9,6 +9,14 @@ export interface CheckResult {
   dependsOn?: string[];
 }
 
+export interface CachedPage {
+  url: string;
+  markdown?: {
+    content: string;
+    source: 'md-url' | 'content-negotiation';
+  };
+}
+
 export interface CheckContext {
   /** The base URL being checked (as provided by the user). */
   baseUrl: string;
@@ -20,6 +28,8 @@ export interface CheckContext {
   http: HttpClient;
   /** Runtime options. */
   options: CheckOptions;
+  /** Cached page content, keyed by original page URL. */
+  pageCache: Map<string, CachedPage>;
 }
 
 export interface CheckOptions {
