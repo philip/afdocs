@@ -1,7 +1,5 @@
 import { registerCheck } from '../registry.js';
-import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
-import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
-import { toMdUrls } from '../../helpers/to-md-urls.js';
+import { getMarkdownContent } from '../../helpers/get-markdown-content.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
 
 interface PageSizeResult {
@@ -9,8 +7,7 @@ interface PageSizeResult {
   mdUrl: string;
   characters: number;
   status: CheckStatus;
-  source: 'cache' | 'fallback';
-  error?: string;
+  source: string;
 }
 
 function sizeStatus(chars: number, pass: number, fail: number): CheckStatus {
@@ -25,180 +22,65 @@ function worstStatus(statuses: CheckStatus[]): CheckStatus {
   return 'pass';
 }
 
+function formatSize(chars: number): string {
+  if (chars >= 1000) return `${Math.round(chars / 1000)}K`;
+  return String(chars);
+}
+
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'page-size-markdown';
   const category = 'page-size';
   const { pass: passThreshold, fail: failThreshold } = ctx.options.thresholds;
 
-  // Check if dependency checks ran
-  const mdUrlResult = ctx.previousResults.get('markdown-url-support');
-  const cnResult = ctx.previousResults.get('content-negotiation');
-  const depRan = mdUrlResult || cnResult;
+  const mdResult = await getMarkdownContent(ctx);
 
-  if (depRan) {
-    // At least one dependency check ran. Did either pass or warn?
-    const depPassed =
-      (mdUrlResult && (mdUrlResult.status === 'pass' || mdUrlResult.status === 'warn')) ||
-      (cnResult && (cnResult.status === 'pass' || cnResult.status === 'warn'));
-
-    if (!depPassed) {
-      return {
-        id,
-        category,
-        status: 'skip',
-        message: 'Site does not serve markdown; skipping markdown size check',
-      };
-    }
-
-    // Build a map from page URL → markdown URL using dependency results
-    const mdUrlMap = new Map<string, string>();
-    const mdUrlPages = (mdUrlResult?.details as Record<string, unknown>)?.pageResults as
-      | Array<{ url: string; mdUrl: string; supported: boolean }>
-      | undefined;
-    if (mdUrlPages) {
-      for (const p of mdUrlPages) {
-        if (p.supported) mdUrlMap.set(p.url, p.mdUrl);
-      }
-    }
-
-    // Use cached pages
-    const pageResults: PageSizeResult[] = [];
-    for (const [, cached] of ctx.pageCache) {
-      if (cached.markdown) {
-        const chars = cached.markdown.content.length;
-        const resolvedMdUrl =
-          cached.markdown.source === 'md-url'
-            ? (mdUrlMap.get(cached.url) ?? cached.url)
-            : cached.url;
-        pageResults.push({
-          url: cached.url,
-          mdUrl: resolvedMdUrl,
-          characters: chars,
-          status: sizeStatus(chars, passThreshold, failThreshold),
-          source: 'cache',
-        });
-      }
-    }
-
-    if (pageResults.length === 0) {
-      return {
-        id,
-        category,
-        status: 'skip',
-        message: 'No cached markdown pages available to measure',
-      };
-    }
-
-    return buildResult(
-      id,
-      category,
-      pageResults,
-      pageResults.length,
-      false,
-      passThreshold,
-      failThreshold,
-      [],
-    );
-  }
-
-  // Standalone mode: dependency checks never ran
-  const {
-    urls: pageUrls,
-    totalPages,
-    sampled: wasSampled,
-    warnings,
-  } = await discoverAndSamplePages(ctx);
-
-  const pageResults: PageSizeResult[] = [];
-  const concurrency = ctx.options.maxConcurrency;
-
-  for (let i = 0; i < pageUrls.length; i += concurrency) {
-    const batch = pageUrls.slice(i, i + concurrency);
-    const batchResults = await Promise.all(
-      batch.map(async (url): Promise<PageSizeResult | null> => {
-        // Try .md URL candidates
-        const candidates = toMdUrls(url);
-        for (const candidateUrl of candidates) {
-          try {
-            const response = await ctx.http.fetch(candidateUrl);
-            if (!response.ok) continue;
-            const body = await response.text();
-            if (looksLikeMarkdown(body)) {
-              const chars = body.length;
-              return {
-                url,
-                mdUrl: candidateUrl,
-                characters: chars,
-                status: sizeStatus(chars, passThreshold, failThreshold),
-                source: 'fallback',
-              };
-            }
-          } catch {
-            // Try next candidate
-          }
-        }
-
-        // Try content negotiation
-        try {
-          const response = await ctx.http.fetch(url, {
-            headers: { Accept: 'text/markdown' },
-          });
-          if (response.ok) {
-            const body = await response.text();
-            if (looksLikeMarkdown(body)) {
-              const chars = body.length;
-              return {
-                url,
-                mdUrl: url,
-                characters: chars,
-                status: sizeStatus(chars, passThreshold, failThreshold),
-                source: 'fallback',
-              };
-            }
-          }
-        } catch {
-          // No markdown available for this page
-        }
-
-        return null;
-      }),
-    );
-    for (const r of batchResults) {
-      if (r) pageResults.push(r);
-    }
-  }
-
-  if (pageResults.length === 0) {
+  if (mdResult.mode === 'cached' && !mdResult.depPassed) {
     return {
       id,
       category,
       status: 'skip',
-      message: 'No markdown content found; skipping size check',
+      message: 'Site does not serve markdown; skipping markdown size check',
     };
   }
 
-  return buildResult(
-    id,
-    category,
-    pageResults,
-    totalPages,
-    wasSampled,
-    passThreshold,
-    failThreshold,
-    warnings,
-  );
-}
+  if (mdResult.pages.length === 0) {
+    const hint =
+      mdResult.mode === 'standalone'
+        ? 'No markdown content found; skipping size check'
+        : 'No cached markdown pages available to measure';
+    return { id, category, status: 'skip', message: hint };
+  }
 
-function buildResult(
-  id: string,
-  category: string,
-  pageResults: PageSizeResult[],
-  totalPages: number,
-  sampled: boolean,
-  passThreshold: number,
-  failThreshold: number,
-  discoveryWarnings: string[],
-): CheckResult {
+  // Build mdUrl map from markdown-url-support results for richer reporting
+  const mdUrlMap = new Map<string, string>();
+  const mdUrlResult = ctx.previousResults.get('markdown-url-support');
+  const mdUrlPages = (mdUrlResult?.details as Record<string, unknown>)?.pageResults as
+    | Array<{ url: string; mdUrl: string; supported: boolean }>
+    | undefined;
+  if (mdUrlPages) {
+    for (const p of mdUrlPages) {
+      if (p.supported) mdUrlMap.set(p.url, p.mdUrl);
+    }
+  }
+
+  const pageResults: PageSizeResult[] = mdResult.pages
+    .filter((p) => p.source !== 'llms-txt') // llms.txt files aren't doc pages to size-check
+    .map((page) => {
+      const chars = page.content.length;
+      const mdUrl = mdUrlMap.get(page.url) ?? page.url;
+      return {
+        url: page.url,
+        mdUrl,
+        characters: chars,
+        status: sizeStatus(chars, passThreshold, failThreshold),
+        source: page.source,
+      };
+    });
+
+  if (pageResults.length === 0) {
+    return { id, category, status: 'skip', message: 'No markdown pages available to measure' };
+  }
+
   const sizes = pageResults.map((r) => r.characters).sort((a, b) => a - b);
   const median = sizes[Math.floor(sizes.length / 2)];
   const max = sizes[sizes.length - 1];
@@ -208,12 +90,8 @@ function buildResult(
   const failBucket = pageResults.filter((r) => r.status === 'fail').length;
 
   const overallStatus = worstStatus(pageResults.map((r) => r.status));
+  const sampled = mdResult.mode === 'standalone'; // standalone always samples via discoverAndSamplePages
   const pageLabel = sampled ? 'sampled pages' : 'pages';
-
-  const formatSize = (chars: number) => {
-    if (chars >= 1000) return `${Math.round(chars / 1000)}K`;
-    return String(chars);
-  };
 
   let message: string;
   if (overallStatus === 'pass') {
@@ -230,7 +108,7 @@ function buildResult(
     status: overallStatus,
     message,
     details: {
-      totalPages,
+      totalPages: pageResults.length,
       testedPages: pageResults.length,
       sampled,
       median,
@@ -240,7 +118,6 @@ function buildResult(
       failBucket,
       thresholds: { pass: passThreshold, fail: failThreshold },
       pageResults,
-      discoveryWarnings,
     },
   };
 }

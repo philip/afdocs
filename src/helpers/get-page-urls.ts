@@ -240,8 +240,13 @@ export interface SampledPages {
 /**
  * Discover page URLs and sample down to maxLinksToTest if needed.
  * Consolidates the discover+shuffle+sample pattern used by multiple checks.
+ *
+ * The result is cached on ctx so that all checks within a single run
+ * share the same sampled page list, avoiding inconsistent results.
  */
 export async function discoverAndSamplePages(ctx: CheckContext): Promise<SampledPages> {
+  if (ctx._sampledPages) return ctx._sampledPages;
+
   const discovery = await getPageUrls(ctx);
   let urls = discovery.urls;
   const totalPages = urls.length;
@@ -255,5 +260,6 @@ export async function discoverAndSamplePages(ctx: CheckContext): Promise<Sampled
     urls = urls.slice(0, ctx.options.maxLinksToTest);
   }
 
-  return { urls, totalPages, sampled, warnings: discovery.warnings };
+  ctx._sampledPages = { urls, totalPages, sampled, warnings: discovery.warnings };
+  return ctx._sampledPages;
 }

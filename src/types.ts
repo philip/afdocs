@@ -1,3 +1,5 @@
+import type { SampledPages } from './helpers/get-page-urls.js';
+
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip' | 'error';
 
 export interface CheckResult {
@@ -30,6 +32,8 @@ export interface CheckContext {
   options: CheckOptions;
   /** Cached page content, keyed by original page URL. */
   pageCache: Map<string, CachedPage>;
+  /** Cached sampled pages result, shared across checks within a single run. */
+  _sampledPages?: SampledPages;
 }
 
 export interface CheckOptions {

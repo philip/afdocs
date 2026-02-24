@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 10 are fully implemented; the rest return `skip` until completed.
+afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 14 are fully implemented; the rest return `skip` until completed.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
@@ -36,8 +36,14 @@ Markdown Availability
   ✗ content-negotiation: Server ignores Accept: text/markdown header (0/50 sampled pages return markdown)
   ✗ markdown-url-support: No sampled pages support .md URLs (0/50 tested)
 
+URL Stability
+  ✓ http-status-codes: All 50 sampled pages return proper error codes for bad URLs
+
+Authentication
+  ✓ auth-gate-detection: All 50 sampled pages are publicly accessible
+
 Summary
-  5 passed, 2 failed, 14 skipped (21 total)
+  9 passed, 3 failed, 9 skipped (21 total)
 ```
 
 ## Install
@@ -138,7 +144,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-21 checks across 8 categories. Checks marked with \* are stub implementations that return `skip`.
+21 checks across 8 categories. Checks marked with \* are not yet implemented and return `skip`.
 
 ### Category 1: llms.txt
 
@@ -171,13 +177,13 @@ describe('agent-friendliness', () => {
 | --------------------------------- | -------------------------------------------------- |
 | `tabbed-content-serialization` \* | Whether tabbed content creates oversized output    |
 | `section-header-quality` \*       | Whether headers in tabbed sections include context |
-| `markdown-code-fence-validity` \* | Whether markdown has unclosed code fences          |
+| `markdown-code-fence-validity`    | Whether markdown has unclosed code fences          |
 
 ### Category 5: URL Stability and Redirects
 
 | Check                  | Description                                     |
 | ---------------------- | ----------------------------------------------- |
-| `http-status-codes` \* | Whether error pages return correct status codes |
+| `http-status-codes`    | Whether error pages return correct status codes |
 | `redirect-behavior` \* | Whether redirects are same-host HTTP redirects  |
 
 ### Category 6: Agent Discoverability Directives
@@ -192,13 +198,13 @@ describe('agent-friendliness', () => {
 | ---------------------------- | ---------------------------------------------- |
 | `llms-txt-freshness` \*      | Whether `llms.txt` reflects current site state |
 | `markdown-content-parity` \* | Whether markdown and HTML versions match       |
-| `cache-header-hygiene` \*    | Whether cache headers allow timely updates     |
+| `cache-header-hygiene`       | Whether cache headers allow timely updates     |
 
 ### Category 8: Authentication and Access
 
 | Check                        | Description                                                          |
 | ---------------------------- | -------------------------------------------------------------------- |
-| `auth-gate-detection` \*     | Whether documentation pages require authentication to access content |
+| `auth-gate-detection`        | Whether documentation pages require authentication to access content |
 | `auth-alternative-access` \* | Whether auth-gated sites provide alternative access paths for agents |
 
 ## Check dependencies

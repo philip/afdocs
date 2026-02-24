@@ -69,13 +69,18 @@ src/
     registry.ts    # Check registration and lookup
     index.ts       # Side-effect imports that register all checks
   cli/             # CLI entry point and formatters
-  helpers/         # Shared utilities (HTTP, markdown detection, etc.)
+  helpers/         # Shared utilities
+    get-page-urls.ts       # Page discovery (llms.txt, sitemap) and sampling
+    get-markdown-content.ts # Shared markdown fetching (cached or standalone)
+    detect-markdown.ts     # Heuristics for identifying markdown content
+    to-md-urls.ts          # Generate .md URL candidates from a page URL
+    html-to-markdown.ts    # HTML → markdown conversion
   runner.ts        # Orchestrates check execution with dependency resolution
   types.ts         # Shared type definitions
   http.ts          # Rate-limited HTTP client
 test/
-  unit/            # Unit tests (mocked HTTP via MSW)
-  integration/     # Integration tests (spawns the CLI binary)
+  unit/            # Unit tests (one check or helper at a time, mocked HTTP)
+  integration/     # Integration tests (CLI binary + cross-check pipelines)
   fixtures/        # Shared test fixtures
 bin/
   afdocs.mjs       # CLI binary entry point
@@ -126,6 +131,28 @@ const {
 
 This handles the full discovery chain (llms.txt links, sitemap, baseUrl fallback) and Fisher-Yates shuffles down to `maxLinksToTest` when needed.
 
+The result is **cached on `ctx._sampledPages`** so that all checks within a single run share the same sampled page list. This ensures consistent results: if markdown-url-support tests pages A, B, C, then content-negotiation, page-size-html, http-status-codes, and every other check that calls `discoverAndSamplePages` will test the same pages A, B, C. Do not bypass this caching by calling `getPageUrls` directly unless your check genuinely needs a different page set.
+
+### Getting markdown content
+
+Checks that analyze markdown content (page size, code fences, content parity, etc.) should use the shared `getMarkdownContent` helper from `src/helpers/get-markdown-content.ts`:
+
+```ts
+import { getMarkdownContent } from '../../helpers/get-markdown-content.js';
+
+const mdResult = await getMarkdownContent(ctx);
+// mdResult.mode === 'cached' when markdown-url-support or content-negotiation ran
+// mdResult.mode === 'standalone' when neither ran (fetches markdown independently)
+// mdResult.pages contains MarkdownPage[] with url, content, and source
+```
+
+This helper handles two scenarios:
+
+- **Cached mode**: When `markdown-url-support` or `content-negotiation` has run, reads from `ctx.pageCache`. Also checks whether the dependency passed (some pages had markdown) or failed (no markdown found).
+- **Standalone mode**: When neither dependency ran (e.g. user ran `--checks page-size-markdown` alone), discovers pages and fetches markdown independently.
+
+In both modes, llms.txt content from `llms-txt-exists` results is included automatically. The `source` field on each page indicates its origin (`'md-url'`, `'content-negotiation'`, `'standalone-md-url'`, `'standalone-content-negotiation'`, or `'llms-txt'`).
+
 ### Check dependencies and standalone mode
 
 Checks can declare dependencies via `dependsOn`. The runner resolves these so that, for example, `page-size-markdown` can read cached markdown from `markdown-url-support` and `content-negotiation`.
@@ -147,7 +174,21 @@ When a user runs a single check with `--checks`, its dependencies may not have e
 
 3. **Ensure parity.** A standalone check should produce the same results as when it runs as part of the full suite. If standalone mode discovers pages differently (fewer URLs, different sources), users will see inconsistent results depending on which checks they run.
 
-See `page-size-markdown.ts` for a concrete example: it reads from `ctx.pageCache` when dependencies ran, and falls back to `discoverAndSamplePages` with its own markdown fetching when they didn't.
+See `page-size-markdown.ts` for a concrete example: it uses `getMarkdownContent()`, which reads from `ctx.pageCache` when dependencies ran and falls back to independent fetching when they didn't.
+
+### Shared state between checks
+
+Checks communicate through three mechanisms on `CheckContext`:
+
+| Mechanism         | Written by                                    | Read by                          | Purpose                                        |
+| ----------------- | --------------------------------------------- | -------------------------------- | ---------------------------------------------- |
+| `previousResults` | Runner (after each check)                     | Any downstream check             | Check status, details (e.g. `discoveredFiles`) |
+| `pageCache`       | `markdown-url-support`, `content-negotiation` | `getMarkdownContent()` consumers | Cached markdown content keyed by page URL      |
+| `_sampledPages`   | `discoverAndSamplePages` (first call)         | All subsequent callers           | Ensures consistent page sampling across checks |
+
+When a check reads from `previousResults`, it creates an implicit ordering dependency. If your check reads from another check's results, either declare it in `dependsOn` or handle the case where it hasn't run. For example, `cache-header-hygiene` reads llms.txt URLs from `llms-txt-exists` results but doesn't declare it as a dependency; it gracefully falls back to an empty list.
+
+`content-negotiation` guards against overwriting `pageCache` entries that `markdown-url-support` already populated: `if (!ctx.pageCache.has(url))`. This ensures the `.md` URL version takes precedence when both mechanisms find markdown for the same page.
 
 ### Testing checks with dependencies
 
@@ -191,7 +232,13 @@ server.use(
 
 ## Testing
 
-Tests use [Vitest](https://vitest.dev/) with [MSW](https://mswjs.io/) (Mock Service Worker) for HTTP mocking. The typical pattern:
+Tests use [Vitest](https://vitest.dev/) with [MSW](https://mswjs.io/) (Mock Service Worker) for HTTP mocking. There are two levels of tests:
+
+### Unit tests (`test/unit/`)
+
+Each check gets its own test file at `test/unit/checks/<check-id>.test.ts`. These test a single check in isolation by manually constructing a `CheckContext` with the expected `previousResults` and `pageCache` state.
+
+The typical pattern:
 
 ```ts
 import { setupServer } from 'msw/node';
@@ -229,6 +276,20 @@ it('does the thing', async () => {
 Use unique hostnames per test (e.g. `http://my-check-pass.local/...`) to avoid MSW handler collisions between tests.
 
 Set `requestDelay: 0` in test contexts to avoid artificial delays.
+
+### Cross-check integration tests (`test/integration/check-pipeline.test.ts`)
+
+These tests run multiple real checks through the runner and verify that data flows correctly between them. Unlike unit tests (which manually set up context), pipeline tests exercise the actual check execution order, `pageCache` population, `previousResults` propagation, and shared sampling.
+
+**When to update `check-pipeline.test.ts`:**
+
+- **Adding a check that reads from `previousResults` or `pageCache`**: Add a test verifying it receives the expected data from its upstream checks, and that it handles the "upstream didn't run" case.
+- **Adding a check that writes to `pageCache`**: Add a test verifying downstream consumers see the cached data.
+- **Changing `dependsOn` declarations**: Add a test covering the new dependency chain (skip when dep fails, standalone when dep absent).
+- **Adding a check that calls `discoverAndSamplePages`**: Add it to the "shared sampling" test to verify it samples the same pages as other checks.
+- **Changing shared helpers** (`getMarkdownContent`, `discoverAndSamplePages`, etc.): Run the pipeline tests to verify cross-check behavior is preserved.
+
+The pipeline tests use a `setupSite` helper to configure a mock docs site with llms.txt, HTML pages, .md URLs, and content-negotiation support, then run a subset of checks via `runChecks()` with `checkIds`.
 
 ## Known issues
 

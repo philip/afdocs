@@ -51,6 +51,15 @@ describe('CLI', () => {
       http.get('http://cli-all.local/docs/llms.txt', () => new HttpResponse(null, { status: 404 })),
       http.get('http://cli-all.local/robots.txt', () => new HttpResponse('', { status: 404 })),
       http.get('http://cli-all.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+      // Catch-all for the test host so new checks don't hang on unresolvable requests
+      http.get(
+        'http://cli-all.local/*',
+        () =>
+          new HttpResponse('<html><body>OK</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
     );
 
     const { runChecks } = await import('../../src/runner.js');
