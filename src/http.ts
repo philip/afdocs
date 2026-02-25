@@ -30,7 +30,6 @@ export function createHttpClient(options: RateLimitedHttpClientOptions): HttpCli
     async fetch(url: string, reqOptions?: HttpRequestOptions): Promise<HttpResponse> {
       let retries = 0;
 
-       
       while (true) {
         await waitForSlot();
         activeRequests++;
