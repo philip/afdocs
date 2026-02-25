@@ -69,8 +69,8 @@ const DETAIL_FORMATTERS: Record<string, DetailFormatter> = {
     const pages = details.pageResults as PageResult[] | undefined;
     if (!pages) return [];
     return pages
-      .filter((p) => p.status !== 'pass')
-      .map((p) => formatDetailLine(p.status, p.url, 'no .md URL found'));
+      .filter((p) => !p.supported)
+      .map((p) => formatDetailLine('warn', p.url, 'no .md URL found'));
   },
 
   'content-negotiation': (details) => {

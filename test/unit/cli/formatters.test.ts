@@ -214,6 +214,41 @@ describe('formatText', () => {
       expect(output).not.toContain('https://example.com/b');
     });
 
+    it('only shows unsupported pages for markdown-url-support', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'markdown-url-support',
+            category: 'markdown-availability',
+            status: 'warn',
+            message: '1/2 pages support .md URLs',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/good',
+                  mdUrl: 'https://example.com/good.md',
+                  supported: true,
+                  status: 200,
+                },
+                {
+                  url: 'https://example.com/bad',
+                  mdUrl: 'https://example.com/bad.md',
+                  supported: false,
+                  status: 404,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/bad');
+      expect(output).toContain('no .md URL found');
+      // Supported page should NOT appear
+      expect(output).not.toContain('https://example.com/good');
+    });
+
     it('shows nothing extra for checks with no details', () => {
       const report = makeReport({
         results: [

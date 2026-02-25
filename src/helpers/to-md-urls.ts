@@ -6,9 +6,15 @@
 export function toMdUrls(url: string): string[] {
   const parsed = new URL(url);
 
-  // URL already points to a .md file — use it directly
-  if (parsed.pathname.endsWith('.md')) {
+  // URL already points to a .md or .mdx file — use it directly
+  if (parsed.pathname.endsWith('.md') || parsed.pathname.endsWith('.mdx')) {
     return [url];
+  }
+
+  // Non-HTML file extension (e.g. .txt, .json, .xml) — no .md equivalent
+  const lastSegment = parsed.pathname.split('/').pop() ?? '';
+  if (/\.[a-z0-9]+$/i.test(lastSegment) && !/\.html?$/i.test(lastSegment)) {
+    return [];
   }
 
   const pathname = parsed.pathname.replace(/\/$/, '') || '';

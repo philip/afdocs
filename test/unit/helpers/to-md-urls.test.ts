@@ -45,4 +45,22 @@ describe('toMdUrls', () => {
     const result = toMdUrls('https://example.com/docs/guide?v=2');
     expect(result[0]).toBe('https://example.com/docs/guide.md?v=2');
   });
+
+  it('returns URL as-is when it already ends in .mdx', () => {
+    expect(toMdUrls('https://example.com/docs/guide.mdx')).toEqual([
+      'https://example.com/docs/guide.mdx',
+    ]);
+  });
+
+  it('returns empty array for .txt files', () => {
+    expect(toMdUrls('https://example.com/docs/llms.txt')).toEqual([]);
+  });
+
+  it('returns empty array for .json files', () => {
+    expect(toMdUrls('https://example.com/api/schema.json')).toEqual([]);
+  });
+
+  it('returns empty array for .xml files', () => {
+    expect(toMdUrls('https://example.com/sitemap.xml')).toEqual([]);
+  });
 });
