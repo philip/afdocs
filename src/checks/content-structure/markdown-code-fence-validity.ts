@@ -40,6 +40,10 @@ function analyzeFences(content: string): { fenceCount: number; issues: FenceIssu
     const match = FENCE_RE.exec(stripped);
     if (!match) continue;
 
+    // Skip fences inside markdown table cells (e.g. "``` | ```" or "| ```")
+    // These aren't real CommonMark fences — multi-line table cells are a vendor extension
+    if (stripped.includes('|')) continue;
+
     const char = match[3] ? '`' : '~';
     const length = (match[3] || match[4]).length;
 

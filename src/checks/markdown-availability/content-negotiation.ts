@@ -1,6 +1,7 @@
 import { registerCheck } from '../registry.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
+import { isNonPageUrl } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 type Classification = 'markdown-with-correct-type' | 'markdown-with-wrong-type' | 'html';
@@ -8,6 +9,7 @@ type Classification = 'markdown-with-correct-type' | 'markdown-with-wrong-type' 
 interface PageResult {
   url: string;
   classification: Classification;
+  skipped?: boolean;
   contentType: string;
   status: number;
   error?: string;
@@ -31,6 +33,10 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     const batch = pageUrls.slice(i, i + concurrency);
     const batchResults = await Promise.all(
       batch.map(async (url): Promise<PageResult> => {
+        // Non-page file types (e.g. .json, .xml) are already in a machine-readable format
+        if (isNonPageUrl(url)) {
+          return { url, classification: 'html', skipped: true, contentType: '', status: 0 };
+        }
         try {
           const response = await ctx.http.fetch(url, {
             headers: { Accept: 'text/markdown' },
@@ -77,16 +83,21 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     results.push(...batchResults);
   }
 
-  const markdownWithCorrectType = results.filter(
+  const testedResults = results.filter((r) => !r.skipped);
+  const skippedCount = results.length - testedResults.length;
+  const markdownWithCorrectType = testedResults.filter(
     (r) => r.classification === 'markdown-with-correct-type',
   ).length;
-  const markdownWithWrongType = results.filter(
+  const markdownWithWrongType = testedResults.filter(
     (r) => r.classification === 'markdown-with-wrong-type',
   ).length;
-  const htmlOnly = results.filter((r) => r.classification === 'html').length;
-  const negotiationRate = Math.round((markdownWithCorrectType / results.length) * 100);
-  const fetchErrors = results.filter((r) => r.error).length;
-  const rateLimited = results.filter((r) => r.status === 429).length;
+  const htmlOnly = testedResults.filter((r) => r.classification === 'html').length;
+  const negotiationRate =
+    testedResults.length > 0
+      ? Math.round((markdownWithCorrectType / testedResults.length) * 100)
+      : 0;
+  const fetchErrors = testedResults.filter((r) => r.error).length;
+  const rateLimited = testedResults.filter((r) => r.status === 429).length;
 
   const pageLabel = wasSampled ? 'sampled pages' : 'pages';
   const suffix =
@@ -95,7 +106,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
   const details: Record<string, unknown> = {
     totalPages,
-    testedPages: results.length,
+    testedPages: testedResults.length,
+    skippedPages: skippedCount,
     sampled: wasSampled,
     markdownWithCorrectType,
     markdownWithWrongType,
@@ -112,7 +124,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'pass',
-      message: `${markdownWithCorrectType}/${results.length} ${pageLabel} support content negotiation (${negotiationRate}%)${suffix}`,
+      message: `${markdownWithCorrectType}/${testedResults.length} ${pageLabel} support content negotiation (${negotiationRate}%)${suffix}`,
       details,
     };
   }
@@ -131,7 +143,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     id,
     category,
     status: 'fail',
-    message: `Server ignores Accept: text/markdown header (0/${results.length} ${pageLabel} return markdown)${suffix}`,
+    message: `Server ignores Accept: text/markdown header (0/${testedResults.length} ${pageLabel} return markdown)${suffix}`,
     details,
   };
 }

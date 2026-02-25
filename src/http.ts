@@ -6,6 +6,8 @@ interface RateLimitedHttpClientOptions {
   maxConcurrency: number;
 }
 
+const MAX_RETRIES = 2;
+
 export function createHttpClient(options: RateLimitedHttpClientOptions): HttpClient {
   let lastRequestTime = 0;
   let activeRequests = 0;
@@ -26,37 +28,42 @@ export function createHttpClient(options: RateLimitedHttpClientOptions): HttpCli
 
   return {
     async fetch(url: string, reqOptions?: HttpRequestOptions): Promise<HttpResponse> {
-      await waitForSlot();
-      activeRequests++;
-      lastRequestTime = Date.now();
+      let retries = 0;
 
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), options.requestTimeout);
+       
+      while (true) {
+        await waitForSlot();
+        activeRequests++;
+        lastRequestTime = Date.now();
 
-        const response = await globalThis.fetch(url, {
-          method: reqOptions?.method ?? 'GET',
-          headers: reqOptions?.headers,
-          redirect: reqOptions?.redirect ?? 'follow',
-          signal: reqOptions?.signal ?? controller.signal,
-        });
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), options.requestTimeout);
 
-        clearTimeout(timeout);
+          const response = await globalThis.fetch(url, {
+            method: reqOptions?.method ?? 'GET',
+            headers: reqOptions?.headers,
+            redirect: reqOptions?.redirect ?? 'follow',
+            signal: reqOptions?.signal ?? controller.signal,
+          });
 
-        // Check for Retry-After header
-        const retryAfter = response.headers.get('Retry-After');
-        if (response.status === 429 && retryAfter) {
-          const delaySec = parseInt(retryAfter, 10);
-          if (!isNaN(delaySec) && delaySec > 0 && delaySec <= 60) {
-            await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
-            activeRequests--;
-            return this.fetch(url, reqOptions);
+          clearTimeout(timeout);
+
+          // Retry on 429 with Retry-After, up to MAX_RETRIES times
+          const retryAfter = response.headers.get('Retry-After');
+          if (response.status === 429 && retryAfter && retries < MAX_RETRIES) {
+            const delaySec = parseInt(retryAfter, 10);
+            if (!isNaN(delaySec) && delaySec > 0 && delaySec <= 60) {
+              retries++;
+              await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+              continue;
+            }
           }
-        }
 
-        return response as HttpResponse;
-      } finally {
-        activeRequests--;
+          return response as HttpResponse;
+        } finally {
+          activeRequests--;
+        }
       }
     },
   };

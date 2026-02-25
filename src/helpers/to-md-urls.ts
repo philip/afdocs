@@ -1,4 +1,20 @@
 /**
+ * Returns true if the URL points to a non-page file type (e.g. .json, .xml, .txt)
+ * where we would not expect a markdown equivalent.
+ */
+export function isNonPageUrl(url: string): boolean {
+  const parsed = new URL(url);
+  const lastSegment = parsed.pathname.split('/').pop() ?? '';
+  // Has a file extension that isn't .html/.htm/.md/.mdx
+  return (
+    /\.[a-z0-9]+$/i.test(lastSegment) &&
+    !/\.html?$/i.test(lastSegment) &&
+    !lastSegment.endsWith('.md') &&
+    !lastSegment.endsWith('.mdx')
+  );
+}
+
+/**
  * Generate candidate .md URLs for a page URL.
  * If the URL already ends in .md, return it as-is.
  * Otherwise try both `/docs/guide.md` and `/docs/guide/index.md`.
@@ -11,9 +27,8 @@ export function toMdUrls(url: string): string[] {
     return [url];
   }
 
-  // Non-HTML file extension (e.g. .txt, .json, .xml) — no .md equivalent
-  const lastSegment = parsed.pathname.split('/').pop() ?? '';
-  if (/\.[a-z0-9]+$/i.test(lastSegment) && !/\.html?$/i.test(lastSegment)) {
+  // Non-page file extension (e.g. .txt, .json, .xml) — no .md equivalent
+  if (isNonPageUrl(url)) {
     return [];
   }
 

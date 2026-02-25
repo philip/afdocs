@@ -166,6 +166,51 @@ describe('formatText', () => {
       expect(output).not.toContain('https://example.com/small');
     });
 
+    it('shows per-page fence issues for markdown-code-fence-validity', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'markdown-code-fence-validity',
+            category: 'content-structure',
+            status: 'fail',
+            message: '1 unclosed code fences found across 2 pages',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/good',
+                  fenceCount: 3,
+                  issues: [],
+                  status: 'pass',
+                },
+                {
+                  url: 'https://example.com/broken',
+                  fenceCount: 2,
+                  issues: [{ line: 15, type: 'unclosed', opener: '```' }],
+                  status: 'fail',
+                },
+                {
+                  url: 'https://example.com/inconsistent',
+                  fenceCount: 4,
+                  issues: [{ line: 22, type: 'inconsistent-close', opener: '```', closer: '~~~' }],
+                  status: 'warn',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      // Passing page should not appear
+      expect(output).not.toContain('https://example.com/good');
+      // Unclosed fence
+      expect(output).toContain('https://example.com/broken');
+      expect(output).toContain('unclosed ``` at line 15');
+      // Inconsistent close
+      expect(output).toContain('https://example.com/inconsistent');
+      expect(output).toContain('``` closed with ~~~ at line 22');
+    });
+
     it('shows broken links for llms-txt-links-resolve', () => {
       const report = makeReport({
         results: [
@@ -221,7 +266,7 @@ describe('formatText', () => {
             id: 'markdown-url-support',
             category: 'markdown-availability',
             status: 'warn',
-            message: '1/2 pages support .md URLs',
+            message: '1/3 pages support .md URLs',
             details: {
               pageResults: [
                 {
@@ -236,6 +281,13 @@ describe('formatText', () => {
                   supported: false,
                   status: 404,
                 },
+                {
+                  url: 'https://example.com/docs/page.md',
+                  mdUrl: 'https://example.com/docs/page.md',
+                  supported: false,
+                  alreadyMd: true,
+                  status: 0,
+                },
               ],
             },
           },
@@ -245,8 +297,74 @@ describe('formatText', () => {
       const output = formatText(report, { verbose: true });
       expect(output).toContain('https://example.com/bad');
       expect(output).toContain('no .md URL found');
+      // .md URL that serves HTML should show different message
+      expect(output).toContain('https://example.com/docs/page.md');
+      expect(output).toContain('.md URL serves HTML, not markdown');
       // Supported page should NOT appear
       expect(output).not.toContain('https://example.com/good');
+    });
+
+    it('shows non-markdown pages for content-negotiation', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'content-negotiation',
+            category: 'markdown-availability',
+            status: 'warn',
+            message: 'Content negotiation partially supported',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/good',
+                  classification: 'markdown-with-correct-type',
+                  contentType: 'text/markdown',
+                  status: 200,
+                },
+                {
+                  url: 'https://example.com/wrong-type',
+                  classification: 'markdown-with-wrong-type',
+                  contentType: 'text/plain',
+                  status: 200,
+                },
+                {
+                  url: 'https://example.com/html-only',
+                  classification: 'html',
+                  contentType: 'text/html',
+                  status: 200,
+                },
+                {
+                  url: 'https://example.com/docs/page.md',
+                  classification: 'html',
+                  contentType: 'text/html',
+                  status: 200,
+                },
+                {
+                  url: 'https://example.com/openapi.json',
+                  classification: 'html',
+                  skipped: true,
+                  contentType: '',
+                  status: 0,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      // markdown-with-correct-type should NOT appear (it's the good result)
+      expect(output).not.toContain('https://example.com/good');
+      // skipped pages should NOT appear
+      expect(output).not.toContain('openapi.json');
+      // wrong type should appear with descriptive message
+      expect(output).toContain('https://example.com/wrong-type');
+      expect(output).toContain('returns markdown but content-type is text/plain');
+      // html-only should explain the server ignores the Accept header
+      expect(output).toContain('https://example.com/html-only');
+      expect(output).toContain('returns HTML, ignores Accept header');
+      // .md URL that serves HTML should get its own message
+      expect(output).toContain('https://example.com/docs/page.md');
+      expect(output).toContain('.md URL serves HTML, not markdown');
     });
 
     it('shows nothing extra for checks with no details', () => {

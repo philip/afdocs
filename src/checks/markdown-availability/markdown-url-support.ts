@@ -8,6 +8,8 @@ interface PageResult {
   url: string;
   mdUrl: string;
   supported: boolean;
+  skipped?: boolean;
+  alreadyMd?: boolean;
   status: number;
   error?: string;
 }
@@ -31,6 +33,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     const batchResults = await Promise.all(
       batch.map(async (url): Promise<PageResult> => {
         const candidates = toMdUrls(url);
+        // Non-markdown file types (e.g. .json, .xml) have no .md equivalent — skip them
+        if (candidates.length === 0) {
+          return { url, mdUrl: url, supported: false, skipped: true, status: 0 };
+        }
+        const alreadyMd = /\.mdx?$/i.test(new URL(url).pathname);
         let lastError: string | undefined;
         for (const mdUrl of candidates) {
           try {
@@ -46,24 +53,34 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
                 url,
                 markdown: { content: body, source: 'md-url' },
               });
-              return { url, mdUrl, supported: true, status: response.status };
+              return { url, mdUrl, supported: true, alreadyMd, status: response.status };
             }
             lastError = undefined; // Got a response, not a fetch error
           } catch (err) {
             lastError = err instanceof Error ? err.message : String(err);
           }
         }
-        return { url, mdUrl: candidates[0], supported: false, status: 0, error: lastError };
+        return {
+          url,
+          mdUrl: candidates[0],
+          supported: false,
+          alreadyMd,
+          status: 0,
+          error: lastError,
+        };
       }),
     );
     results.push(...batchResults);
   }
 
-  const mdSupported = results.filter((r) => r.supported).length;
-  const mdUnsupported = results.length - mdSupported;
-  const supportRate = Math.round((mdSupported / results.length) * 100);
-  const fetchErrors = results.filter((r) => r.error).length;
-  const rateLimited = results.filter((r) => r.status === 429).length;
+  const testedResults = results.filter((r) => !r.skipped);
+  const skippedCount = results.length - testedResults.length;
+  const mdSupported = testedResults.filter((r) => r.supported).length;
+  const mdUnsupported = testedResults.length - mdSupported;
+  const supportRate =
+    testedResults.length > 0 ? Math.round((mdSupported / testedResults.length) * 100) : 0;
+  const fetchErrors = testedResults.filter((r) => r.error).length;
+  const rateLimited = testedResults.filter((r) => r.status === 429).length;
 
   const pageLabel = wasSampled ? 'sampled pages' : 'pages';
   const suffix =
@@ -72,7 +89,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
   const details: Record<string, unknown> = {
     totalPages,
-    testedPages: results.length,
+    testedPages: testedResults.length,
+    skippedPages: skippedCount,
     sampled: wasSampled,
     mdSupported,
     mdUnsupported,
@@ -88,7 +106,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'pass',
-      message: `${mdSupported}/${results.length} ${pageLabel} support .md URLs (${supportRate}%)${suffix}`,
+      message: `${mdSupported}/${testedResults.length} ${pageLabel} support .md URLs (${supportRate}%)${suffix}`,
       details,
     };
   }
@@ -98,7 +116,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       id,
       category,
       status: 'warn',
-      message: `${mdSupported}/${results.length} ${pageLabel} support .md URLs (${supportRate}%); inconsistent support${suffix}`,
+      message: `${mdSupported}/${testedResults.length} ${pageLabel} support .md URLs (${supportRate}%); inconsistent support${suffix}`,
       details,
     };
   }
@@ -107,7 +125,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     id,
     category,
     status: 'fail',
-    message: `No ${pageLabel} support .md URLs (0/${results.length} tested)${suffix}`,
+    message: `No ${pageLabel} support .md URLs (0/${testedResults.length} tested)${suffix}`,
     details,
   };
 }

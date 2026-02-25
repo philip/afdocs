@@ -8,5 +8,5 @@ export {
   parseSitemapDirectives,
 } from './get-page-urls.js';
 export type { PageUrlResult, SampledPages } from './get-page-urls.js';
-export { toMdUrls } from './to-md-urls.js';
+export { toMdUrls, isNonPageUrl } from './to-md-urls.js';
 export { htmlToMarkdown } from './html-to-markdown.js';

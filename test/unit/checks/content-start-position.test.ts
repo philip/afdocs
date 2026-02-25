@@ -69,7 +69,7 @@ describe('content-start-position', () => {
 
   // ── ATX heading detection ──
 
-  it('passes when content starts with an ATX heading (h3–h6)', async () => {
+  it('passes when content starts with an ATX heading (h3–h4)', async () => {
     // Turndown uses ATX style for h3+
     server.use(
       http.get(
@@ -231,13 +231,20 @@ describe('content-start-position', () => {
   // ── Status threshold: warn (10–50%) ──
 
   it('warns when content starts between 10–50%', async () => {
-    // Build HTML where ~25% is nav boilerplate, then content follows.
-    // We need the converted markdown to have content starting around 25%.
+    // Build HTML where nav boilerplate pushes content start to ~25%.
+    // Nav links are skipped by the link-density heuristic, so we need enough
+    // of them relative to the content to land in the 10-50% range.
     const navLinks = Array.from(
-      { length: 20 },
+      { length: 10 },
       (_, i) => `<li><a href="/nav${i}">Navigation Link Item ${i}</a></li>`,
     ).join('');
-    const html = `<html><body><nav><ul>${navLinks}</ul></nav><article><h1>Content Title</h1><p>Here is the actual documentation that you are looking for.</p></article></body></html>`;
+    // Enough content paragraphs so nav is ~25% of total, not >50%
+    const contentParagraphs = Array.from(
+      { length: 10 },
+      (_, i) =>
+        `<p>This is documentation paragraph ${i} with enough words to be substantial real content that agents would process.</p>`,
+    ).join('');
+    const html = `<html><body><nav><ul>${navLinks}</ul></nav><article><h1>Content Title</h1>${contentParagraphs}</article></body></html>`;
 
     server.use(
       http.get(
@@ -251,15 +258,11 @@ describe('content-start-position', () => {
       contentStartPercent: number;
       status: string;
     }>;
-    // If the nav is enough to push past 10%, we get warn
-    if (pageResults[0].contentStartPercent > 10 && pageResults[0].contentStartPercent <= 50) {
-      expect(result.status).toBe('warn');
-      expect(result.details?.warnBucket).toBe(1);
-      expect(result.message).toContain('10–50%');
-    } else {
-      // Nav wasn't heavy enough; still a valid pass
-      expect(result.status).toBe('pass');
-    }
+    expect(pageResults[0].contentStartPercent).toBeGreaterThan(10);
+    expect(pageResults[0].contentStartPercent).toBeLessThanOrEqual(50);
+    expect(result.status).toBe('warn');
+    expect(result.details?.warnBucket).toBe(1);
+    expect(result.message).toContain('10–50%');
   });
 
   // ── Status threshold: fail (>50%) ──

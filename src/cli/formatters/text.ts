@@ -69,18 +69,50 @@ const DETAIL_FORMATTERS: Record<string, DetailFormatter> = {
     const pages = details.pageResults as PageResult[] | undefined;
     if (!pages) return [];
     return pages
-      .filter((p) => !p.supported)
-      .map((p) => formatDetailLine('warn', p.url, 'no .md URL found'));
+      .filter((p) => !p.supported && !p.skipped)
+      .map((p) => {
+        const msg = p.alreadyMd ? '.md URL serves HTML, not markdown' : 'no .md URL found';
+        return formatDetailLine('warn', p.url, msg);
+      });
   },
 
   'content-negotiation': (details) => {
     const pages = details.pageResults as PageResult[] | undefined;
     if (!pages) return [];
     return pages
-      .filter((p) => p.status !== 'pass')
+      .filter((p) => p.classification !== 'markdown-with-correct-type' && !p.skipped)
       .map((p) => {
-        const classification = (p.classification as string) ?? '';
-        return formatDetailLine(p.status, p.url, classification);
+        const status = p.classification === 'markdown-with-wrong-type' ? 'warn' : 'fail';
+        const urlIsMd = /\.mdx?$/i.test(new URL(p.url).pathname);
+        let label: string;
+        if (p.classification === 'markdown-with-wrong-type') {
+          const ct = (p.contentType as string) || 'unknown';
+          label = `returns markdown but content-type is ${ct}`;
+        } else if (urlIsMd) {
+          label = '.md URL serves HTML, not markdown';
+        } else {
+          label = 'returns HTML, ignores Accept header';
+        }
+        return formatDetailLine(status, p.url, label);
+      });
+  },
+
+  'markdown-code-fence-validity': (details) => {
+    const pages = details.pageResults as PageResult[] | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.status !== 'pass')
+      .flatMap((p) => {
+        const issues =
+          (p.issues as Array<{ line: number; type: string; opener: string; closer?: string }>) ??
+          [];
+        return issues.map((issue) => {
+          const info =
+            issue.type === 'unclosed'
+              ? `unclosed ${issue.opener} at line ${issue.line}`
+              : `${issue.opener} closed with ${issue.closer} at line ${issue.line}`;
+          return formatDetailLine(issue.type === 'unclosed' ? 'fail' : 'warn', p.url, info);
+        });
       });
   },
 

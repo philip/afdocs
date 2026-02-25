@@ -132,6 +132,28 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('ignores fences inside markdown table cells', async () => {
+    // Table cells with code fences are a vendor extension, not CommonMark
+    const md = [
+      '# API Response',
+      '',
+      '| Before | After |',
+      '| --- | --- |',
+      '| ```',
+      '  old: true',
+      '  ``` | ```',
+      '  new: true',
+      '  ``` |',
+      '',
+      'Some text.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(0);
+  });
+
   it('handles nested-looking fences correctly', async () => {
     // A 4-backtick fence containing a 3-backtick fence
     const md = '# Hello\n\n````\n```\ninner\n```\n````\n';

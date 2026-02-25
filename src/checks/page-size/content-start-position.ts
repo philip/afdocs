@@ -13,13 +13,76 @@ interface PagePositionResult {
   error?: string;
 }
 
-const CSS_PATTERN = /[{}\s]*[a-z-]+\s*:\s*[^;]+;/;
+const CSS_PATTERN = /[{}\s]*[a-z0-9_-]+\s*:\s*[^;]+;/;
 const JS_PATTERNS = [/^\s*(function|var|const|let|import|export)\b/, /^\s*\/\//, /[{};]\s*$/];
+const INLINE_SCRIPT_MIN_LENGTH = 200;
+const INLINE_SCRIPT_TOKENS =
+  /function\s*\(|=>\s*\{|document\.|window\.|localStorage|\.addEventListener|\.getElementById|\.querySelector|\.setAttribute|self\.\\/;
 const NAV_MAX_LENGTH = 40;
+
+/** Measure how much of a line is markdown link syntax: `[text](url)` or `[![img](src)](url)` */
+function linkDensity(line: string): number {
+  // Match plain links [text](url) and image links [![alt](src)](url)
+  const links = line.match(/\[(?:[^[\]]*|!\[[^\]]*\]\([^)]*\))*\]\([^)]*\)/g);
+  if (!links) return 0;
+  return links.join('').length / line.length;
+}
+
+/** Returns true if the line is script or CSS content that should be ignored. */
+function isBoilerplateLine(line: string): boolean {
+  if (CSS_PATTERN.test(line)) return true;
+  if (JS_PATTERNS.some((p) => p.test(line))) return true;
+  if (line.length >= INLINE_SCRIPT_MIN_LENGTH && INLINE_SCRIPT_TOKENS.test(line)) return true;
+  return false;
+}
+
+/**
+ * Check whether a heading is followed by prose (content heading) rather than
+ * a list of links (sidebar/nav heading). Looks ahead up to 6 non-empty,
+ * non-boilerplate lines after the heading for a prose paragraph.
+ */
+function headingFollowedByContent(lines: string[], headingIdx: number): boolean {
+  // Skip the heading line itself and any setext underline
+  let start = headingIdx + 1;
+  if (start < lines.length && /^[=-]+$/.test(lines[start].trim())) {
+    start++;
+  }
+
+  let nonEmptyCount = 0;
+  for (let i = start; i < lines.length && nonEmptyCount < 6; i++) {
+    const t = lines[i].trim();
+    if (t.length === 0) continue;
+
+    // Skip script/CSS boilerplate — don't count it as "content after heading"
+    if (isBoilerplateLine(t)) continue;
+
+    nonEmptyCount++;
+
+    // If we hit a link-heavy line or a list item starting with [, keep scanning
+    if (linkDensity(t) > 0.5) continue;
+    if (/^\*\s+\[/.test(t)) continue;
+    if (/^\]\(/.test(t)) continue;
+
+    // Another heading (ATX or setext) means the previous one had no prose body
+    if (/^#{1,6}\s/.test(t)) return false;
+    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+    if (/^[=-]+$/.test(nextLine) && nextLine.length >= 2) return false;
+
+    // A line > NAV_MAX_LENGTH that isn't a link is likely real prose
+    if (t.length > NAV_MAX_LENGTH && linkDensity(t) < 0.5) return true;
+
+    // A shorter line with sentence-ending punctuation is also prose
+    if (/[.!?]$/.test(t) && t.length >= 10 && linkDensity(t) < 0.5) return true;
+
+    // Short lines under headings are typically nav items
+  }
+  return false;
+}
 
 /**
  * Find the character position where meaningful content begins in converted markdown.
- * Meaningful content is a heading or a prose paragraph (not CSS, JS, or short nav text).
+ * Meaningful content is a heading followed by prose, or a standalone prose paragraph
+ * that isn't navigation, scripts, CSS, or link-heavy boilerplate.
  */
 function findContentStart(markdown: string): number {
   const lines = markdown.split('\n');
@@ -34,37 +97,52 @@ function findContentStart(markdown: string): number {
       continue;
     }
 
-    // ATX heading: starts with # at beginning of line
-    if (/^#{1,6}\s+\S/.test(trimmed)) {
-      return charPos;
+    // ATX heading h1-h4 followed by prose content (not a nav/sidebar heading)
+    if (/^#{1,4}\s+\S/.test(trimmed) && !/^#{5,6}\s/.test(trimmed)) {
+      if (headingFollowedByContent(lines, idx)) {
+        return charPos;
+      }
+      // Otherwise skip it as a sidebar/nav heading
+      charPos += line.length + 1;
+      continue;
     }
 
-    // Setext heading: current line is text, next line is === or ---
+    // Setext heading followed by prose content
     const nextLine = idx + 1 < lines.length ? lines[idx + 1].trim() : '';
     if (/^[=-]+$/.test(nextLine) && nextLine.length >= 2 && trimmed.length > 0) {
+      if (headingFollowedByContent(lines, idx)) {
+        return charPos;
+      }
+      charPos += line.length + 1;
+      continue;
+    }
+
+    // Skip CSS, JS, and inline script boilerplate
+    if (isBoilerplateLine(trimmed)) {
+      charPos += line.length + 1;
+      continue;
+    }
+
+    // Skip lines dominated by markdown link syntax (nav bars, TOC, link lists)
+    if (linkDensity(trimmed) > 0.5) {
+      charPos += line.length + 1;
+      continue;
+    }
+
+    // Skip bare link fragments from Turndown splitting links across lines: `](/path)`
+    if (/^\]\(/.test(trimmed)) {
+      charPos += line.length + 1;
+      continue;
+    }
+
+    // Standalone prose paragraph (not preceded by a heading we recognized).
+    // Must be a strong signal of real content to avoid matching UI chrome like
+    // "Press Enter to activate dropdown" or "Select language: English".
+    // Require sentence punctuation + substantial length, or very long text.
+    if (trimmed.length >= 80 && linkDensity(trimmed) < 0.5) {
       return charPos;
     }
-
-    // Skip CSS-like lines
-    if (CSS_PATTERN.test(trimmed)) {
-      charPos += line.length + 1;
-      continue;
-    }
-
-    // Skip JS-like lines
-    if (JS_PATTERNS.some((p) => p.test(trimmed))) {
-      charPos += line.length + 1;
-      continue;
-    }
-
-    // Skip very short nav-like tokens (e.g., "Home", "Docs", "API")
-    if (trimmed.length <= NAV_MAX_LENGTH && !/[.!?]/.test(trimmed) && !trimmed.includes(' ')) {
-      charPos += line.length + 1;
-      continue;
-    }
-
-    // Prose-like paragraph: contains spaces (multiple words) and is reasonably long
-    if (trimmed.length > NAV_MAX_LENGTH || (trimmed.includes(' ') && trimmed.length > 20)) {
+    if (/[.!?]$/.test(trimmed) && trimmed.length >= 40 && linkDensity(trimmed) < 0.5) {
       return charPos;
     }
 
