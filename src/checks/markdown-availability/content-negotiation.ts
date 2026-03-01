@@ -1,5 +1,5 @@
 import { registerCheck } from '../registry.js';
-import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
+import { looksLikeMarkdown, looksLikeHtml } from '../../helpers/detect-markdown.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
 import { isNonPageUrl } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
@@ -47,7 +47,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
           const isMarkdownBody = looksLikeMarkdown(body);
 
           let classification: Classification;
-          if (isMarkdownType && isMarkdownBody) {
+          if (isMarkdownType && (isMarkdownBody || !looksLikeHtml(body))) {
             classification = 'markdown-with-correct-type';
             // Cache the markdown content (only if not already cached by md-url check)
             if (!ctx.pageCache.has(url)) {
