@@ -103,15 +103,10 @@ const DETAIL_FORMATTERS: Record<string, DetailFormatter> = {
     return pages
       .filter((p) => p.status !== 'pass')
       .flatMap((p) => {
-        const issues =
-          (p.issues as Array<{ line: number; type: string; opener: string; closer?: string }>) ??
-          [];
+        const issues = (p.issues as Array<{ line: number; type: string; opener: string }>) ?? [];
         return issues.map((issue) => {
-          const info =
-            issue.type === 'unclosed'
-              ? `unclosed ${issue.opener} at line ${issue.line}`
-              : `${issue.opener} closed with ${issue.closer} at line ${issue.line}`;
-          return formatDetailLine(issue.type === 'unclosed' ? 'fail' : 'warn', p.url, info);
+          const info = `unclosed ${issue.opener} at line ${issue.line}`;
+          return formatDetailLine('fail', p.url, info);
         });
       });
   },

@@ -189,10 +189,10 @@ describe('formatText', () => {
                   status: 'fail',
                 },
                 {
-                  url: 'https://example.com/inconsistent',
+                  url: 'https://example.com/also-broken',
                   fenceCount: 4,
-                  issues: [{ line: 22, type: 'inconsistent-close', opener: '```', closer: '~~~' }],
-                  status: 'warn',
+                  issues: [{ line: 22, type: 'unclosed', opener: '```' }],
+                  status: 'fail',
                 },
               ],
             },
@@ -206,9 +206,9 @@ describe('formatText', () => {
       // Unclosed fence
       expect(output).toContain('https://example.com/broken');
       expect(output).toContain('unclosed ``` at line 15');
-      // Inconsistent close
-      expect(output).toContain('https://example.com/inconsistent');
-      expect(output).toContain('``` closed with ~~~ at line 22');
+      // Second unclosed fence
+      expect(output).toContain('https://example.com/also-broken');
+      expect(output).toContain('unclosed ``` at line 22');
     });
 
     it('shows broken links for llms-txt-links-resolve', () => {

@@ -82,13 +82,35 @@ describe('markdown-code-fence-validity', () => {
     expect(pageResults[0].issues[0].type).toBe('unclosed');
   });
 
-  it('warns when fences use inconsistent delimiters', async () => {
+  it('treats mismatched delimiter type as unclosed (not inconsistent close)', async () => {
+    // Per CommonMark, ~~~ does not close a ``` fence — the fence remains open
     const md = '# Hello\n\n```js\nconsole.log("hi");\n~~~\n\nMore text\n';
     const result = await check.run(
       makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
     );
-    expect(result.status).toBe('warn');
-    expect(result.details?.inconsistentCount).toBe(1);
+    expect(result.status).toBe('fail');
+    expect(result.details?.unclosedCount).toBe(1);
+  });
+
+  it('allows valid cross-type nesting (backtick fence containing tilde fence)', async () => {
+    // A ``` fence can contain ~~~ fences because they are different delimiter types
+    const md = [
+      '# Example',
+      '',
+      '```markdown',
+      'Some content with an inner code block:',
+      '~~~css',
+      ':root { --color: red; }',
+      '~~~',
+      'More content.',
+      '```',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
   });
 
   it('skips when dependency ran but no markdown was cached', async () => {
