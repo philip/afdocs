@@ -69,7 +69,7 @@ describe('runner', () => {
 
   it('stub checks return skip with "Not yet implemented"', async () => {
     const report = await runChecks('http://stub.local', {
-      checkIds: ['llms-txt-directive'],
+      checkIds: ['tabbed-content-serialization'],
       requestDelay: 0,
     });
 
@@ -234,7 +234,7 @@ describe('runner', () => {
 
   it('includes timestamp and url in report', async () => {
     const report = await runChecks('http://meta.local', {
-      checkIds: ['llms-txt-directive'],
+      checkIds: ['tabbed-content-serialization'],
       requestDelay: 0,
     });
 

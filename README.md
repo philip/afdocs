@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 15 are fully implemented; the rest return `skip` until completed.
+afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 16 are fully implemented; the rest return `skip` until completed.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
@@ -188,9 +188,9 @@ describe('agent-friendliness', () => {
 
 ### Category 6: Agent Discoverability Directives
 
-| Check                   | Description                                              |
-| ----------------------- | -------------------------------------------------------- |
-| `llms-txt-directive` \* | Whether pages include a directive pointing to `llms.txt` |
+| Check                | Description                                              |
+| -------------------- | -------------------------------------------------------- |
+| `llms-txt-directive` | Whether pages include a directive pointing to `llms.txt` |
 
 ### Category 7: Observability and Content Health
 
