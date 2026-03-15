@@ -32,6 +32,13 @@ export interface CheckContext {
   baseUrl: string;
   /** The origin (scheme + host) derived from baseUrl. */
   origin: string;
+  /**
+   * The actual origin where content lives, when the baseUrl origin redirects
+   * cross-host. Set by llms-txt-exists when it detects a cross-host redirect.
+   * Checks that need ground-truth data (e.g. sitemap for freshness) should
+   * use this over `origin`; checks that test agent experience should use `origin`.
+   */
+  effectiveOrigin?: string;
   /** Results from previously-run checks, keyed by check ID. */
   previousResults: Map<string, CheckResult>;
   /** HTTP client with rate limiting. */

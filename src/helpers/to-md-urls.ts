@@ -1,4 +1,17 @@
 /**
+ * Returns true if the two URLs have different hosts (i.e. a cross-host redirect).
+ */
+export function isCrossHostRedirect(originalUrl: string, finalUrl: string): boolean {
+  try {
+    const original = new URL(originalUrl);
+    const final_ = new URL(finalUrl);
+    return original.host !== final_.host;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Returns true if the URL points to a non-page file type (e.g. .json, .xml, .txt)
  * where we would not expect a markdown equivalent.
  */

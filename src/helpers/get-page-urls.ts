@@ -36,7 +36,7 @@ export function parseSitemapUrls(xml: string): { urls: string[]; sitemapIndexUrl
   return { urls, sitemapIndexUrls };
 }
 
-async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
+export async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
   const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
 
@@ -189,8 +189,8 @@ export function parseSitemapDirectives(robotsTxt: string): string[] {
 /**
  * Discover sitemap URLs by checking robots.txt first, then falling back to /sitemap.xml.
  */
-async function discoverSitemapUrls(ctx: CheckContext): Promise<string[]> {
-  // Try robots.txt for Sitemap directives
+async function discoverSitemapUrls(ctx: CheckContext, originOverride?: string): Promise<string[]> {
+  // Try robots.txt for Sitemap directives at the original origin first
   try {
     const robotsResponse = await ctx.http.fetch(`${ctx.origin}/robots.txt`);
     if (robotsResponse.ok) {
@@ -202,8 +202,22 @@ async function discoverSitemapUrls(ctx: CheckContext): Promise<string[]> {
     // robots.txt fetch failed; fall through
   }
 
-  // Default to /sitemap.xml
-  return [`${ctx.origin}/sitemap.xml`];
+  // If there's an effective origin (cross-host redirect), try its robots.txt too
+  if (originOverride && originOverride !== ctx.origin) {
+    try {
+      const robotsResponse = await ctx.http.fetch(`${originOverride}/robots.txt`);
+      if (robotsResponse.ok) {
+        const body = await robotsResponse.text();
+        const directives = parseSitemapDirectives(body);
+        if (directives.length > 0) return directives;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // Default to /sitemap.xml (prefer effective origin if available)
+  return [`${originOverride ?? ctx.origin}/sitemap.xml`];
 }
 
 export interface PageUrlResult {
@@ -235,21 +249,27 @@ async function fetchSitemap(
   }
 }
 
-async function getUrlsFromSitemap(ctx: CheckContext, warnings: string[]): Promise<string[]> {
-  const sitemapUrls = await discoverSitemapUrls(ctx);
+export async function getUrlsFromSitemap(
+  ctx: CheckContext,
+  warnings: string[],
+  maxUrls: number = MAX_SITEMAP_URLS,
+  originOverride?: string,
+): Promise<string[]> {
+  const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
+  const matchOrigin = originOverride ?? ctx.origin;
 
   for (const sitemapUrl of sitemapUrls) {
-    if (urls.length >= MAX_SITEMAP_URLS) break;
+    if (urls.length >= maxUrls) break;
 
     const parsed = await fetchSitemap(ctx, sitemapUrl, warnings);
 
     // Add direct URLs (filtered to same origin)
     for (const url of parsed.urls) {
-      if (urls.length >= MAX_SITEMAP_URLS) break;
+      if (urls.length >= maxUrls) break;
       try {
         const u = new URL(url);
-        if (u.origin === ctx.origin) {
+        if (u.origin === matchOrigin) {
           urls.push(url);
         }
       } catch {
@@ -258,17 +278,17 @@ async function getUrlsFromSitemap(ctx: CheckContext, warnings: string[]): Promis
     }
 
     // Follow one level of sitemap index
-    if (parsed.sitemapIndexUrls.length > 0 && urls.length < MAX_SITEMAP_URLS) {
+    if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
       for (const subSitemapUrl of parsed.sitemapIndexUrls) {
-        if (urls.length >= MAX_SITEMAP_URLS) break;
+        if (urls.length >= maxUrls) break;
 
         const subParsed = await fetchSitemap(ctx, subSitemapUrl, warnings);
 
         for (const url of subParsed.urls) {
-          if (urls.length >= MAX_SITEMAP_URLS) break;
+          if (urls.length >= maxUrls) break;
           try {
             const u = new URL(url);
-            if (u.origin === ctx.origin) {
+            if (u.origin === matchOrigin) {
               urls.push(url);
             }
           } catch {

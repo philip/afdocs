@@ -1,4 +1,5 @@
 import { registerCheck } from '../registry.js';
+import { isCrossHostRedirect } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
 
 /**
@@ -12,16 +13,6 @@ function getCandidateUrls(baseUrl: string, origin: string): string[] {
   candidates.add(`${origin}/llms.txt`);
   candidates.add(`${origin}/docs/llms.txt`);
   return Array.from(candidates);
-}
-
-function isCrossHostRedirect(originalUrl: string, finalUrl: string): boolean {
-  try {
-    const original = new URL(originalUrl);
-    const final_ = new URL(finalUrl);
-    return original.host !== final_.host;
-  } catch {
-    return false;
-  }
 }
 
 async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
@@ -153,6 +144,21 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
 
   if (redirectedOrigins.length > 0) {
     details.redirectedOrigins = redirectedOrigins;
+  }
+
+  // Set effectiveOrigin for downstream checks when content lives at a different host.
+  // Derive from redirect URLs on discovered files, or from the fallback redirectedOrigins.
+  if (!ctx.effectiveOrigin) {
+    const crossHostFile = discovered.find((f) => f.crossHostRedirect && f.redirectUrl);
+    if (crossHostFile?.redirectUrl) {
+      try {
+        ctx.effectiveOrigin = new URL(crossHostFile.redirectUrl).origin;
+      } catch {
+        /* ignore malformed */
+      }
+    } else if (redirectedOrigins.length > 0) {
+      ctx.effectiveOrigin = redirectedOrigins[0];
+    }
   }
 
   if (discovered.length === 0) {
