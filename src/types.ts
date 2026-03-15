@@ -21,6 +21,7 @@ export interface CachedPage {
 
 export interface FetchedPage {
   url: string;
+  status: number;
   body: string;
   contentType: string;
   isHtml: boolean;

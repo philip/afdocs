@@ -17,7 +17,7 @@ export async function fetchPage(ctx: CheckContext, url: string): Promise<Fetched
     contentType.includes('text/markdown') || contentType.includes('text/plain');
   const isHtml = !isMarkdownType && (contentType.includes('text/html') || looksLikeHtml(body));
 
-  const result: FetchedPage = { url, body, contentType, isHtml };
+  const result: FetchedPage = { url, status: response.status, body, contentType, isHtml };
   ctx.htmlCache.set(url, result);
   return result;
 }
