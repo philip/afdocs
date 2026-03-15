@@ -75,11 +75,33 @@ afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80
 | `--format <format>`     | `text`   | Output format: `text` or `json`              |
 | `-v, --verbose`         |          | Show per-page details for checks with issues |
 | `--checks <ids>`        | all      | Comma-separated list of check IDs            |
+| `--sampling <strategy>` | `random` | URL sampling strategy (see below)            |
 | `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests             |
 | `--request-delay <ms>`  | `200`    | Delay between requests                       |
 | `--max-links <n>`       | `50`     | Maximum links to test in link checks         |
 | `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)             |
 | `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)             |
+
+### Sampling strategies
+
+By default, afdocs discovers pages from your site (via `llms.txt`, sitemap, or both) and randomly samples up to `--max-links` pages to check. The `--sampling` flag gives you control over how that sample is selected.
+
+| Strategy        | Behavior                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `random`        | Shuffle discovered URLs and take the first N. Fast and broad, but results vary between runs.                                                                 |
+| `deterministic` | Sort discovered URLs alphabetically, then pick every Nth URL for an even spread. Produces the same sample on repeated runs as long as the URL set is stable. |
+| `none`          | Skip discovery entirely. Only check the URL you pass on the command line.                                                                                    |
+
+```bash
+# Reproducible runs for CI or iteration (same pages every time)
+afdocs check https://docs.example.com --sampling deterministic
+
+# Check a single page without any discovery
+afdocs check https://docs.example.com/api/auth --sampling none
+
+# Check a single page with specific checks
+afdocs check https://docs.example.com/api/auth --sampling none --checks page-size-html,redirect-behavior
+```
 
 ### Exit codes
 

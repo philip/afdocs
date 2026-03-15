@@ -324,9 +324,29 @@ export interface SampledPages {
  *
  * The result is cached on ctx so that all checks within a single run
  * share the same sampled page list, avoiding inconsistent results.
+ *
+ * Sampling strategies:
+ * - `random`: Fisher-Yates shuffle, then take the first maxLinksToTest. (Default.)
+ * - `deterministic`: Sort URLs lexicographically, then pick every Nth URL
+ *   so that the result is reproducible across runs (as long as the discovered
+ *   URL set is stable).
+ * - `none`: Skip discovery entirely; return only the baseUrl.
  */
 export async function discoverAndSamplePages(ctx: CheckContext): Promise<SampledPages> {
   if (ctx._sampledPages) return ctx._sampledPages;
+
+  const strategy = ctx.options.samplingStrategy;
+
+  // "none" skips discovery and uses only the URL the user provided.
+  if (strategy === 'none') {
+    ctx._sampledPages = {
+      urls: [ctx.baseUrl],
+      totalPages: 1,
+      sampled: false,
+      warnings: [],
+    };
+    return ctx._sampledPages;
+  }
 
   const discovery = await getPageUrls(ctx);
   let urls = discovery.urls;
@@ -334,11 +354,23 @@ export async function discoverAndSamplePages(ctx: CheckContext): Promise<Sampled
 
   const sampled = totalPages > ctx.options.maxLinksToTest;
   if (sampled) {
-    for (let i = urls.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [urls[i], urls[j]] = [urls[j], urls[i]];
+    if (strategy === 'deterministic') {
+      // Sort lexicographically for a stable ordering, then pick evenly-spaced URLs.
+      urls.sort();
+      const stride = urls.length / ctx.options.maxLinksToTest;
+      const picked: string[] = [];
+      for (let i = 0; i < ctx.options.maxLinksToTest; i++) {
+        picked.push(urls[Math.floor(i * stride)]);
+      }
+      urls = picked;
+    } else {
+      // "random" — Fisher-Yates shuffle
+      for (let i = urls.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [urls[i], urls[j]] = [urls[j], urls[i]];
+      }
+      urls = urls.slice(0, ctx.options.maxLinksToTest);
     }
-    urls = urls.slice(0, ctx.options.maxLinksToTest);
   }
 
   ctx._sampledPages = { urls, totalPages, sampled, warnings: discovery.warnings };

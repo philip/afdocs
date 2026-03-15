@@ -696,6 +696,52 @@ describe('discoverAndSamplePages', () => {
     }
   });
 
+  it('deterministic strategy produces stable evenly-spaced results', async () => {
+    const links = Array.from(
+      { length: 10 },
+      (_, i) => `- [Page ${i}](http://det.local/page-${String(i).padStart(2, '0')}): Page ${i}`,
+    ).join('\n');
+    const content = `# Docs\n> Summary\n## Links\n${links}\n`;
+    const ctx = makeCtx('http://det.local', content, {
+      maxLinksToTest: 3,
+      samplingStrategy: 'deterministic',
+    });
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toHaveLength(3);
+    expect(result.totalPages).toBe(10);
+    expect(result.sampled).toBe(true);
+
+    // Run again with a fresh context — should produce the same URLs
+    const ctx2 = makeCtx('http://det.local', content, {
+      maxLinksToTest: 3,
+      samplingStrategy: 'deterministic',
+    });
+    const result2 = await discoverAndSamplePages(ctx2);
+    expect(result2.urls).toEqual(result.urls);
+
+    // URLs should be evenly spaced from the sorted list
+    // Sorted: page-00 through page-09, stride = 10/3 ≈ 3.33
+    // Indices: floor(0*3.33)=0, floor(1*3.33)=3, floor(2*3.33)=6
+    expect(result.urls).toEqual([
+      'http://det.local/page-00',
+      'http://det.local/page-03',
+      'http://det.local/page-06',
+    ]);
+  });
+
+  it('none strategy returns only the baseUrl without discovery', async () => {
+    const content = `# Docs\n> Summary\n## Links\n- [A](http://none-test.local/a): A\n- [B](http://none-test.local/b): B\n`;
+    const ctx = makeCtx('http://none-test.local', content, {
+      samplingStrategy: 'none',
+    });
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toEqual(['http://none-test.local']);
+    expect(result.totalPages).toBe(1);
+    expect(result.sampled).toBe(false);
+  });
+
   it('passes through warnings from discovery', async () => {
     server.use(
       http.get(

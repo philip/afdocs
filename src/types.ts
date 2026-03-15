@@ -46,6 +46,8 @@ export interface CheckContext {
   _sampledPages?: SampledPages;
 }
 
+export type SamplingStrategy = 'random' | 'deterministic' | 'none';
+
 export interface CheckOptions {
   /** Maximum concurrent HTTP requests within a single check. */
   maxConcurrency: number;
@@ -55,6 +57,8 @@ export interface CheckOptions {
   requestTimeout: number;
   /** Maximum number of links to test in link-resolution checks. */
   maxLinksToTest: number;
+  /** URL sampling strategy: random (default), deterministic, or none. */
+  samplingStrategy: SamplingStrategy;
   /** Size thresholds. */
   thresholds: SizeThresholds;
 }
