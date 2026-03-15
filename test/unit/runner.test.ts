@@ -69,7 +69,7 @@ describe('runner', () => {
 
   it('stub checks return skip with "Not yet implemented"', async () => {
     const report = await runChecks('http://stub.local', {
-      checkIds: ['tabbed-content-serialization'],
+      checkIds: ['auth-alternative-access'],
       requestDelay: 0,
     });
 

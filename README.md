@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 16 are fully implemented; the rest return `skip` until completed.
+afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers. 19 are fully implemented; the rest return `skip` until completed.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
@@ -43,7 +43,7 @@ Authentication
   ✓ auth-gate-detection: All 50 sampled pages are publicly accessible
 
 Summary
-  9 passed, 3 failed, 9 skipped (21 total)
+  9 passed, 3 failed, 10 skipped (22 total)
 ```
 
 ## Install
@@ -144,7 +144,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-21 checks across 8 categories. Checks marked with \* are not yet implemented and return `skip`.
+22 checks across 8 categories. Checks marked with \* are not yet implemented and return `skip`.
 
 ### Category 1: llms.txt
 
@@ -165,19 +165,20 @@ describe('agent-friendliness', () => {
 
 ### Category 3: Page Size and Truncation Risk
 
-| Check                    | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `page-size-markdown`     | Character count when served as markdown          |
-| `page-size-html`         | Character count of HTML and post-conversion size |
-| `content-start-position` | How far into the response actual content begins  |
+| Check                    | Description                                                     |
+| ------------------------ | --------------------------------------------------------------- |
+| `rendering-strategy`     | Whether pages contain server-rendered content or are SPA shells |
+| `page-size-markdown`     | Character count when served as markdown                         |
+| `page-size-html`         | Character count of HTML and post-conversion size                |
+| `content-start-position` | How far into the response actual content begins                 |
 
 ### Category 4: Content Structure
 
-| Check                             | Description                                        |
-| --------------------------------- | -------------------------------------------------- |
-| `tabbed-content-serialization` \* | Whether tabbed content creates oversized output    |
-| `section-header-quality` \*       | Whether headers in tabbed sections include context |
-| `markdown-code-fence-validity`    | Whether markdown has unclosed code fences          |
+| Check                          | Description                                        |
+| ------------------------------ | -------------------------------------------------- |
+| `tabbed-content-serialization` | Whether tabbed content creates oversized output    |
+| `section-header-quality`       | Whether headers in tabbed sections include context |
+| `markdown-code-fence-validity` | Whether markdown has unclosed code fences          |
 
 ### Category 5: URL Stability and Redirects
 

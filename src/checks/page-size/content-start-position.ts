@@ -1,7 +1,7 @@
 import { registerCheck } from '../registry.js';
-import { looksLikeHtml } from '../../helpers/detect-markdown.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
 import { htmlToMarkdown } from '../../helpers/html-to-markdown.js';
+import { fetchPage } from '../../helpers/fetch-page.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
 
 interface PagePositionResult {
@@ -184,14 +184,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     const batchResults = await Promise.all(
       batch.map(async (url): Promise<PagePositionResult> => {
         try {
-          const response = await ctx.http.fetch(url);
-          const body = await response.text();
-          const contentType = response.headers.get('content-type') ?? '';
-          const isMarkdownType =
-            contentType.includes('text/markdown') || contentType.includes('text/plain');
-          const isHtml =
-            !isMarkdownType && (contentType.includes('text/html') || looksLikeHtml(body));
-          const markdown = isHtml ? htmlToMarkdown(body) : body;
+          const page = await fetchPage(ctx, url);
+          const markdown = page.isHtml ? htmlToMarkdown(page.body) : page.body;
           const totalChars = markdown.length;
           const contentStartChar = findContentStart(markdown);
           const contentStartPercent =

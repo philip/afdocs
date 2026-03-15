@@ -10,3 +10,8 @@ export {
 export type { PageUrlResult, SampledPages } from './get-page-urls.js';
 export { toMdUrls, isNonPageUrl } from './to-md-urls.js';
 export { htmlToMarkdown } from './html-to-markdown.js';
+export { fetchPage } from './fetch-page.js';
+export { detectTabGroups } from './detect-tabs.js';
+export type { DetectedTabGroup, TabPanel } from './detect-tabs.js';
+export { analyzeRendering } from './detect-rendering.js';
+export type { RenderingAnalysis } from './detect-rendering.js';

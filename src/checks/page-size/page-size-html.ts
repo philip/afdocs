@@ -1,7 +1,7 @@
 import { registerCheck } from '../registry.js';
-import { looksLikeHtml } from '../../helpers/detect-markdown.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
 import { htmlToMarkdown } from '../../helpers/html-to-markdown.js';
+import { fetchPage } from '../../helpers/fetch-page.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
 
 interface PageSizeResult {
@@ -50,18 +50,12 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     const batchResults = await Promise.all(
       batch.map(async (url): Promise<PageSizeResult> => {
         try {
-          const response = await ctx.http.fetch(url);
-          const body = await response.text();
-          const contentType = response.headers.get('content-type') ?? '';
-          const isMarkdownType =
-            contentType.includes('text/markdown') || contentType.includes('text/plain');
-          const isHtml =
-            !isMarkdownType && (contentType.includes('text/html') || looksLikeHtml(body));
+          const page = await fetchPage(ctx, url);
 
           // Skip conversion if the response is already markdown
-          const html = isHtml ? body : '';
+          const html = page.isHtml ? page.body : '';
           const htmlChars = html.length;
-          const converted = isHtml ? htmlToMarkdown(body) : body;
+          const converted = page.isHtml ? htmlToMarkdown(page.body) : page.body;
           const convertedChars = converted.length;
           const ratio = htmlChars > 0 ? Math.round((1 - convertedChars / htmlChars) * 100) : 0;
 

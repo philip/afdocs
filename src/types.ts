@@ -19,6 +19,13 @@ export interface CachedPage {
   };
 }
 
+export interface FetchedPage {
+  url: string;
+  body: string;
+  contentType: string;
+  isHtml: boolean;
+}
+
 export interface CheckContext {
   /** The base URL being checked (as provided by the user). */
   baseUrl: string;
@@ -32,6 +39,8 @@ export interface CheckContext {
   options: CheckOptions;
   /** Cached page content, keyed by original page URL. */
   pageCache: Map<string, CachedPage>;
+  /** Cached raw HTML fetches, keyed by URL. Shared across checks within a single run. */
+  htmlCache: Map<string, FetchedPage>;
   /** Cached sampled pages result, shared across checks within a single run. */
   _sampledPages?: SampledPages;
 }

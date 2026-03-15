@@ -535,6 +535,58 @@ describe('check pipeline: content-negotiation respects md-url cache', () => {
   });
 });
 
+describe('check pipeline: HTML fetch cache shared across checks', () => {
+  it('page-size-html and tabbed-content-serialization share fetched HTML', async () => {
+    let fetchCount = 0;
+    const pageHtml =
+      '<html><body><h1>Guide</h1><div class="sphinx-tabs"><div class="sphinx-tabs-tab">Python</div><div class="sphinx-tabs-panel"><pre>print("hi")</pre></div></div></body></html>';
+
+    server.use(
+      http.get('http://pipe-htmlcache.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Guide](http://pipe-htmlcache.local/docs/guide): Guide\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-htmlcache.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get('http://pipe-htmlcache.local/docs/guide', () => {
+        fetchCount++;
+        return new HttpResponse(pageHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }),
+      // page-size-html probes for .md and 404-test URLs
+      http.get(
+        'http://pipe-htmlcache.local/docs/guide.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-htmlcache.local/docs/guide-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-htmlcache.local', {
+      checkIds: ['llms-txt-exists', 'page-size-html', 'tabbed-content-serialization'],
+      requestDelay: 0,
+    });
+
+    const htmlResult = report.results.find((r) => r.id === 'page-size-html')!;
+    const tabResult = report.results.find((r) => r.id === 'tabbed-content-serialization')!;
+
+    // Both checks should succeed
+    expect(htmlResult.status).not.toBe('error');
+    expect(tabResult.status).not.toBe('error');
+    expect(tabResult.details?.totalGroupsFound).toBe(1);
+
+    // The page should only be fetched once, not twice
+    expect(fetchCount).toBe(1);
+  });
+});
+
 describe('check pipeline: independent checks share sampling', () => {
   it('cache-header-hygiene and auth-gate-detection test the same pages', async () => {
     const pages = [];
