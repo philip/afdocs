@@ -414,6 +414,104 @@ describe('getPageUrls', () => {
     expect(result.warnings[0]).toContain('sitemap-docs.xml.gz');
   });
 
+  // ── Progressive disclosure: walking aggregate .txt files ──
+
+  it('walks aggregate .txt files linked from llms.txt (Cloudflare pattern)', async () => {
+    // Root llms.txt links to per-product llms.txt files
+    const rootContent = `# Docs\n- [Workers](http://walk-test.local/workers/llms.txt)\n- [Cache](http://walk-test.local/cache/llms.txt)\n`;
+    const workersContent = `# Workers\n- [Guide](http://walk-test.local/workers/guide/index.md): Get started\n- [API](http://walk-test.local/workers/api/index.md): API ref\n`;
+    const cacheContent = `# Cache\n- [Overview](http://walk-test.local/cache/overview/index.md): Overview\n`;
+
+    server.use(
+      http.get(
+        'http://walk-test.local/workers/llms.txt',
+        () =>
+          new HttpResponse(workersContent, {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        'http://walk-test.local/cache/llms.txt',
+        () =>
+          new HttpResponse(cacheContent, {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx('http://walk-test.local', rootContent);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toContain('http://walk-test.local/workers/guide/index.md');
+    expect(result.urls).toContain('http://walk-test.local/workers/api/index.md');
+    expect(result.urls).toContain('http://walk-test.local/cache/overview/index.md');
+    expect(result.urls).toHaveLength(3);
+  });
+
+  it('walks aggregate .txt files with relative URLs (Supabase pattern)', async () => {
+    // Root llms.txt links to aggregate content files
+    const rootContent = `# Docs\n- [Guides](http://walk-rel.local/llms/guides.txt)\n`;
+    const guidesContent = `# Guides\n\nLearn about [auth](/docs/guides/auth) and [storage](/docs/guides/storage).\n`;
+
+    server.use(
+      http.get(
+        'http://walk-rel.local/llms/guides.txt',
+        () =>
+          new HttpResponse(guidesContent, {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx('http://walk-rel.local', rootContent);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toContain('http://walk-rel.local/docs/guides/auth');
+    expect(result.urls).toContain('http://walk-rel.local/docs/guides/storage');
+  });
+
+  it('resolves relative URLs in root llms.txt against origin', async () => {
+    const content = `# Docs\n- [Guide](/docs/guide): A guide\n- [Ref](/docs/ref): A ref\n`;
+    const ctx = makeCtx('http://rel-root.local', content);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://rel-root.local/docs/guide',
+      'http://rel-root.local/docs/ref',
+    ]);
+  });
+
+  it('does not walk .txt files from a different origin', async () => {
+    const content = `# Docs\n- [External](http://other-site.com/llms.txt)\n- [Local](http://no-walk.local/docs/page): Page\n`;
+    const ctx = makeCtx('http://no-walk.local', content);
+    const result = await getPageUrls(ctx);
+    // Should only have the local page URL, not try to fetch the external .txt
+    expect(result.urls).toEqual(['http://no-walk.local/docs/page']);
+  });
+
+  it('falls through to baseUrl when all aggregate files fail', async () => {
+    const rootContent = `# Docs\n- [Bad](http://walk-err.local/bad.txt)\n- [Html](http://walk-err.local/html.txt)\n`;
+
+    server.use(
+      http.get('http://walk-err.local/bad.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://walk-err.local/html.txt',
+        () =>
+          new HttpResponse('<!DOCTYPE html><html></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get('http://walk-err.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://walk-err.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+    );
+
+    const ctx = makeCtx('http://walk-err.local', rootContent);
+    const result = await getPageUrls(ctx);
+    // All aggregate files failed → no page URLs → falls through to baseUrl
+    expect(result.urls).toEqual(['http://walk-err.local']);
+  });
+
   // ── Direct llms.txt fetch (standalone mode) ──
 
   it('fetches llms.txt directly when llms-txt-exists has not run', async () => {

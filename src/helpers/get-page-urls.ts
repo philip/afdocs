@@ -1,5 +1,6 @@
 import { extractMarkdownLinks } from '../checks/llms-txt/llms-txt-valid.js';
 import { MAX_SITEMAP_URLS } from '../constants.js';
+import { isNonPageUrl } from './to-md-urls.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';
 
 /**
@@ -35,11 +36,12 @@ export function parseSitemapUrls(xml: string): { urls: string[]; sitemapIndexUrl
   return { urls, sitemapIndexUrls };
 }
 
-function getUrlsFromCachedLlmsTxt(ctx: CheckContext): string[] {
+async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
   const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
 
-  return extractLinksFromLlmsTxtFiles(discovered);
+  const urls = extractLinksFromLlmsTxtFiles(discovered);
+  return walkAggregateLinks(ctx, urls);
 }
 
 function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
@@ -49,10 +51,88 @@ function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
     for (const link of links) {
       if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
         urls.add(link.url);
+      } else if (link.url.startsWith('/')) {
+        // Resolve root-relative URLs against the source file's origin
+        try {
+          const base = new URL(file.url);
+          urls.add(new URL(link.url, base.origin).toString());
+        } catch {
+          // Skip malformed URLs
+        }
       }
     }
   }
   return Array.from(urls);
+}
+
+/**
+ * Identify .txt links that are likely aggregate/index files (progressive
+ * disclosure pattern) and walk them one level deep to find page URLs.
+ *
+ * A link is considered walkable when it ends in .txt and is on the same
+ * origin as the site being tested. This covers both sub-product llms.txt
+ * files (Cloudflare) and aggregate content files (Supabase).
+ */
+async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<string[]> {
+  const pageUrls: string[] = [];
+  const aggregateUrls: string[] = [];
+
+  for (const url of urls) {
+    try {
+      const parsed = new URL(url);
+      if (/\.txt$/i.test(parsed.pathname)) {
+        // .txt files are either aggregate indexes to walk (same origin)
+        // or external resources to skip — never page URLs themselves
+        if (parsed.origin === ctx.origin) {
+          aggregateUrls.push(url);
+        }
+      } else {
+        pageUrls.push(url);
+      }
+    } catch {
+      pageUrls.push(url);
+    }
+  }
+
+  if (aggregateUrls.length === 0) return pageUrls;
+
+  // Fetch aggregate files and extract their links
+  for (const aggUrl of aggregateUrls) {
+    try {
+      const response = await ctx.http.fetch(aggUrl);
+      if (!response.ok) continue;
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('text/')) continue;
+      const content = await response.text();
+      const trimmed = content.trimStart().toLowerCase();
+      if (trimmed.startsWith('<!') || trimmed.startsWith('<html')) continue;
+      if (content.trim().length === 0) continue;
+
+      const subFile: DiscoveredFile = {
+        url: aggUrl,
+        content,
+        status: response.status,
+        redirected: response.redirected,
+      };
+      const subUrls = extractLinksFromLlmsTxtFiles([subFile]);
+
+      for (const subUrl of subUrls) {
+        // Only keep same-origin page URLs (skip further .txt nesting)
+        try {
+          const parsed = new URL(subUrl);
+          if (parsed.origin === ctx.origin && !isNonPageUrl(subUrl)) {
+            pageUrls.push(subUrl);
+          }
+        } catch {
+          // Skip malformed URLs
+        }
+      }
+    } catch {
+      // Skip failed fetches
+    }
+  }
+
+  return pageUrls;
 }
 
 /**
@@ -87,7 +167,8 @@ async function fetchLlmsTxtUrls(ctx: CheckContext): Promise<string[]> {
     }
   }
 
-  return extractLinksFromLlmsTxtFiles(discovered);
+  const urls = extractLinksFromLlmsTxtFiles(discovered);
+  return walkAggregateLinks(ctx, urls);
 }
 
 /**
@@ -213,7 +294,7 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
-  const cachedUrls = getUrlsFromCachedLlmsTxt(ctx);
+  const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
   if (cachedUrls.length > 0) return { urls: cachedUrls, warnings };
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
