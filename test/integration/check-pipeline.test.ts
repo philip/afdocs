@@ -630,3 +630,446 @@ describe('check pipeline: independent checks share sampling', () => {
     expect(authPages).toEqual(cachePageUrls);
   });
 });
+
+describe('check pipeline: auth-gate-detection → auth-alternative-access', () => {
+  it('auth-alternative-access detects public llms.txt when docs are gated', async () => {
+    // Site where llms.txt is public but doc pages return 401
+    server.use(
+      http.get('http://pipe-auth-llms.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Page](http://pipe-auth-llms.local/docs/page): A page\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-auth-llms.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-auth-llms.local/docs/page',
+        () => new HttpResponse('Unauthorized', { status: 401 }),
+      ),
+      http.get(
+        'http://pipe-auth-llms.local/docs/page.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-auth-llms.local/docs/page-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-auth-llms.local', {
+      checkIds: ['llms-txt-exists', 'auth-gate-detection', 'auth-alternative-access'],
+      requestDelay: 0,
+    });
+
+    const llmsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
+    const authResult = report.results.find((r) => r.id === 'auth-gate-detection')!;
+    const altResult = report.results.find((r) => r.id === 'auth-alternative-access')!;
+
+    expect(llmsResult.status).toBe('pass');
+    expect(authResult.status).toBe('fail');
+    // auth-alternative-access should detect the public llms.txt
+    expect(altResult.status).toBe('warn'); // llms.txt alone is partial
+    const paths = altResult.details?.detectedPaths as Array<{ type: string }>;
+    expect(paths.some((p) => p.type === 'public-llms-txt')).toBe(true);
+  });
+
+  it('auth-alternative-access skips when all pages are public', async () => {
+    setupSite('pipe-auth-public.local', {
+      llmsTxt: '# Docs\n## Links\n- [Page](http://pipe-auth-public.local/docs/page): A page\n',
+      pages: [{ path: '/docs/page' }],
+    });
+
+    const report = await runChecks('http://pipe-auth-public.local', {
+      checkIds: ['llms-txt-exists', 'auth-gate-detection', 'auth-alternative-access'],
+      requestDelay: 0,
+    });
+
+    const authResult = report.results.find((r) => r.id === 'auth-gate-detection')!;
+    const altResult = report.results.find((r) => r.id === 'auth-alternative-access')!;
+
+    expect(authResult.status).toBe('pass');
+    expect(altResult.status).toBe('skip');
+    expect(altResult.message).toContain('publicly accessible');
+  });
+
+  it('auth-alternative-access passes when gated site has public markdown', async () => {
+    // Site where some pages require auth but markdown is available
+    server.use(
+      http.get('http://pipe-auth-md.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Public](http://pipe-auth-md.local/docs/public): Public\n- [Private](http://pipe-auth-md.local/docs/private): Private\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/public',
+        () =>
+          new HttpResponse('<html><body><h1>Public Page</h1><p>Content here.</p></body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/public.md',
+        () =>
+          new HttpResponse('# Public Page\n\nContent here.\n', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/private',
+        () => new HttpResponse('Forbidden', { status: 403 }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/private.md',
+        () => new HttpResponse(null, { status: 403 }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/public-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/private-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-auth-md.local', {
+      checkIds: [
+        'llms-txt-exists',
+        'markdown-url-support',
+        'auth-gate-detection',
+        'auth-alternative-access',
+      ],
+      requestDelay: 0,
+    });
+
+    const authResult = report.results.find((r) => r.id === 'auth-gate-detection')!;
+    const mdResult = report.results.find((r) => r.id === 'markdown-url-support')!;
+    const altResult = report.results.find((r) => r.id === 'auth-alternative-access')!;
+
+    expect(authResult.status).toBe('warn'); // mixed: some accessible, some gated
+    expect(mdResult.status).not.toBe('skip');
+    expect(altResult.status).toBe('pass');
+    const paths = altResult.details?.detectedPaths as Array<{ type: string }>;
+    expect(paths.some((p) => p.type === 'public-llms-txt')).toBe(true);
+    expect(paths.some((p) => p.type === 'public-markdown')).toBe(true);
+    expect(paths.some((p) => p.type === 'partial-public-access')).toBe(true);
+  });
+});
+
+describe('check pipeline: rendering-strategy → tabbed-content-serialization', () => {
+  it('tabbed-content-serialization uses SPA shell detection to try markdown fallback', async () => {
+    // Page is an SPA shell (minimal HTML with React root), but has tabs in markdown
+    const spaHtml =
+      '<html><head><title>Docs</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>';
+    const mdContent =
+      '# Guide\n\n:::tabs\n::tab{label="Python"}\n```python\nprint("hi")\n```\n::tab{label="JS"}\n```js\nconsole.log("hi");\n```\n:::';
+
+    server.use(
+      http.get('http://pipe-spa-tab.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Guide](http://pipe-spa-tab.local/docs/guide): Guide\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-spa-tab.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get('http://pipe-spa-tab.local/docs/guide', ({ request }) => {
+        const accept = request.headers.get('accept') ?? '';
+        if (accept.includes('text/markdown')) {
+          return new HttpResponse(mdContent, {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          });
+        }
+        return new HttpResponse(spaHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }),
+      http.get(
+        'http://pipe-spa-tab.local/docs/guide.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-spa-tab.local/docs/guide-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-spa-tab.local', {
+      checkIds: ['llms-txt-exists', 'rendering-strategy', 'tabbed-content-serialization'],
+      requestDelay: 0,
+    });
+
+    const renderResult = report.results.find((r) => r.id === 'rendering-strategy')!;
+    const tabResult = report.results.find((r) => r.id === 'tabbed-content-serialization')!;
+
+    // rendering-strategy should flag the page as SPA shell
+    expect(renderResult.status).toBe('fail');
+    const renderPages = renderResult.details?.pageResults as Array<{ url: string; status: string }>;
+    expect(renderPages.some((p) => p.status === 'fail')).toBe(true);
+
+    // tabbed-content-serialization should have used the md-fallback path
+    // since the page was detected as an SPA shell by rendering-strategy
+    const tabbedPages = tabResult.details?.tabbedPages as Array<{ url: string; source: string }>;
+    expect(tabbedPages).toBeDefined();
+    // If tabs were detected via the fallback, source should be 'md-fallback'
+    // If no tabs found in md either, source stays 'html' — either way it should not error
+    expect(tabResult.status).not.toBe('error');
+  });
+});
+
+describe('check pipeline: tabbed-content-serialization → section-header-quality', () => {
+  it('section-header-quality reads tabbed page data from tabbed-content-serialization', async () => {
+    // Page with Sphinx-style tabs containing headers in each panel
+    const tabbedHtml = `<html><body>
+      <h1>Installation</h1>
+      <div class="sphinx-tabs">
+        <div class="sphinx-tabs-tab">Python</div>
+        <div class="sphinx-tabs-panel"><h2>Installation</h2><pre>pip install sdk</pre></div>
+        <div class="sphinx-tabs-tab">JavaScript</div>
+        <div class="sphinx-tabs-panel"><h2>Installation</h2><pre>npm install sdk</pre></div>
+      </div>
+    </body></html>`;
+
+    server.use(
+      http.get('http://pipe-tab-hdr.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Install](http://pipe-tab-hdr.local/docs/install): Installation\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-tab-hdr.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-tab-hdr.local/docs/install',
+        () =>
+          new HttpResponse(tabbedHtml, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://pipe-tab-hdr.local/docs/install.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-tab-hdr.local/docs/install-afdocs-nonexistent-8f3a',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-tab-hdr.local', {
+      checkIds: ['llms-txt-exists', 'tabbed-content-serialization', 'section-header-quality'],
+      requestDelay: 0,
+    });
+
+    const tabResult = report.results.find((r) => r.id === 'tabbed-content-serialization')!;
+    const headerResult = report.results.find((r) => r.id === 'section-header-quality')!;
+
+    // tabbed-content-serialization should find the tab group
+    expect(tabResult.details?.totalGroupsFound).toBeGreaterThanOrEqual(1);
+
+    // section-header-quality should consume the tabbed page data (not skip)
+    expect(headerResult.status).not.toBe('skip');
+    expect(headerResult.message).not.toContain('did not run');
+  });
+
+  it('section-header-quality skips when tabbed-content-serialization did not run', async () => {
+    const report = await runChecks('http://pipe-tab-norun.local', {
+      checkIds: ['section-header-quality'],
+      requestDelay: 0,
+    });
+
+    const headerResult = report.results.find((r) => r.id === 'section-header-quality')!;
+    expect(headerResult.status).toBe('skip');
+    expect(headerResult.message).toContain('did not run');
+  });
+});
+
+describe('check pipeline: llms-txt-exists → llms-txt-links-markdown data flow', () => {
+  it('llms-txt-links-markdown receives discovered file content and tests links', async () => {
+    server.use(
+      http.get('http://pipe-llms-md.local/llms.txt', () =>
+        HttpResponse.text(
+          '# Docs\n## Links\n- [Guide](http://pipe-llms-md.local/docs/guide): Guide\n',
+        ),
+      ),
+      http.get(
+        'http://pipe-llms-md.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      // The link in llms.txt returns HTML (not markdown)
+      http.get(
+        'http://pipe-llms-md.local/docs/guide',
+        () =>
+          new HttpResponse('<html><body><h1>Guide</h1></body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      // .md URL returns markdown
+      http.get(
+        'http://pipe-llms-md.local/docs/guide.md',
+        () =>
+          new HttpResponse('# Guide\n\nContent.\n', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-llms-md.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-links-markdown'],
+      requestDelay: 0,
+    });
+
+    const existsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
+    const mdResult = report.results.find((r) => r.id === 'llms-txt-links-markdown')!;
+
+    expect(existsResult.status).toBe('pass');
+    // Should run (not skip) and test the link
+    expect(mdResult.status).not.toBe('skip');
+    expect(mdResult.details?.totalLinks).toBe(1);
+  });
+
+  it('llms-txt-links-markdown skips when llms-txt-exists fails', async () => {
+    server.use(
+      http.get(
+        'http://pipe-llms-md-nollms.local/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-llms-md-nollms.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-llms-md-nollms.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-links-markdown'],
+      requestDelay: 0,
+    });
+
+    expect(report.results.find((r) => r.id === 'llms-txt-exists')!.status).toBe('fail');
+    expect(report.results.find((r) => r.id === 'llms-txt-links-markdown')!.status).toBe('skip');
+  });
+});
+
+describe('check pipeline: markdown-content-parity reads from pageCache', () => {
+  it('markdown-content-parity compares cached markdown against HTML', async () => {
+    const mdContent = '# API Reference\n\nEndpoints and methods.\n';
+    const htmlContent =
+      '<html><body><h1>API Reference</h1><p>Endpoints and methods.</p></body></html>';
+
+    setupSite('pipe-parity.local', {
+      llmsTxt: '# Docs\n## Links\n- [API](http://pipe-parity.local/docs/api): Reference\n',
+      pages: [{ path: '/docs/api', md: mdContent, html: htmlContent }],
+    });
+
+    const report = await runChecks('http://pipe-parity.local', {
+      checkIds: ['llms-txt-exists', 'markdown-url-support', 'markdown-content-parity'],
+      requestDelay: 0,
+    });
+
+    const mdUrlResult = report.results.find((r) => r.id === 'markdown-url-support')!;
+    const parityResult = report.results.find((r) => r.id === 'markdown-content-parity')!;
+
+    // markdown-url-support should have populated the pageCache
+    expect(mdUrlResult.status).toBe('pass');
+
+    // markdown-content-parity should consume the cached markdown (not skip)
+    expect(parityResult.status).not.toBe('skip');
+    expect(parityResult.message).not.toContain('No pages with markdown');
+    expect(parityResult.details?.pagesCompared).toBe(1);
+  });
+
+  it('markdown-content-parity skips when no markdown is cached', async () => {
+    setupSite('pipe-parity-nomd.local', {
+      llmsTxt: '# Docs\n## Links\n- [Page](http://pipe-parity-nomd.local/docs/page): A page\n',
+      pages: [{ path: '/docs/page' }],
+    });
+
+    const report = await runChecks('http://pipe-parity-nomd.local', {
+      checkIds: [
+        'llms-txt-exists',
+        'markdown-url-support',
+        'content-negotiation',
+        'markdown-content-parity',
+      ],
+      requestDelay: 0,
+    });
+
+    const parityResult = report.results.find((r) => r.id === 'markdown-content-parity')!;
+    // Both upstream checks failed → no markdown in cache → dependency skip
+    expect(parityResult.status).toBe('skip');
+  });
+});
+
+describe('check pipeline: effectiveOrigin propagation', () => {
+  it('llms-txt-exists sets effectiveOrigin which llms-txt-freshness uses', async () => {
+    // llms.txt redirects cross-host; sitemap lives at the redirected host
+    const redirectedHost = 'pipe-effective-docs.local';
+    const llmsContent = `# Docs\n## Links\n- [Guide](http://${redirectedHost}/docs/guide): Guide\n`;
+
+    server.use(
+      // Original host redirects llms.txt to different host
+      http.get(
+        'http://pipe-effective.local/llms.txt',
+        () =>
+          new HttpResponse(null, {
+            status: 301,
+            headers: { Location: `http://${redirectedHost}/llms.txt` },
+          }),
+      ),
+      http.get(
+        'http://pipe-effective.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      // Redirected host serves llms.txt
+      http.get(`http://${redirectedHost}/llms.txt`, () => HttpResponse.text(llmsContent)),
+      // Sitemap at redirected host
+      http.get('http://pipe-effective.local/robots.txt', () =>
+        HttpResponse.text(`Sitemap: http://${redirectedHost}/sitemap.xml`),
+      ),
+      http.get(`http://${redirectedHost}/robots.txt`, () =>
+        HttpResponse.text(`Sitemap: http://${redirectedHost}/sitemap.xml`),
+      ),
+      http.get(
+        `http://${redirectedHost}/sitemap.xml`,
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0" encoding="UTF-8"?>
+           <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+             <url><loc>http://${redirectedHost}/docs/guide</loc></url>
+           </urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const report = await runChecks('http://pipe-effective.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-freshness'],
+      requestDelay: 0,
+    });
+
+    const existsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
+    const freshnessResult = report.results.find((r) => r.id === 'llms-txt-freshness')!;
+
+    // Cross-host redirect produces 'warn' (agents may not follow it)
+    expect(existsResult.status).toBe('warn');
+    // Freshness should not skip — it should use the effectiveOrigin to find the sitemap
+    // at the redirected host and match URLs there
+    expect(freshnessResult.status).not.toBe('skip');
+    expect(freshnessResult.message).not.toContain('No sitemap found');
+  });
+});

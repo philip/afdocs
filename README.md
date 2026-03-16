@@ -7,7 +7,7 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers. 21 are fully implemented; the rest return `skip` until completed.
+afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
@@ -166,7 +166,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-22 checks across 8 categories. Checks marked with \* are not yet implemented and return `skip`.
+22 checks across 8 categories.
 
 ### Category 1: llms.txt
 
@@ -225,10 +225,10 @@ describe('agent-friendliness', () => {
 
 ### Category 8: Authentication and Access
 
-| Check                        | Description                                                          |
-| ---------------------------- | -------------------------------------------------------------------- |
-| `auth-gate-detection`        | Whether documentation pages require authentication to access content |
-| `auth-alternative-access` \* | Whether auth-gated sites provide alternative access paths for agents |
+| Check                     | Description                                                          |
+| ------------------------- | -------------------------------------------------------------------- |
+| `auth-gate-detection`     | Whether documentation pages require authentication to access content |
+| `auth-alternative-access` | Whether auth-gated sites provide alternative access paths for agents |
 
 ## Check dependencies
 

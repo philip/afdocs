@@ -45,11 +45,18 @@ function detectLoginForm(body: string): string | undefined {
     return 'Contains password input field';
   }
 
-  // Check page title for login indicators
+  // Check page title for login indicators.
+  // Only match titles that suggest the page IS a login form, not pages that
+  // mention login as a topic (e.g. "unable to login" in a knowledge base article).
+  // We require the login keyword to appear at the start or after a separator.
   const titleMatch = /<title[^>]*>(.*?)<\/title>/i.exec(sample);
   if (titleMatch) {
-    const title = titleMatch[1].toLowerCase();
-    if (/sign\s*in|log\s*in|authenticate/i.test(title)) {
+    const title = titleMatch[1].toLowerCase().trim();
+    if (
+      /^(sign\s*in|log\s*in)\b/.test(title) ||
+      /[|\-–—:]\s*(sign\s*in|log\s*in)\s*$/i.test(title) ||
+      /^authenticate\b/.test(title)
+    ) {
       return `Page title suggests login: "${titleMatch[1].trim()}"`;
     }
   }
