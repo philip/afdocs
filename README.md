@@ -12,7 +12,7 @@ afdocs runs 22 checks across 8 categories to evaluate how well your docs serve a
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
 >
-> Implements [spec v0.1.0](https://agentdocsspec.com/spec) (2026-02-22).
+> Implements [spec v0.2.1](https://agentdocsspec.com/spec) (2026-03-15).
 
 ## Quick start
 

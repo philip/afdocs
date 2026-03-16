@@ -136,6 +136,6 @@ registerCheck({
   id: 'markdown-code-fence-validity',
   category: 'content-structure',
   description: 'Whether markdown contains unclosed code fences',
-  dependsOn: [['markdown-url-support', 'content-negotiation']],
+  dependsOn: [],
   run: check,
 });

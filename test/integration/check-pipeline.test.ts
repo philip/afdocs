@@ -351,11 +351,14 @@ describe('check pipeline: dependency skipping vs standalone mode', () => {
     expect(mdUrlResult.status).toBe('fail');
     expect(cnResult.status).toBe('fail');
 
-    // Downstream checks should be skipped by the runner (deps ran but failed)
+    // page-size-markdown should be skipped by the runner (deps ran but failed)
     expect(sizeResult.status).toBe('skip');
     expect(sizeResult.message).toContain('dependency');
-    expect(fenceResult.status).toBe('skip');
-    expect(fenceResult.message).toContain('dependency');
+
+    // markdown-code-fence-validity has no dependency; it runs and analyzes
+    // llms.txt content even when the site doesn't serve markdown pages
+    expect(fenceResult.status).toBe('pass');
+    expect(fenceResult.message).toContain('code fences properly closed');
   });
 
   it('downstream checks run standalone when upstream is not in the check list', async () => {

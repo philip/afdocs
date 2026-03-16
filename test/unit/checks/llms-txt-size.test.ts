@@ -22,6 +22,27 @@ describe('llms-txt-size', () => {
     return ctx;
   }
 
+  it('skips when no discovered files', async () => {
+    const ctx = createContext('http://test.local', { requestDelay: 0 });
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'fail',
+      message: 'Not found',
+      details: { discoveredFiles: [] },
+    });
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('No llms.txt files');
+  });
+
+  it('skips when llms-txt-exists has no details', async () => {
+    const ctx = createContext('http://test.local', { requestDelay: 0 });
+    // No previousResults set at all
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+  });
+
   it('passes for small content', async () => {
     const result = await check.run(makeCtx('# Small\n\n> Tiny file.\n'));
     expect(result.status).toBe('pass');

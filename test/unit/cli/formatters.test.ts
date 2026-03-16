@@ -77,6 +77,28 @@ describe('formatText', () => {
     expect(output).not.toContain('errors');
   });
 
+  it('shows small character counts without K suffix', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'page-size-html',
+          category: 'page-size',
+          status: 'warn',
+          message: 'Small page',
+          details: {
+            pageResults: [
+              { url: 'https://example.com/tiny', convertedCharacters: 500, status: 'warn' },
+            ],
+          },
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('500 chars');
+    expect(output).not.toContain('K chars');
+  });
+
   describe('verbose mode', () => {
     it('shows per-page details for non-passing pageResults', () => {
       const report = makeReport({
@@ -398,6 +420,62 @@ describe('formatText', () => {
       });
       const output = formatText(report, { verbose: true });
       expect(output).toContain('Sitemap returned 404, used homepage links instead');
+    });
+
+    it('shows SPA caveat on page-size-html when rendering-strategy fails', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'rendering-strategy',
+            category: 'page-size',
+            status: 'fail',
+            message: 'SPA shell detected',
+          },
+          {
+            id: 'page-size-html',
+            category: 'page-size',
+            status: 'pass',
+            message: 'All pages under threshold',
+          },
+          {
+            id: 'content-start-position',
+            category: 'page-size',
+            status: 'warn',
+            message: 'Content starts late',
+          },
+        ],
+        summary: { total: 3, pass: 1, warn: 1, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report);
+      // Both sensitive checks should show the SPA caveat
+      const spaNote = 'rendering-strategy detected SPA shells';
+      const lines = output.split('\n');
+      const htmlLine = lines.findIndex((l) => l.includes('page-size-html'));
+      const posLine = lines.findIndex((l) => l.includes('content-start-position'));
+      expect(lines[htmlLine + 1]).toContain(spaNote);
+      expect(lines[posLine + 1]).toContain(spaNote);
+    });
+
+    it('does not show SPA caveat when rendering-strategy passes', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'rendering-strategy',
+            category: 'page-size',
+            status: 'pass',
+            message: 'Server-rendered',
+          },
+          {
+            id: 'page-size-html',
+            category: 'page-size',
+            status: 'pass',
+            message: 'All pages under threshold',
+          },
+        ],
+        summary: { total: 2, pass: 2, warn: 0, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report);
+      expect(output).not.toContain('rendering-strategy detected SPA shells');
     });
 
     it('does not show details without verbose flag', () => {

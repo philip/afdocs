@@ -31,6 +31,54 @@ describe('llms-txt-links-resolve', () => {
     return ctx;
   }
 
+  it('skips when no discovered files', async () => {
+    const ctx = createContext('http://test.local', { requestDelay: 0 });
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'fail',
+      message: 'Not found',
+      details: { discoveredFiles: [] },
+    });
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('No llms.txt files');
+  });
+
+  it('falls back to GET when HEAD returns 405', async () => {
+    server.use(
+      http.head('http://head405.local/page1', () => new HttpResponse(null, { status: 405 })),
+      http.get('http://head405.local/page1', () => new HttpResponse('OK', { status: 200 })),
+    );
+
+    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://head405.local/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('pass');
+    expect(result.details?.resolved).toBe(1);
+  });
+
+  it('warns when resolve rate is above threshold but not 100%', async () => {
+    // 9 resolve, 1 broken = 90% resolve rate, which is exactly at LINK_RESOLVE_THRESHOLD (0.9)
+    // Need > 0.9 for warn, so use 10 resolve + 1 broken = ~91%
+    const urls: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      urls.push(`http://warn-rl.local/page${i}`);
+      server.use(
+        http.head(`http://warn-rl.local/page${i}`, () => new HttpResponse(null, { status: 200 })),
+      );
+    }
+    urls.push('http://warn-rl.local/broken');
+    server.use(
+      http.head('http://warn-rl.local/broken', () => new HttpResponse(null, { status: 404 })),
+    );
+
+    const links = urls.map((u, i) => `- [Page ${i}](${u}): Page ${i}`).join('\n');
+    const content = `# Test\n> Summary\n## Links\n${links}\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('warn');
+    expect(result.details?.broken).toHaveLength(1);
+  });
+
   it('passes when all links resolve', async () => {
     server.use(
       http.head('http://links.local/page1', () => new HttpResponse(null, { status: 200 })),
