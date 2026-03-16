@@ -19,11 +19,26 @@ export interface CachedPage {
   };
 }
 
+export interface FetchedPage {
+  url: string;
+  status: number;
+  body: string;
+  contentType: string;
+  isHtml: boolean;
+}
+
 export interface CheckContext {
   /** The base URL being checked (as provided by the user). */
   baseUrl: string;
   /** The origin (scheme + host) derived from baseUrl. */
   origin: string;
+  /**
+   * The actual origin where content lives, when the baseUrl origin redirects
+   * cross-host. Set by llms-txt-exists when it detects a cross-host redirect.
+   * Checks that need ground-truth data (e.g. sitemap for freshness) should
+   * use this over `origin`; checks that test agent experience should use `origin`.
+   */
+  effectiveOrigin?: string;
   /** Results from previously-run checks, keyed by check ID. */
   previousResults: Map<string, CheckResult>;
   /** HTTP client with rate limiting. */
@@ -32,9 +47,13 @@ export interface CheckContext {
   options: CheckOptions;
   /** Cached page content, keyed by original page URL. */
   pageCache: Map<string, CachedPage>;
+  /** Cached raw HTML fetches, keyed by URL. Shared across checks within a single run. */
+  htmlCache: Map<string, FetchedPage>;
   /** Cached sampled pages result, shared across checks within a single run. */
   _sampledPages?: SampledPages;
 }
+
+export type SamplingStrategy = 'random' | 'deterministic' | 'none';
 
 export interface CheckOptions {
   /** Maximum concurrent HTTP requests within a single check. */
@@ -45,6 +64,8 @@ export interface CheckOptions {
   requestTimeout: number;
   /** Maximum number of links to test in link-resolution checks. */
   maxLinksToTest: number;
+  /** URL sampling strategy: random (default), deterministic, or none. */
+  samplingStrategy: SamplingStrategy;
   /** Size thresholds. */
   thresholds: SizeThresholds;
 }

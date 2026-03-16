@@ -7,12 +7,12 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 21 checks across 8 categories to evaluate how well your docs serve agent consumers. 16 are fully implemented; the rest return `skip` until completed.
+afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
 >
-> Implements [spec v0.1.0](https://agentdocsspec.com/spec) (2026-02-22).
+> Implements [spec v0.2.1](https://agentdocsspec.com/spec) (2026-03-15).
 
 ## Quick start
 
@@ -43,7 +43,7 @@ Authentication
   ✓ auth-gate-detection: All 50 sampled pages are publicly accessible
 
 Summary
-  9 passed, 3 failed, 9 skipped (21 total)
+  9 passed, 3 failed, 10 skipped (22 total)
 ```
 
 ## Install
@@ -75,11 +75,33 @@ afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80
 | `--format <format>`     | `text`   | Output format: `text` or `json`              |
 | `-v, --verbose`         |          | Show per-page details for checks with issues |
 | `--checks <ids>`        | all      | Comma-separated list of check IDs            |
+| `--sampling <strategy>` | `random` | URL sampling strategy (see below)            |
 | `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests             |
 | `--request-delay <ms>`  | `200`    | Delay between requests                       |
 | `--max-links <n>`       | `50`     | Maximum links to test in link checks         |
 | `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)             |
 | `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)             |
+
+### Sampling strategies
+
+By default, afdocs discovers pages from your site (via `llms.txt`, sitemap, or both) and randomly samples up to `--max-links` pages to check. The `--sampling` flag gives you control over how that sample is selected.
+
+| Strategy        | Behavior                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `random`        | Shuffle discovered URLs and take the first N. Fast and broad, but results vary between runs.                                                                 |
+| `deterministic` | Sort discovered URLs alphabetically, then pick every Nth URL for an even spread. Produces the same sample on repeated runs as long as the URL set is stable. |
+| `none`          | Skip discovery entirely. Only check the URL you pass on the command line.                                                                                    |
+
+```bash
+# Reproducible runs for CI or iteration (same pages every time)
+afdocs check https://docs.example.com --sampling deterministic
+
+# Check a single page without any discovery
+afdocs check https://docs.example.com/api/auth --sampling none
+
+# Check a single page with specific checks
+afdocs check https://docs.example.com/api/auth --sampling none --checks page-size-html,redirect-behavior
+```
 
 ### Exit codes
 
@@ -144,7 +166,7 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-21 checks across 8 categories. Checks marked with \* are not yet implemented and return `skip`.
+22 checks across 8 categories.
 
 ### Category 1: llms.txt
 
@@ -165,19 +187,20 @@ describe('agent-friendliness', () => {
 
 ### Category 3: Page Size and Truncation Risk
 
-| Check                    | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `page-size-markdown`     | Character count when served as markdown          |
-| `page-size-html`         | Character count of HTML and post-conversion size |
-| `content-start-position` | How far into the response actual content begins  |
+| Check                    | Description                                                     |
+| ------------------------ | --------------------------------------------------------------- |
+| `rendering-strategy`     | Whether pages contain server-rendered content or are SPA shells |
+| `page-size-markdown`     | Character count when served as markdown                         |
+| `page-size-html`         | Character count of HTML and post-conversion size                |
+| `content-start-position` | How far into the response actual content begins                 |
 
 ### Category 4: Content Structure
 
-| Check                             | Description                                        |
-| --------------------------------- | -------------------------------------------------- |
-| `tabbed-content-serialization` \* | Whether tabbed content creates oversized output    |
-| `section-header-quality` \*       | Whether headers in tabbed sections include context |
-| `markdown-code-fence-validity`    | Whether markdown has unclosed code fences          |
+| Check                          | Description                                        |
+| ------------------------------ | -------------------------------------------------- |
+| `tabbed-content-serialization` | Whether tabbed content creates oversized output    |
+| `section-header-quality`       | Whether headers in tabbed sections include context |
+| `markdown-code-fence-validity` | Whether markdown has unclosed code fences          |
 
 ### Category 5: URL Stability and Redirects
 
@@ -194,18 +217,18 @@ describe('agent-friendliness', () => {
 
 ### Category 7: Observability and Content Health
 
-| Check                        | Description                                    |
-| ---------------------------- | ---------------------------------------------- |
-| `llms-txt-freshness` \*      | Whether `llms.txt` reflects current site state |
-| `markdown-content-parity` \* | Whether markdown and HTML versions match       |
-| `cache-header-hygiene`       | Whether cache headers allow timely updates     |
+| Check                     | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `llms-txt-freshness`      | Whether `llms.txt` reflects current site state |
+| `markdown-content-parity` | Whether markdown and HTML versions match       |
+| `cache-header-hygiene`    | Whether cache headers allow timely updates     |
 
 ### Category 8: Authentication and Access
 
-| Check                        | Description                                                          |
-| ---------------------------- | -------------------------------------------------------------------- |
-| `auth-gate-detection`        | Whether documentation pages require authentication to access content |
-| `auth-alternative-access` \* | Whether auth-gated sites provide alternative access paths for agents |
+| Check                     | Description                                                          |
+| ------------------------- | -------------------------------------------------------------------- |
+| `auth-gate-detection`     | Whether documentation pages require authentication to access content |
+| `auth-alternative-access` | Whether auth-gated sites provide alternative access paths for agents |
 
 ## Check dependencies
 

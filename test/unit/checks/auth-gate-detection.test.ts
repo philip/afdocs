@@ -174,6 +174,42 @@ describe('auth-gate-detection', () => {
     expect(result.details?.softAuthGate).toBe(1);
   });
 
+  it('detects login form via title with separator pattern', async () => {
+    server.use(
+      http.get(
+        'http://agd-titlesep.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><head><title>Company Portal | Log In</title></head><body><div>Welcome</div></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const content = `# Docs\n## Links\n- [Page 1](http://agd-titlesep.local/docs/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('fail');
+    expect(result.details?.softAuthGate).toBe(1);
+  });
+
+  it('does not flag pages that mention login as a topic', async () => {
+    server.use(
+      http.get(
+        'http://agd-notlogin.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><head><title>the user is unable to login</title></head><body><h1>Troubleshooting</h1><p>Steps to fix login issues.</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const content = `# Docs\n## Links\n- [Page 1](http://agd-notlogin.local/docs/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('pass');
+    expect(result.details?.accessible).toBe(1);
+  });
+
   it('treats non-SSO redirects as accessible', async () => {
     server.use(
       http.get(

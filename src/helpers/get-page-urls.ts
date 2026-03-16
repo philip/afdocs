@@ -1,5 +1,6 @@
 import { extractMarkdownLinks } from '../checks/llms-txt/llms-txt-valid.js';
 import { MAX_SITEMAP_URLS } from '../constants.js';
+import { isNonPageUrl } from './to-md-urls.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';
 
 /**
@@ -35,11 +36,12 @@ export function parseSitemapUrls(xml: string): { urls: string[]; sitemapIndexUrl
   return { urls, sitemapIndexUrls };
 }
 
-function getUrlsFromCachedLlmsTxt(ctx: CheckContext): string[] {
+export async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
   const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
 
-  return extractLinksFromLlmsTxtFiles(discovered);
+  const urls = extractLinksFromLlmsTxtFiles(discovered);
+  return walkAggregateLinks(ctx, urls);
 }
 
 function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
@@ -49,10 +51,88 @@ function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
     for (const link of links) {
       if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
         urls.add(link.url);
+      } else if (link.url.startsWith('/')) {
+        // Resolve root-relative URLs against the source file's origin
+        try {
+          const base = new URL(file.url);
+          urls.add(new URL(link.url, base.origin).toString());
+        } catch {
+          // Skip malformed URLs
+        }
       }
     }
   }
   return Array.from(urls);
+}
+
+/**
+ * Identify .txt links that are likely aggregate/index files (progressive
+ * disclosure pattern) and walk them one level deep to find page URLs.
+ *
+ * A link is considered walkable when it ends in .txt and is on the same
+ * origin as the site being tested. This covers both sub-product llms.txt
+ * files (Cloudflare) and aggregate content files (Supabase).
+ */
+async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<string[]> {
+  const pageUrls: string[] = [];
+  const aggregateUrls: string[] = [];
+
+  for (const url of urls) {
+    try {
+      const parsed = new URL(url);
+      if (/\.txt$/i.test(parsed.pathname)) {
+        // .txt files are either aggregate indexes to walk (same origin)
+        // or external resources to skip — never page URLs themselves
+        if (parsed.origin === ctx.origin) {
+          aggregateUrls.push(url);
+        }
+      } else {
+        pageUrls.push(url);
+      }
+    } catch {
+      pageUrls.push(url);
+    }
+  }
+
+  if (aggregateUrls.length === 0) return pageUrls;
+
+  // Fetch aggregate files and extract their links
+  for (const aggUrl of aggregateUrls) {
+    try {
+      const response = await ctx.http.fetch(aggUrl);
+      if (!response.ok) continue;
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('text/')) continue;
+      const content = await response.text();
+      const trimmed = content.trimStart().toLowerCase();
+      if (trimmed.startsWith('<!') || trimmed.startsWith('<html')) continue;
+      if (content.trim().length === 0) continue;
+
+      const subFile: DiscoveredFile = {
+        url: aggUrl,
+        content,
+        status: response.status,
+        redirected: response.redirected,
+      };
+      const subUrls = extractLinksFromLlmsTxtFiles([subFile]);
+
+      for (const subUrl of subUrls) {
+        // Only keep same-origin page URLs (skip further .txt nesting)
+        try {
+          const parsed = new URL(subUrl);
+          if (parsed.origin === ctx.origin && !isNonPageUrl(subUrl)) {
+            pageUrls.push(subUrl);
+          }
+        } catch {
+          // Skip malformed URLs
+        }
+      }
+    } catch {
+      // Skip failed fetches
+    }
+  }
+
+  return pageUrls;
 }
 
 /**
@@ -87,7 +167,8 @@ async function fetchLlmsTxtUrls(ctx: CheckContext): Promise<string[]> {
     }
   }
 
-  return extractLinksFromLlmsTxtFiles(discovered);
+  const urls = extractLinksFromLlmsTxtFiles(discovered);
+  return walkAggregateLinks(ctx, urls);
 }
 
 /**
@@ -108,8 +189,8 @@ export function parseSitemapDirectives(robotsTxt: string): string[] {
 /**
  * Discover sitemap URLs by checking robots.txt first, then falling back to /sitemap.xml.
  */
-async function discoverSitemapUrls(ctx: CheckContext): Promise<string[]> {
-  // Try robots.txt for Sitemap directives
+async function discoverSitemapUrls(ctx: CheckContext, originOverride?: string): Promise<string[]> {
+  // Try robots.txt for Sitemap directives at the original origin first
   try {
     const robotsResponse = await ctx.http.fetch(`${ctx.origin}/robots.txt`);
     if (robotsResponse.ok) {
@@ -121,8 +202,22 @@ async function discoverSitemapUrls(ctx: CheckContext): Promise<string[]> {
     // robots.txt fetch failed; fall through
   }
 
-  // Default to /sitemap.xml
-  return [`${ctx.origin}/sitemap.xml`];
+  // If there's an effective origin (cross-host redirect), try its robots.txt too
+  if (originOverride && originOverride !== ctx.origin) {
+    try {
+      const robotsResponse = await ctx.http.fetch(`${originOverride}/robots.txt`);
+      if (robotsResponse.ok) {
+        const body = await robotsResponse.text();
+        const directives = parseSitemapDirectives(body);
+        if (directives.length > 0) return directives;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // Default to /sitemap.xml (prefer effective origin if available)
+  return [`${originOverride ?? ctx.origin}/sitemap.xml`];
 }
 
 export interface PageUrlResult {
@@ -154,21 +249,27 @@ async function fetchSitemap(
   }
 }
 
-async function getUrlsFromSitemap(ctx: CheckContext, warnings: string[]): Promise<string[]> {
-  const sitemapUrls = await discoverSitemapUrls(ctx);
+export async function getUrlsFromSitemap(
+  ctx: CheckContext,
+  warnings: string[],
+  maxUrls: number = MAX_SITEMAP_URLS,
+  originOverride?: string,
+): Promise<string[]> {
+  const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
+  const matchOrigin = originOverride ?? ctx.origin;
 
   for (const sitemapUrl of sitemapUrls) {
-    if (urls.length >= MAX_SITEMAP_URLS) break;
+    if (urls.length >= maxUrls) break;
 
     const parsed = await fetchSitemap(ctx, sitemapUrl, warnings);
 
     // Add direct URLs (filtered to same origin)
     for (const url of parsed.urls) {
-      if (urls.length >= MAX_SITEMAP_URLS) break;
+      if (urls.length >= maxUrls) break;
       try {
         const u = new URL(url);
-        if (u.origin === ctx.origin) {
+        if (u.origin === matchOrigin) {
           urls.push(url);
         }
       } catch {
@@ -177,17 +278,17 @@ async function getUrlsFromSitemap(ctx: CheckContext, warnings: string[]): Promis
     }
 
     // Follow one level of sitemap index
-    if (parsed.sitemapIndexUrls.length > 0 && urls.length < MAX_SITEMAP_URLS) {
+    if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
       for (const subSitemapUrl of parsed.sitemapIndexUrls) {
-        if (urls.length >= MAX_SITEMAP_URLS) break;
+        if (urls.length >= maxUrls) break;
 
         const subParsed = await fetchSitemap(ctx, subSitemapUrl, warnings);
 
         for (const url of subParsed.urls) {
-          if (urls.length >= MAX_SITEMAP_URLS) break;
+          if (urls.length >= maxUrls) break;
           try {
             const u = new URL(url);
-            if (u.origin === ctx.origin) {
+            if (u.origin === matchOrigin) {
               urls.push(url);
             }
           } catch {
@@ -213,7 +314,7 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
-  const cachedUrls = getUrlsFromCachedLlmsTxt(ctx);
+  const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
   if (cachedUrls.length > 0) return { urls: cachedUrls, warnings };
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
@@ -243,9 +344,29 @@ export interface SampledPages {
  *
  * The result is cached on ctx so that all checks within a single run
  * share the same sampled page list, avoiding inconsistent results.
+ *
+ * Sampling strategies:
+ * - `random`: Fisher-Yates shuffle, then take the first maxLinksToTest. (Default.)
+ * - `deterministic`: Sort URLs lexicographically, then pick every Nth URL
+ *   so that the result is reproducible across runs (as long as the discovered
+ *   URL set is stable).
+ * - `none`: Skip discovery entirely; return only the baseUrl.
  */
 export async function discoverAndSamplePages(ctx: CheckContext): Promise<SampledPages> {
   if (ctx._sampledPages) return ctx._sampledPages;
+
+  const strategy = ctx.options.samplingStrategy;
+
+  // "none" skips discovery and uses only the URL the user provided.
+  if (strategy === 'none') {
+    ctx._sampledPages = {
+      urls: [ctx.baseUrl],
+      totalPages: 1,
+      sampled: false,
+      warnings: [],
+    };
+    return ctx._sampledPages;
+  }
 
   const discovery = await getPageUrls(ctx);
   let urls = discovery.urls;
@@ -253,11 +374,23 @@ export async function discoverAndSamplePages(ctx: CheckContext): Promise<Sampled
 
   const sampled = totalPages > ctx.options.maxLinksToTest;
   if (sampled) {
-    for (let i = urls.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [urls[i], urls[j]] = [urls[j], urls[i]];
+    if (strategy === 'deterministic') {
+      // Sort lexicographically for a stable ordering, then pick evenly-spaced URLs.
+      urls.sort();
+      const stride = urls.length / ctx.options.maxLinksToTest;
+      const picked: string[] = [];
+      for (let i = 0; i < ctx.options.maxLinksToTest; i++) {
+        picked.push(urls[Math.floor(i * stride)]);
+      }
+      urls = picked;
+    } else {
+      // "random" — Fisher-Yates shuffle
+      for (let i = urls.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [urls[i], urls[j]] = [urls[j], urls[i]];
+      }
+      urls = urls.slice(0, ctx.options.maxLinksToTest);
     }
-    urls = urls.slice(0, ctx.options.maxLinksToTest);
   }
 
   ctx._sampledPages = { urls, totalPages, sampled, warnings: discovery.warnings };

@@ -12,6 +12,7 @@ import './markdown-availability/markdown-url-support.js';
 import './markdown-availability/content-negotiation.js';
 
 // Category 3: Page Size
+import './page-size/rendering-strategy.js';
 import './page-size/page-size-markdown.js';
 import './page-size/page-size-html.js';
 import './page-size/content-start-position.js';

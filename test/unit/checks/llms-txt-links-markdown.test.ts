@@ -31,6 +31,31 @@ describe('llms-txt-links-markdown', () => {
     return ctx;
   }
 
+  it('skips when no discovered files', async () => {
+    const ctx = createContext('http://test.local', { requestDelay: 0 });
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'llms-txt',
+      status: 'fail',
+      message: 'Not found',
+      details: { discoveredFiles: [] },
+    });
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('No llms.txt files');
+  });
+
+  it('skips when no HTTP links present', async () => {
+    const content = `# Test
+> Summary
+## Links
+Just text, no links here.
+`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('No HTTP(S) links');
+  });
+
   it('passes when links have .md extensions', async () => {
     const content = `# Test
 > Summary

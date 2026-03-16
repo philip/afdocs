@@ -10,6 +10,7 @@ export const DEFAULT_OPTIONS: CheckOptions = {
   requestDelay: 200,
   requestTimeout: 15_000,
   maxLinksToTest: 50,
+  samplingStrategy: 'random',
   thresholds: DEFAULT_THRESHOLDS,
 };
 

@@ -48,6 +48,7 @@ export function createContext(baseUrl: string, options?: Partial<RunnerOptions>)
     }),
     options: merged,
     pageCache: new Map(),
+    htmlCache: new Map(),
   };
 }
 

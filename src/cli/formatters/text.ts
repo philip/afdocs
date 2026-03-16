@@ -128,10 +128,23 @@ function formatDetailLine(status: string, url: string, metric: string): string {
   return `      ${icon} ${url} ${chalk.dim(metric)}`;
 }
 
-function formatResult(result: CheckResult): string {
+/** Check IDs whose results may be unreliable when rendering-strategy fails. */
+const RENDERING_SENSITIVE_CHECKS = new Set(['page-size-html', 'content-start-position']);
+
+function formatResult(result: CheckResult, allResults?: CheckResult[]): string {
   const icon = STATUS_ICONS[result.status] ?? '?';
   const color = STATUS_COLORS[result.status] ?? ((s: string) => s);
-  return `  ${icon} ${color(result.id)}: ${result.message}`;
+  let line = `  ${icon} ${color(result.id)}: ${result.message}`;
+
+  // Add caveat when rendering-strategy failed and this check measures HTML content
+  if (RENDERING_SENSITIVE_CHECKS.has(result.id) && allResults) {
+    const renderResult = allResults.find((r) => r.id === 'rendering-strategy');
+    if (renderResult?.status === 'fail') {
+      line += `\n      ${chalk.dim('Note: rendering-strategy detected SPA shells; these measurements may reflect a shell, not actual content')}`;
+    }
+  }
+
+  return line;
 }
 
 function formatVerboseDetails(result: CheckResult): string[] {
@@ -178,7 +191,7 @@ export function formatText(report: ReportResult, options?: FormatTextOptions): s
   for (const [category, results] of byCategory) {
     lines.push(chalk.bold.underline(category));
     for (const result of results) {
-      lines.push(formatResult(result));
+      lines.push(formatResult(result, report.results));
       if (verbose) {
         lines.push(...formatVerboseDetails(result));
       }

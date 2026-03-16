@@ -67,14 +67,14 @@ describe('runner', () => {
     expect(report.summary.total).toBe(2);
   });
 
-  it('stub checks return skip with "Not yet implemented"', async () => {
+  it('auth-alternative-access skips when auth-gate-detection did not run', async () => {
     const report = await runChecks('http://stub.local', {
-      checkIds: ['tabbed-content-serialization'],
+      checkIds: ['auth-alternative-access'],
       requestDelay: 0,
     });
 
     expect(report.results[0].status).toBe('skip');
-    expect(report.results[0].message).toBe('Not yet implemented');
+    expect(report.results[0].message).toBe('auth-gate-detection did not run');
   });
 
   it('catches check errors and reports status "error"', async () => {
