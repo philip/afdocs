@@ -1,5 +1,5 @@
 import type { CheckContext, CheckResult, RunnerOptions, ReportResult } from './types.js';
-import { DEFAULT_OPTIONS } from './constants.js';
+import { DEFAULT_OPTIONS, SPEC_BASE_URL } from './constants.js';
 import { createHttpClient } from './http.js';
 import { getChecksSorted } from './checks/registry.js';
 
@@ -118,6 +118,7 @@ export async function runChecks(
   return {
     url: baseUrl,
     timestamp: new Date().toISOString(),
+    specUrl: SPEC_BASE_URL,
     results,
     summary,
   };

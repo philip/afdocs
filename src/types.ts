@@ -126,6 +126,7 @@ export interface RunnerOptions extends CheckOptions {
 export interface ReportResult {
   url: string;
   timestamp: string;
+  specUrl: string;
   results: CheckResult[];
   summary: {
     total: number;

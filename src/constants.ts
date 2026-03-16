@@ -34,3 +34,6 @@ export const LINK_RESOLVE_THRESHOLD = 0.9;
 
 /** Maximum number of URLs to collect from sitemaps before stopping. */
 export const MAX_SITEMAP_URLS = 500;
+
+/** Base URL for the Agent-Friendly Documentation Spec. */
+export const SPEC_BASE_URL = 'https://agentdocsspec.com/spec/';

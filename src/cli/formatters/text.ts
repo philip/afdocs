@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import type { ReportResult, CheckResult } from '../../types.js';
+import { SPEC_BASE_URL } from '../../constants.js';
 
 const STATUS_ICONS: Record<string, string> = {
   pass: chalk.green('✓'),
@@ -144,6 +145,11 @@ function formatResult(result: CheckResult, allResults?: CheckResult[]): string {
     }
   }
 
+  // Add spec link for warn/fail/error results
+  if (result.status === 'warn' || result.status === 'fail' || result.status === 'error') {
+    line += `\n      ${chalk.dim(`Learn more: ${SPEC_BASE_URL}#${result.id}`)}`;
+  }
+
   return line;
 }
 
@@ -209,6 +215,8 @@ export function formatText(report: ReportResult, options?: FormatTextOptions): s
   if (summary.skip > 0) parts.push(chalk.gray(`${summary.skip} skipped`));
   if (summary.error > 0) parts.push(chalk.red(`${summary.error} errors`));
   lines.push(`  ${parts.join(', ')} (${summary.total} total)`);
+  lines.push('');
+  lines.push(chalk.dim(`Full spec: ${SPEC_BASE_URL}`));
   lines.push('');
 
   return lines.join('\n');
