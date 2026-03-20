@@ -192,6 +192,91 @@ describe('redirect-behavior', () => {
     expect(result.details?.sameHostCount).toBe(1);
   });
 
+  it('ignores window.location inside <code> blocks', async () => {
+    server.use(
+      http.get(
+        'http://rb-code.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><p>Use <code>window.location = "/page"</code> to navigate.</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('rb-code.local', '/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores window.location inside <pre> blocks', async () => {
+    server.use(
+      http.get(
+        'http://rb-pre.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><pre class="highlight"><code>window.location.href = "/new";</code></pre></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('rb-pre.local', '/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores meta refresh inside <pre> blocks', async () => {
+    server.use(
+      http.get(
+        'http://rb-premeta.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><pre>&lt;meta http-equiv="refresh" content="0;url=/new"&gt;</pre></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('rb-premeta.local', '/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores window.location property reads in <script> tags', async () => {
+    server.use(
+      http.get(
+        'http://rb-read.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><script>window._uxa.push(["setPath", window.location.pathname+window.location.hash]);</script></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('rb-read.local', '/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('still detects real JS redirects in <script> tags', async () => {
+    server.use(
+      http.get(
+        'http://rb-script.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><pre>example code</pre><script>window.location = "/new";</script></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('rb-script.local', '/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.jsRedirectCount).toBe(1);
+  });
+
   it('classifies 302 redirects the same as 301', async () => {
     server.use(
       http.get(

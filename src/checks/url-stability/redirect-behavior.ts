@@ -11,7 +11,10 @@ interface RedirectResult {
 }
 
 const JS_REDIRECT_PATTERNS =
-  /window\.location\s*[=.]|document\.location\s*[=.]|location\.href\s*=|location\.replace\s*\(|<meta[^>]+http-equiv\s*=\s*["']?refresh["']?/i;
+  /(?:window|document)\.location\s*=(?!=)|location\.href\s*=(?!=)|location\.(?:replace|assign)\s*\(|<meta[^>]+http-equiv\s*=\s*["']?refresh["']?/i;
+
+/** Strip <pre> and <code> block contents so code examples don't trigger false positives. */
+const CODE_BLOCK_RE = /<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi;
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'redirect-behavior';
@@ -36,7 +39,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
             // Check for JS-based redirects in the body
             try {
               const body = await response.text();
-              if (JS_REDIRECT_PATTERNS.test(body.slice(0, 10_000))) {
+              const sample = body.slice(0, 10_000).replace(CODE_BLOCK_RE, '');
+              if (JS_REDIRECT_PATTERNS.test(sample)) {
                 return { url, status, classification: 'js-redirect' };
               }
             } catch {
