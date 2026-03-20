@@ -60,41 +60,41 @@ Just text, no links here.
     const content = `# Test
 > Summary
 ## Links
-- [Page 1](http://md.local/page1.md): First
-- [Page 2](http://md.local/page2.md): Second
+- [Page 1](http://test.local/page1.md): First
+- [Page 2](http://test.local/page2.md): Second
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.markdownRate).toBe(100);
   });
 
-  it('fails when links are HTML with no markdown alternatives', async () => {
+  it('fails when same-origin links are HTML with no markdown alternatives', async () => {
     server.use(
       http.head(
-        'http://html.local/page1',
+        'http://test.local/page1',
         () =>
           new HttpResponse(null, {
             status: 200,
             headers: { 'content-type': 'text/html' },
           }),
       ),
-      http.head('http://html.local/page1.md', () => new HttpResponse(null, { status: 404 })),
+      http.head('http://test.local/page1.md', () => new HttpResponse(null, { status: 404 })),
       http.head(
-        'http://html.local/page2',
+        'http://test.local/page2',
         () =>
           new HttpResponse(null, {
             status: 200,
             headers: { 'content-type': 'text/html' },
           }),
       ),
-      http.head('http://html.local/page2.md', () => new HttpResponse(null, { status: 404 })),
+      http.head('http://test.local/page2.md', () => new HttpResponse(null, { status: 404 })),
     );
 
     const content = `# Test
 > Summary
 ## Links
-- [Page 1](http://html.local/page1): First
-- [Page 2](http://html.local/page2): Second
+- [Page 1](http://test.local/page1): First
+- [Page 2](http://test.local/page2): Second
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
@@ -103,43 +103,84 @@ Just text, no links here.
   it('warns when .md variants are available', async () => {
     server.use(
       http.head(
-        'http://variant.local/page1',
+        'http://test.local/page1',
         () =>
           new HttpResponse(null, {
             status: 200,
             headers: { 'content-type': 'text/html' },
           }),
       ),
-      http.head('http://variant.local/page1.md', () => new HttpResponse(null, { status: 200 })),
+      http.head('http://test.local/page1.md', () => new HttpResponse(null, { status: 200 })),
     );
 
     const content = `# Test
 > Summary
 ## Links
-- [Page 1](http://variant.local/page1): First
+- [Page 1](http://test.local/page1): First
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
   });
 
-  it('reports fetch errors in details and message', async () => {
+  it('excludes cross-origin links from markdown assessment', async () => {
     server.use(
-      http.head('http://err-md.local/page1', () => HttpResponse.error()),
-      http.get('http://err-md.local/page1', () => HttpResponse.error()),
+      http.head(
+        'http://test.local/page1',
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: { 'content-type': 'text/markdown' },
+          }),
+      ),
+      // External link serves HTML, but should not affect the result
+      http.head(
+        'http://external.example/page',
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          }),
+      ),
     );
 
-    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://err-md.local/page1): First\n`;
+    const content = `# Test
+> Summary
+## Links
+- [Page 1](http://test.local/page1): First
+- [External](http://external.example/page): External
+`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('pass');
+    expect(result.details?.crossOriginExcluded).toBe(1);
+  });
+
+  it('skips when all links are cross-origin', async () => {
+    const content = `# Test
+> Summary
+## Links
+- [External](http://external.example/page): External
+`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('external');
+  });
+
+  it('reports fetch errors in details and message', async () => {
+    server.use(
+      http.head('http://test.local/page1', () => HttpResponse.error()),
+      http.get('http://test.local/page1', () => HttpResponse.error()),
+    );
+
+    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://test.local/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.details?.fetchErrors).toBe(1);
     expect(result.message).toContain('failed to fetch');
   });
 
   it('reports rate-limited results (HTTP 429)', async () => {
-    server.use(
-      http.head('http://rl-md.local/page1', () => new HttpResponse(null, { status: 429 })),
-    );
+    server.use(http.head('http://test.local/page1', () => new HttpResponse(null, { status: 429 })));
 
-    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://rl-md.local/page1): First\n`;
+    const content = `# Test\n> Summary\n## Links\n- [Page 1](http://test.local/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.details?.rateLimited).toBe(1);
     expect(result.message).toContain('rate-limited (HTTP 429)');
@@ -148,7 +189,7 @@ Just text, no links here.
   it('includes "sampled" in message when results are sampled', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://sample-md.local/page${i}.md): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/page${i}.md): Page ${i}`,
     ).join('\n');
 
     const content = `# Test\n> Summary\n## Links\n${links}\n`;
@@ -172,7 +213,7 @@ Just text, no links here.
   it('uses toMdUrls to find .md variants (handles trailing slash and .html)', async () => {
     server.use(
       http.head(
-        'http://tomd.local/guide.html',
+        'http://test.local/guide.html',
         () =>
           new HttpResponse(null, {
             status: 200,
@@ -180,10 +221,10 @@ Just text, no links here.
           }),
       ),
       // toMdUrls should produce /guide.md (stripping .html)
-      http.head('http://tomd.local/guide.md', () => new HttpResponse(null, { status: 200 })),
+      http.head('http://test.local/guide.md', () => new HttpResponse(null, { status: 200 })),
     );
 
-    const content = `# Test\n> Summary\n## Links\n- [Guide](http://tomd.local/guide.html): Guide\n`;
+    const content = `# Test\n> Summary\n## Links\n- [Guide](http://test.local/guide.html): Guide\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
     expect(result.details?.mdVariantsAvailable).toBe(1);
