@@ -51,7 +51,7 @@ describe('auth-gate-detection', () => {
   it('passes when all pages are accessible', async () => {
     server.use(
       http.get(
-        'http://agd-pass.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<html><body><h1>Docs</h1><p>Content here.</p></body></html>', {
             status: 200,
@@ -60,7 +60,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-pass.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.accessible).toBe(1);
@@ -69,12 +69,12 @@ describe('auth-gate-detection', () => {
   it('fails when page returns 401', async () => {
     server.use(
       http.get(
-        'http://agd-401.local/docs/page1',
+        'http://test.local/docs/page1',
         () => new HttpResponse('Unauthorized', { status: 401 }),
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-401.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.authRequired).toBe(1);
@@ -83,12 +83,12 @@ describe('auth-gate-detection', () => {
   it('fails when page returns 403', async () => {
     server.use(
       http.get(
-        'http://agd-403.local/docs/page1',
+        'http://test.local/docs/page1',
         () => new HttpResponse('Forbidden', { status: 403 }),
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-403.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.authRequired).toBe(1);
@@ -97,7 +97,7 @@ describe('auth-gate-detection', () => {
   it('warns when some pages are gated and some accessible', async () => {
     server.use(
       http.get(
-        'http://agd-mix.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<html><body><h1>Docs</h1></body></html>', {
             status: 200,
@@ -105,12 +105,12 @@ describe('auth-gate-detection', () => {
           }),
       ),
       http.get(
-        'http://agd-mix.local/docs/page2',
+        'http://test.local/docs/page2',
         () => new HttpResponse('Unauthorized', { status: 401 }),
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-mix.local/docs/page1): First\n- [Page 2](http://agd-mix.local/docs/page2): Second\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n- [Page 2](http://test.local/docs/page2): Second\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
     expect(result.details?.accessible).toBe(1);
@@ -120,7 +120,7 @@ describe('auth-gate-detection', () => {
   it('detects SSO redirect to known domain', async () => {
     server.use(
       http.get(
-        'http://agd-sso.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(null, {
             status: 302,
@@ -131,7 +131,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-sso.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.authRedirect).toBe(1);
@@ -141,7 +141,7 @@ describe('auth-gate-detection', () => {
   it('detects login form (password field)', async () => {
     server.use(
       http.get(
-        'http://agd-form.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><form><input type="text" name="user"><input type="password" name="pass"><button>Log in</button></form></body></html>',
@@ -150,7 +150,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-form.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.softAuthGate).toBe(1);
@@ -159,7 +159,7 @@ describe('auth-gate-detection', () => {
   it('detects login form via page title', async () => {
     server.use(
       http.get(
-        'http://agd-title.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><head><title>Sign In - Company Portal</title></head><body><div>Please authenticate</div></body></html>',
@@ -168,7 +168,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-title.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.softAuthGate).toBe(1);
@@ -177,7 +177,7 @@ describe('auth-gate-detection', () => {
   it('detects login form via title with separator pattern', async () => {
     server.use(
       http.get(
-        'http://agd-titlesep.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><head><title>Company Portal | Log In</title></head><body><div>Welcome</div></body></html>',
@@ -186,7 +186,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-titlesep.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.softAuthGate).toBe(1);
@@ -195,7 +195,7 @@ describe('auth-gate-detection', () => {
   it('does not flag pages that mention login as a topic', async () => {
     server.use(
       http.get(
-        'http://agd-notlogin.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><head><title>the user is unable to login</title></head><body><h1>Troubleshooting</h1><p>Steps to fix login issues.</p></body></html>',
@@ -204,7 +204,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-notlogin.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.accessible).toBe(1);
@@ -213,16 +213,16 @@ describe('auth-gate-detection', () => {
   it('treats non-SSO redirects as accessible', async () => {
     server.use(
       http.get(
-        'http://agd-noredir.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(null, {
             status: 301,
-            headers: { Location: 'http://agd-noredir.local/docs/page1-new' },
+            headers: { Location: 'http://test.local/docs/page1-new' },
           }),
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-noredir.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.accessible).toBe(1);
@@ -231,7 +231,7 @@ describe('auth-gate-detection', () => {
   it('resolves relative Location headers in SSO redirects', async () => {
     server.use(
       http.get(
-        'http://agd-relredir.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(null, {
             status: 302,
@@ -240,7 +240,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-relredir.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     // login.* prefix matches SSO_DOMAINS
     expect(result.status).toBe('pass');
@@ -250,12 +250,12 @@ describe('auth-gate-detection', () => {
   it('treats other status codes (e.g. 500) as accessible', async () => {
     server.use(
       http.get(
-        'http://agd-500.local/docs/page1',
+        'http://test.local/docs/page1',
         () => new HttpResponse('Internal Server Error', { status: 500 }),
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-500.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.accessible).toBe(1);
@@ -263,11 +263,11 @@ describe('auth-gate-detection', () => {
 
   it('fails when all fetches error out', async () => {
     server.use(
-      http.get('http://agd-allfail.local/docs/page1', () => HttpResponse.error()),
-      http.get('http://agd-allfail.local/docs/page2', () => HttpResponse.error()),
+      http.get('http://test.local/docs/page1', () => HttpResponse.error()),
+      http.get('http://test.local/docs/page2', () => HttpResponse.error()),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-allfail.local/docs/page1): First\n- [Page 2](http://agd-allfail.local/docs/page2): Second\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n- [Page 2](http://test.local/docs/page2): Second\n`;
     const result = await check.run(makeCtx(content));
     // All results are errors with classification 'accessible', so tested.length > 0 but no gated
     expect(result.details?.fetchErrors).toBe(2);
@@ -276,7 +276,7 @@ describe('auth-gate-detection', () => {
   it('detects SSO form action as soft auth gate', async () => {
     server.use(
       http.get(
-        'http://agd-ssoform.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><form action="https://idp.example.com/saml/login"><button>Login with SSO</button></form></body></html>',
@@ -285,7 +285,7 @@ describe('auth-gate-detection', () => {
       ),
     );
 
-    const content = `# Docs\n## Links\n- [Page 1](http://agd-ssoform.local/docs/page1): First\n`;
+    const content = `# Docs\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.softAuthGate).toBe(1);

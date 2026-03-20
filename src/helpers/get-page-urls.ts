@@ -77,16 +77,20 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
   const pageUrls: string[] = [];
   const aggregateUrls: string[] = [];
 
+  const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
+
   for (const url of urls) {
     try {
       const parsed = new URL(url);
       if (/\.txt$/i.test(parsed.pathname)) {
         // .txt files are either aggregate indexes to walk (same origin)
         // or external resources to skip — never page URLs themselves
-        if (parsed.origin === ctx.origin) {
+        if (parsed.origin === ctx.origin || parsed.origin === siteOrigin) {
           aggregateUrls.push(url);
         }
-      } else {
+      } else if (parsed.origin === ctx.origin || parsed.origin === siteOrigin) {
+        // Only include same-origin page URLs; cross-origin links are
+        // external resources the site owner doesn't control.
         pageUrls.push(url);
       }
     } catch {

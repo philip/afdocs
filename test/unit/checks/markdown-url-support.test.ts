@@ -54,7 +54,7 @@ describe('markdown-url-support', () => {
 
     server.use(
       http.get(
-        'http://md.local/docs/getting-started.md',
+        'http://test.local/docs/getting-started.md',
         () =>
           new HttpResponse(mdContent, {
             status: 200,
@@ -62,7 +62,7 @@ describe('markdown-url-support', () => {
           }),
       ),
       http.get(
-        'http://md.local/docs/api.md',
+        'http://test.local/docs/api.md',
         () =>
           new HttpResponse('# API Reference\n\n[Link](http://example.com)', {
             status: 200,
@@ -74,8 +74,8 @@ describe('markdown-url-support', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Getting Started](http://md.local/docs/getting-started): Guide
-- [API](http://md.local/docs/api): Reference
+- [Getting Started](http://test.local/docs/getting-started): Guide
+- [API](http://test.local/docs/api): Reference
 `;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('pass');
@@ -85,19 +85,19 @@ describe('markdown-url-support', () => {
   it('fails when .md URLs return 404', async () => {
     server.use(
       http.get(
-        'http://no-md.local/docs/page1.md',
+        'http://test.local/docs/page1.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://no-md.local/docs/page1/index.md',
+        'http://test.local/docs/page1/index.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://no-md.local/docs/page2.md',
+        'http://test.local/docs/page2.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://no-md.local/docs/page2/index.md',
+        'http://test.local/docs/page2/index.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
@@ -105,8 +105,8 @@ describe('markdown-url-support', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://no-md.local/docs/page1): First
-- [Page 2](http://no-md.local/docs/page2): Second
+- [Page 1](http://test.local/docs/page1): First
+- [Page 2](http://test.local/docs/page2): Second
 `;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('fail');
@@ -116,7 +116,7 @@ describe('markdown-url-support', () => {
   it('fails when .md URLs return HTML (soft 404)', async () => {
     server.use(
       http.get(
-        'http://soft404.local/page.md',
+        'http://test.local/soft404-page.md',
         () =>
           new HttpResponse('<!DOCTYPE html><html><body>Error</body></html>', {
             status: 200,
@@ -124,7 +124,7 @@ describe('markdown-url-support', () => {
           }),
       ),
       http.get(
-        'http://soft404.local/page/index.md',
+        'http://test.local/soft404-page/index.md',
         () =>
           new HttpResponse('<!DOCTYPE html><html><body>Error</body></html>', {
             status: 200,
@@ -136,7 +136,7 @@ describe('markdown-url-support', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page](http://soft404.local/page): A page
+- [Page](http://test.local/soft404-page): A page
 `;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('fail');
@@ -145,7 +145,7 @@ describe('markdown-url-support', () => {
   it('warns when some pages support .md and others do not', async () => {
     server.use(
       http.get(
-        'http://mixed.local/docs/page1.md',
+        'http://test.local/docs/mixed-page1.md',
         () =>
           new HttpResponse('# Page 1\n\nContent here', {
             status: 200,
@@ -153,19 +153,19 @@ describe('markdown-url-support', () => {
           }),
       ),
       http.get(
-        'http://mixed.local/docs/page2.md',
+        'http://test.local/docs/mixed-page2.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://mixed.local/docs/page2/index.md',
+        'http://test.local/docs/mixed-page2/index.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://mixed.local/docs/page3.md',
+        'http://test.local/docs/mixed-page3.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://mixed.local/docs/page3/index.md',
+        'http://test.local/docs/mixed-page3/index.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
@@ -173,9 +173,9 @@ describe('markdown-url-support', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://mixed.local/docs/page1): First
-- [Page 2](http://mixed.local/docs/page2): Second
-- [Page 3](http://mixed.local/docs/page3): Third
+- [Page 1](http://test.local/docs/mixed-page1): First
+- [Page 2](http://test.local/docs/mixed-page2): Second
+- [Page 3](http://test.local/docs/mixed-page3): Third
 `;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('warn');
@@ -203,13 +203,13 @@ describe('markdown-url-support', () => {
     // Generate 5 links but set maxLinksToTest to 2
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://sample.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/sample-page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://sample.local/docs/page${i}.md`,
+          `http://test.local/docs/sample-page${i}.md`,
           () =>
             new HttpResponse(`# Page ${i}\n\nContent`, {
               status: 200,
@@ -240,11 +240,11 @@ describe('markdown-url-support', () => {
 
   it('handles fetch errors gracefully and reports error field', async () => {
     server.use(
-      http.get('http://err.local/docs/page.md', () => HttpResponse.error()),
-      http.get('http://err.local/docs/page/index.md', () => HttpResponse.error()),
+      http.get('http://test.local/docs/err-page.md', () => HttpResponse.error()),
+      http.get('http://test.local/docs/err-page/index.md', () => HttpResponse.error()),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://err.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/err-page): A page\n`;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('fail');
     const pageResults = result.details?.pageResults as Array<{
@@ -262,16 +262,16 @@ describe('markdown-url-support', () => {
   it('reports rate-limited results (HTTP 429)', async () => {
     server.use(
       http.get(
-        'http://rl.local/docs/page.md',
+        'http://test.local/docs/rl-page.md',
         () => new HttpResponse('Too Many Requests', { status: 429 }),
       ),
       http.get(
-        'http://rl.local/docs/page/index.md',
+        'http://test.local/docs/rl-page/index.md',
         () => new HttpResponse('Too Many Requests', { status: 429 }),
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://rl.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/rl-page): A page\n`;
     const result = await check.run(makeCtx({ content }));
     // 429 with non-markdown body won't count as supported, so status 0 (last candidate fails)
     // but the page result itself won't have status 429 because none succeeded
@@ -284,17 +284,17 @@ describe('markdown-url-support', () => {
   it('includes "sampled" in message when results are sampled', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://sample-msg.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/sample-msg-page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://sample-msg.local/docs/page${i}.md`,
+          `http://test.local/docs/sample-msg-page${i}.md`,
           () => new HttpResponse('Not Found', { status: 404 }),
         ),
         http.get(
-          `http://sample-msg.local/docs/page${i}/index.md`,
+          `http://test.local/docs/sample-msg-page${i}/index.md`,
           () => new HttpResponse('Not Found', { status: 404 }),
         ),
       );
@@ -321,7 +321,7 @@ describe('markdown-url-support', () => {
   it('uses URL directly when it already ends in .md', async () => {
     server.use(
       http.get(
-        'http://already-md.local/spec/index.md',
+        'http://test.local/spec/index.md',
         () =>
           new HttpResponse('# Spec\n\nThe full specification.', {
             status: 200,
@@ -330,22 +330,22 @@ describe('markdown-url-support', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Spec](http://already-md.local/spec/index.md): Full spec\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Spec](http://test.local/spec/index.md): Full spec\n`;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('pass');
     expect(result.details?.mdSupported).toBe(1);
     const pageResults = result.details?.pageResults as Array<{ mdUrl: string }>;
-    expect(pageResults[0].mdUrl).toBe('http://already-md.local/spec/index.md');
+    expect(pageResults[0].mdUrl).toBe('http://test.local/spec/index.md');
   });
 
   it('finds markdown at index.md when direct .md fails', async () => {
     server.use(
       http.get(
-        'http://indexmd.local/docs/guide.md',
+        'http://test.local/docs/guide.md',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
       http.get(
-        'http://indexmd.local/docs/guide/index.md',
+        'http://test.local/docs/guide/index.md',
         () =>
           new HttpResponse('# Guide\n\nThis is the guide.', {
             status: 200,
@@ -354,18 +354,18 @@ describe('markdown-url-support', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Guide](http://indexmd.local/docs/guide): Guide\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Guide](http://test.local/docs/guide): Guide\n`;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('pass');
     expect(result.details?.mdSupported).toBe(1);
     const pageResults = result.details?.pageResults as Array<{ mdUrl: string }>;
-    expect(pageResults[0].mdUrl).toBe('http://indexmd.local/docs/guide/index.md');
+    expect(pageResults[0].mdUrl).toBe('http://test.local/docs/guide/index.md');
   });
 
   it('supports markdown detected by body only (no text/markdown content-type)', async () => {
     server.use(
       http.get(
-        'http://bodyonly.local/docs/page.md',
+        'http://test.local/docs/bodyonly-page.md',
         () =>
           new HttpResponse('# Hello\n\nSome [link](http://example.com) here.\n\n```js\ncode\n```', {
             status: 200,
@@ -374,7 +374,7 @@ describe('markdown-url-support', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://bodyonly.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/bodyonly-page): A page\n`;
     const result = await check.run(makeCtx({ content }));
     expect(result.status).toBe('pass');
     expect(result.details?.mdSupported).toBe(1);
@@ -384,7 +384,7 @@ describe('markdown-url-support', () => {
     const mdContent = '# Cached\n\nThis should be cached.';
     server.use(
       http.get(
-        'http://cache.local/docs/page.md',
+        'http://test.local/docs/cache-page.md',
         () =>
           new HttpResponse(mdContent, {
             status: 200,
@@ -396,11 +396,11 @@ describe('markdown-url-support', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page](http://cache.local/docs/page): A page
+- [Page](http://test.local/docs/cache-page): A page
 `;
     const ctx = makeCtx({ content });
     await check.run(ctx);
-    const cached = ctx.pageCache.get('http://cache.local/docs/page');
+    const cached = ctx.pageCache.get('http://test.local/docs/cache-page');
     expect(cached).toBeDefined();
     expect(cached?.markdown?.content).toBe(mdContent);
     expect(cached?.markdown?.source).toBe('md-url');

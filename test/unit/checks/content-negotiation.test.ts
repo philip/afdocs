@@ -46,7 +46,7 @@ describe('content-negotiation', () => {
   it('passes when server returns markdown with correct Content-Type', async () => {
     server.use(
       http.get(
-        'http://cn-pass.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('# Page 1\n\nContent here.', {
             status: 200,
@@ -54,7 +54,7 @@ describe('content-negotiation', () => {
           }),
       ),
       http.get(
-        'http://cn-pass.local/docs/page2',
+        'http://test.local/docs/page2',
         () =>
           new HttpResponse('# Page 2\n\n[Link](http://example.com)', {
             status: 200,
@@ -66,8 +66,8 @@ describe('content-negotiation', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://cn-pass.local/docs/page1): First
-- [Page 2](http://cn-pass.local/docs/page2): Second
+- [Page 1](http://test.local/docs/page1): First
+- [Page 2](http://test.local/docs/page2): Second
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
@@ -77,7 +77,7 @@ describe('content-negotiation', () => {
   it('warns when server returns markdown but with wrong Content-Type', async () => {
     server.use(
       http.get(
-        'http://cn-wrong.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('# Page 1\n\nMarkdown content [link](http://example.com)', {
             status: 200,
@@ -89,7 +89,7 @@ describe('content-negotiation', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://cn-wrong.local/docs/page1): First
+- [Page 1](http://test.local/docs/page1): First
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
@@ -99,7 +99,7 @@ describe('content-negotiation', () => {
   it('fails when server returns HTML regardless of Accept header', async () => {
     server.use(
       http.get(
-        'http://cn-fail.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<!DOCTYPE html><html><body><h1>Page 1</h1></body></html>', {
             status: 200,
@@ -107,7 +107,7 @@ describe('content-negotiation', () => {
           }),
       ),
       http.get(
-        'http://cn-fail.local/docs/page2',
+        'http://test.local/docs/page2',
         () =>
           new HttpResponse('<html><body>Page 2</body></html>', {
             status: 200,
@@ -119,8 +119,8 @@ describe('content-negotiation', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://cn-fail.local/docs/page1): First
-- [Page 2](http://cn-fail.local/docs/page2): Second
+- [Page 1](http://test.local/docs/page1): First
+- [Page 2](http://test.local/docs/page2): Second
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
@@ -130,7 +130,7 @@ describe('content-negotiation', () => {
   it('handles mixed results across pages', async () => {
     server.use(
       http.get(
-        'http://cn-mixed.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('# Page 1\n\nGood markdown.', {
             status: 200,
@@ -138,7 +138,7 @@ describe('content-negotiation', () => {
           }),
       ),
       http.get(
-        'http://cn-mixed.local/docs/page2',
+        'http://test.local/docs/page2',
         () =>
           new HttpResponse('<!DOCTYPE html><html><body>HTML page</body></html>', {
             status: 200,
@@ -150,8 +150,8 @@ describe('content-negotiation', () => {
     const content = `# Docs
 > Summary
 ## Links
-- [Page 1](http://cn-mixed.local/docs/page1): First
-- [Page 2](http://cn-mixed.local/docs/page2): Second
+- [Page 1](http://test.local/docs/page1): First
+- [Page 2](http://test.local/docs/page2): Second
 `;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
@@ -162,13 +162,13 @@ describe('content-negotiation', () => {
   it('samples when more links than maxLinksToTest', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://cn-sample.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://cn-sample.local/docs/page${i}`,
+          `http://test.local/docs/page${i}`,
           () =>
             new HttpResponse(`# Page ${i}\n\nContent`, {
               status: 200,
@@ -198,9 +198,9 @@ describe('content-negotiation', () => {
   });
 
   it('handles fetch errors gracefully and reports error field', async () => {
-    server.use(http.get('http://cn-err.local/docs/page', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/page', () => HttpResponse.error()));
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://cn-err.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/page): A page\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     const pageResults = result.details?.pageResults as Array<{
@@ -218,12 +218,12 @@ describe('content-negotiation', () => {
   it('reports rate-limited results (HTTP 429)', async () => {
     server.use(
       http.get(
-        'http://cn-429.local/docs/page',
+        'http://test.local/docs/page',
         () => new HttpResponse('Too Many Requests', { status: 429 }),
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://cn-429.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/page): A page\n`;
     const result = await check.run(makeCtx(content));
     expect(result.details?.rateLimited).toBe(1);
     expect(result.message).toContain('rate-limited (HTTP 429)');
@@ -232,13 +232,13 @@ describe('content-negotiation', () => {
   it('includes "sampled" in message when results are sampled', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://cn-sampled.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://cn-sampled.local/docs/page${i}`,
+          `http://test.local/docs/page${i}`,
           () =>
             new HttpResponse('<!DOCTYPE html><html><body>HTML</body></html>', {
               status: 200,
@@ -269,7 +269,7 @@ describe('content-negotiation', () => {
   it('does not overwrite pageCache when already populated', async () => {
     server.use(
       http.get(
-        'http://cn-cached.local/docs/page',
+        'http://test.local/docs/page',
         () =>
           new HttpResponse('# Page\n\nContent negotiated.', {
             status: 200,
@@ -278,16 +278,16 @@ describe('content-negotiation', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page](http://cn-cached.local/docs/page): A page\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/page): A page\n`;
     const ctx = makeCtx(content);
     // Pre-populate the cache as if markdown-url-support already ran
-    ctx.pageCache.set('http://cn-cached.local/docs/page', {
-      url: 'http://cn-cached.local/docs/page',
+    ctx.pageCache.set('http://test.local/docs/page', {
+      url: 'http://test.local/docs/page',
       markdown: { content: '# From md-url', source: 'md-url' },
     });
 
     await check.run(ctx);
-    const cached = ctx.pageCache.get('http://cn-cached.local/docs/page');
+    const cached = ctx.pageCache.get('http://test.local/docs/page');
     expect(cached?.markdown?.source).toBe('md-url');
     expect(cached?.markdown?.content).toBe('# From md-url');
   });

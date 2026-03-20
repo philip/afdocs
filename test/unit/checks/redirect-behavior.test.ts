@@ -48,15 +48,15 @@ describe('redirect-behavior', () => {
     return ctx;
   }
 
-  const llms = (host: string, ...pages: string[]) =>
-    `# Docs\n## Links\n${pages.map((p, i) => `- [Page ${i + 1}](http://${host}${p}): Page\n`).join('')}`;
+  const llms = (...pages: string[]) =>
+    `# Docs\n## Links\n${pages.map((p, i) => `- [Page ${i + 1}](http://test.local${p}): Page\n`).join('')}`;
 
   it('passes when pages return 200 with no redirects', async () => {
     server.use(
-      http.get('http://rb-pass.local/docs/page1', () => new HttpResponse('OK', { status: 200 })),
+      http.get('http://test.local/docs/rb-pass', () => new HttpResponse('OK', { status: 200 })),
     );
 
-    const result = await check.run(makeCtx(llms('rb-pass.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-pass')));
     expect(result.status).toBe('pass');
     expect(result.details?.noRedirectCount).toBe(1);
   });
@@ -64,16 +64,16 @@ describe('redirect-behavior', () => {
   it('passes when redirects are same-host', async () => {
     server.use(
       http.get(
-        'http://rb-same.local/old-page',
+        'http://test.local/rb-same/old-page',
         () =>
           new HttpResponse(null, {
             status: 301,
-            headers: { Location: 'http://rb-same.local/new-page' },
+            headers: { Location: 'http://test.local/rb-same/new-page' },
           }),
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-same.local', '/old-page')));
+    const result = await check.run(makeCtx(llms('/rb-same/old-page')));
     expect(result.status).toBe('pass');
     expect(result.details?.sameHostCount).toBe(1);
     expect(result.message).toContain('same-host');
@@ -82,7 +82,7 @@ describe('redirect-behavior', () => {
   it('warns on cross-host redirects', async () => {
     server.use(
       http.get(
-        'http://rb-cross.local/docs/page1',
+        'http://test.local/docs/rb-cross',
         () =>
           new HttpResponse(null, {
             status: 301,
@@ -91,7 +91,7 @@ describe('redirect-behavior', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-cross.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-cross')));
     expect(result.status).toBe('warn');
     expect(result.details?.crossHostCount).toBe(1);
     expect(result.message).toContain('cross-host');
@@ -100,7 +100,7 @@ describe('redirect-behavior', () => {
   it('fails on JavaScript redirects', async () => {
     server.use(
       http.get(
-        'http://rb-js.local/docs/page1',
+        'http://test.local/docs/rb-js',
         () =>
           new HttpResponse('<html><script>window.location = "/new-page";</script></html>', {
             status: 200,
@@ -109,7 +109,7 @@ describe('redirect-behavior', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-js.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-js')));
     expect(result.status).toBe('fail');
     expect(result.details?.jsRedirectCount).toBe(1);
     expect(result.message).toContain('JavaScript');
@@ -118,7 +118,7 @@ describe('redirect-behavior', () => {
   it('detects meta refresh redirects', async () => {
     server.use(
       http.get(
-        'http://rb-meta.local/docs/page1',
+        'http://test.local/docs/rb-meta',
         () =>
           new HttpResponse(
             '<html><head><meta http-equiv="refresh" content="0;url=/new-page"></head></html>',
@@ -127,7 +127,7 @@ describe('redirect-behavior', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-meta.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-meta')));
     expect(result.status).toBe('fail');
     expect(result.details?.jsRedirectCount).toBe(1);
   });
@@ -135,7 +135,7 @@ describe('redirect-behavior', () => {
   it('handles mixed results: js redirect takes precedence over cross-host', async () => {
     server.use(
       http.get(
-        'http://rb-mix.local/docs/page1',
+        'http://test.local/docs/rb-mix1',
         () =>
           new HttpResponse(null, {
             status: 302,
@@ -143,7 +143,7 @@ describe('redirect-behavior', () => {
           }),
       ),
       http.get(
-        'http://rb-mix.local/docs/page2',
+        'http://test.local/docs/rb-mix2',
         () =>
           new HttpResponse('<html><script>document.location.href="/new"</script></html>', {
             status: 200,
@@ -152,7 +152,7 @@ describe('redirect-behavior', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-mix.local', '/docs/page1', '/docs/page2')));
+    const result = await check.run(makeCtx(llms('/docs/rb-mix1', '/docs/rb-mix2')));
     expect(result.status).toBe('fail');
     expect(result.details?.crossHostCount).toBe(1);
     expect(result.details?.jsRedirectCount).toBe(1);
@@ -161,16 +161,16 @@ describe('redirect-behavior', () => {
   });
 
   it('handles fetch errors gracefully', async () => {
-    server.use(http.get('http://rb-err.local/docs/page1', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/rb-err', () => HttpResponse.error()));
 
-    const result = await check.run(makeCtx(llms('rb-err.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-err')));
     expect(result.details?.fetchErrors).toBe(1);
   });
 
   it('fails when all fetches error out', async () => {
-    server.use(http.get('http://rb-allfail.local/docs/page1', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/rb-allfail', () => HttpResponse.error()));
 
-    const result = await check.run(makeCtx(llms('rb-allfail.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-allfail')));
     expect(result.status).toBe('fail');
     expect(result.message).toContain('Could not test any URLs');
   });
@@ -178,24 +178,109 @@ describe('redirect-behavior', () => {
   it('handles relative Location headers', async () => {
     server.use(
       http.get(
-        'http://rb-rel.local/docs/old',
+        'http://test.local/docs/rb-rel-old',
         () =>
           new HttpResponse(null, {
             status: 301,
-            headers: { Location: '/docs/new' },
+            headers: { Location: '/docs/rb-rel-new' },
           }),
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-rel.local', '/docs/old')));
+    const result = await check.run(makeCtx(llms('/docs/rb-rel-old')));
     expect(result.status).toBe('pass');
     expect(result.details?.sameHostCount).toBe(1);
+  });
+
+  it('ignores window.location inside <code> blocks', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/rb-code',
+        () =>
+          new HttpResponse(
+            '<html><body><p>Use <code>window.location = "/page"</code> to navigate.</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/rb-code')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores window.location inside <pre> blocks', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/rb-pre',
+        () =>
+          new HttpResponse(
+            '<html><body><pre class="highlight"><code>window.location.href = "/new";</code></pre></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/rb-pre')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores meta refresh inside <pre> blocks', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/rb-premeta',
+        () =>
+          new HttpResponse(
+            '<html><body><pre>&lt;meta http-equiv="refresh" content="0;url=/new"&gt;</pre></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/rb-premeta')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('ignores window.location property reads in <script> tags', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/rb-read',
+        () =>
+          new HttpResponse(
+            '<html><script>window._uxa.push(["setPath", window.location.pathname+window.location.hash]);</script></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/rb-read')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.jsRedirectCount).toBe(0);
+  });
+
+  it('still detects real JS redirects in <script> tags', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/rb-script',
+        () =>
+          new HttpResponse(
+            '<html><body><pre>example code</pre><script>window.location = "/new";</script></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/rb-script')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.jsRedirectCount).toBe(1);
   });
 
   it('classifies 302 redirects the same as 301', async () => {
     server.use(
       http.get(
-        'http://rb-302.local/docs/page1',
+        'http://test.local/docs/rb-302',
         () =>
           new HttpResponse(null, {
             status: 302,
@@ -204,7 +289,7 @@ describe('redirect-behavior', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('rb-302.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/rb-302')));
     expect(result.status).toBe('warn');
     expect(result.details?.crossHostCount).toBe(1);
   });

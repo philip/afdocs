@@ -48,13 +48,13 @@ describe('llms-txt-directive', () => {
     return ctx;
   }
 
-  const llms = (host: string, ...pages: string[]) =>
-    `# Docs\n## Links\n${pages.map((p, i) => `- [Page ${i + 1}](http://${host}${p}): Page\n`).join('')}`;
+  const llms = (...pages: string[]) =>
+    `# Docs\n## Links\n${pages.map((p, i) => `- [Page ${i + 1}](http://test.local${p}): Page\n`).join('')}`;
 
   it('passes when directive link is near the top of page', async () => {
     server.use(
       http.get(
-        'http://ld-pass.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><a href="/llms.txt">Documentation index for AI agents</a><h1>Welcome</h1><p>Content here...</p></body></html>',
@@ -63,7 +63,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-pass.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
     expect(result.details?.nearTopCount).toBe(1);
@@ -73,7 +73,7 @@ describe('llms-txt-directive', () => {
   it('passes when llms.txt is mentioned as text near the top', async () => {
     server.use(
       http.get(
-        'http://ld-text.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><p>See our llms.txt for a full documentation index.</p><h1>Docs</h1><p>Content...</p></body></html>',
@@ -82,7 +82,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-text.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
@@ -90,7 +90,7 @@ describe('llms-txt-directive', () => {
   it('passes with visually hidden directive using sr-only', async () => {
     server.use(
       http.get(
-        'http://ld-hidden.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><span class="sr-only"><a href="/llms.txt">Full documentation index</a></span><h1>Docs</h1><p>Content...</p></body></html>',
@@ -99,7 +99,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-hidden.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
@@ -108,7 +108,7 @@ describe('llms-txt-directive', () => {
     const padding = '<p>Lorem ipsum dolor sit amet.</p>'.repeat(200);
     server.use(
       http.get(
-        'http://ld-deep.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${padding}<a href="/llms.txt">Index</a></body></html>`, {
             status: 200,
@@ -117,7 +117,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-deep.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('warn');
     expect(result.details?.buriedCount).toBe(1);
     expect(result.message).toContain('buried deep');
@@ -126,7 +126,7 @@ describe('llms-txt-directive', () => {
   it('warns when some pages have directive and some do not', async () => {
     server.use(
       http.get(
-        'http://ld-partial.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><a href="/llms.txt">Index</a><p>Content</p></body></html>',
@@ -134,7 +134,7 @@ describe('llms-txt-directive', () => {
           ),
       ),
       http.get(
-        'http://ld-partial.local/docs/page2',
+        'http://test.local/docs/page2',
         () =>
           new HttpResponse('<html><body><h1>No directive here</h1><p>Content</p></body></html>', {
             status: 200,
@@ -143,7 +143,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-partial.local', '/docs/page1', '/docs/page2')));
+    const result = await check.run(makeCtx(llms('/docs/page1', '/docs/page2')));
     expect(result.status).toBe('warn');
     expect(result.details?.foundCount).toBe(1);
     expect(result.details?.notFoundCount).toBe(1);
@@ -153,7 +153,7 @@ describe('llms-txt-directive', () => {
   it('fails when no directive found in any page', async () => {
     server.use(
       http.get(
-        'http://ld-none.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><h1>Welcome</h1><p>No agent directive here.</p></body></html>',
@@ -162,15 +162,15 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-none.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('fail');
     expect(result.details?.foundCount).toBe(0);
   });
 
   it('fails when all pages fail to fetch', async () => {
-    server.use(http.get('http://ld-err.local/docs/page1', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/page1', () => HttpResponse.error()));
 
-    const result = await check.run(makeCtx(llms('ld-err.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('fail');
     expect(result.message).toContain('Could not test');
   });
@@ -178,12 +178,12 @@ describe('llms-txt-directive', () => {
   it('handles non-200 responses gracefully', async () => {
     server.use(
       http.get(
-        'http://ld-404.local/docs/page1',
+        'http://test.local/docs/page1',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-404.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('fail');
     expect(result.details?.fetchErrors).toBe(1);
   });
@@ -191,7 +191,7 @@ describe('llms-txt-directive', () => {
   it('detects full URL links to llms.txt', async () => {
     server.use(
       http.get(
-        'http://ld-full.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><a href="https://example.com/llms.txt">Documentation Index</a><p>Content</p></body></html>',
@@ -200,7 +200,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-full.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
@@ -208,7 +208,7 @@ describe('llms-txt-directive', () => {
   it('ignores pages without body tags', async () => {
     server.use(
       http.get(
-        'http://ld-nobody.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<a href="/llms.txt">Index</a><p>No body tags in this response</p>', {
             status: 200,
@@ -218,7 +218,7 @@ describe('llms-txt-directive', () => {
     );
 
     // Should still work by falling back to full HTML
-    const result = await check.run(makeCtx(llms('ld-nobody.local', '/docs/page1')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
@@ -228,7 +228,7 @@ describe('llms-txt-directive', () => {
     const content = '<p>Documentation content.</p>'.repeat(10);
     server.use(
       http.get(
-        'http://ld-md.local/docs/page1/',
+        'http://test.local/docs/page1/',
         () =>
           new HttpResponse(
             `<html><body><a href="/llms.txt">Documentation index</a><h1>Docs</h1>${content}</body></html>`,
@@ -237,7 +237,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-md.local', '/docs/page1/index.md')));
+    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
@@ -246,7 +246,7 @@ describe('llms-txt-directive', () => {
     // HTML URL returns the markdown directly (some sites do this)
     server.use(
       http.get(
-        'http://ld-mdcontent.local/docs/page1/',
+        'http://test.local/docs/page1/',
         () =>
           new HttpResponse(
             'For AI agents: see [documentation index](/llms.txt) for navigation.\n\n# Welcome\n\nContent here.',
@@ -255,7 +255,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-mdcontent.local', '/docs/page1/index.md')));
+    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
     const pages = result.details?.pageResults as Array<{ source?: string }>;
@@ -265,7 +265,7 @@ describe('llms-txt-directive', () => {
   it('falls back to .md URL when HTML version has no directive', async () => {
     server.use(
       http.get(
-        'http://ld-fallback.local/docs/page1/',
+        'http://test.local/docs/page1/',
         () =>
           new HttpResponse('<html><body><h1>Docs</h1><p>No directive here</p></body></html>', {
             status: 200,
@@ -273,7 +273,7 @@ describe('llms-txt-directive', () => {
           }),
       ),
       http.get(
-        'http://ld-fallback.local/docs/page1/index.md',
+        'http://test.local/docs/page1/index.md',
         () =>
           new HttpResponse(
             'For AI agents: see /llms.txt for a documentation index.\n\n# Docs\n\nContent.',
@@ -282,7 +282,7 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('ld-fallback.local', '/docs/page1/index.md')));
+    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
     const pages = result.details?.pageResults as Array<{ source?: string }>;

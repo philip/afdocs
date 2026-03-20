@@ -35,18 +35,30 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     };
   }
 
-  // Collect unique links
-  const allLinks = new Set<string>();
+  // Collect unique links and partition by origin
+  const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
+  const sameOriginLinks: string[] = [];
+  const crossOriginLinks: string[] = [];
   for (const file of discovered) {
     const links = extractMarkdownLinks(file.content);
     for (const link of links) {
       if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-        allLinks.add(link.url);
+        try {
+          const linkOrigin = new URL(link.url).origin;
+          if (linkOrigin === siteOrigin) {
+            if (!sameOriginLinks.includes(link.url)) sameOriginLinks.push(link.url);
+          } else {
+            if (!crossOriginLinks.includes(link.url)) crossOriginLinks.push(link.url);
+          }
+        } catch {
+          if (!sameOriginLinks.includes(link.url)) sameOriginLinks.push(link.url);
+        }
       }
     }
   }
 
-  if (allLinks.size === 0) {
+  const totalLinks = sameOriginLinks.length + crossOriginLinks.length;
+  if (totalLinks === 0) {
     return {
       id: 'llms-txt-links-markdown',
       category: 'llms-txt',
@@ -55,86 +67,91 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     };
   }
 
-  // Sample if too many
-  let linksToTest = Array.from(allLinks);
-  const totalLinks = linksToTest.length;
-  const wasSampled = totalLinks > ctx.options.maxLinksToTest;
+  // Sample same-origin links if too many
+  let sameToTest = sameOriginLinks;
+  const wasSampled = sameOriginLinks.length > ctx.options.maxLinksToTest;
   if (wasSampled) {
-    for (let i = linksToTest.length - 1; i > 0; i--) {
+    for (let i = sameToTest.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [linksToTest[i], linksToTest[j]] = [linksToTest[j], linksToTest[i]];
+      [sameToTest[i], sameToTest[j]] = [sameToTest[j], sameToTest[i]];
     }
-    linksToTest = linksToTest.slice(0, ctx.options.maxLinksToTest);
+    sameToTest = sameToTest.slice(0, ctx.options.maxLinksToTest);
   }
 
-  const results: LinkMarkdownResult[] = [];
-  const concurrency = ctx.options.maxConcurrency;
+  async function checkMarkdown(urls: string[]): Promise<LinkMarkdownResult[]> {
+    const out: LinkMarkdownResult[] = [];
+    const concurrency = ctx.options.maxConcurrency;
+    for (let i = 0; i < urls.length; i += concurrency) {
+      const batch = urls.slice(i, i + concurrency);
+      const batchResults = await Promise.all(
+        batch.map(async (url): Promise<LinkMarkdownResult> => {
+          const hasMdExt = hasMarkdownExtension(url);
 
-  for (let i = 0; i < linksToTest.length; i += concurrency) {
-    const batch = linksToTest.slice(i, i + concurrency);
-    const batchResults = await Promise.all(
-      batch.map(async (url): Promise<LinkMarkdownResult> => {
-        const hasMdExt = hasMarkdownExtension(url);
+          if (hasMdExt) {
+            return { url, hasMarkdownExtension: true, servesMarkdown: true };
+          }
 
-        if (hasMdExt) {
-          return { url, hasMarkdownExtension: true, servesMarkdown: true };
-        }
+          // Check if the URL serves markdown via content-type
+          try {
+            const response = await ctx.http.fetch(url, {
+              method: 'HEAD',
+              headers: { Accept: 'text/markdown' },
+            });
+            const contentType = response.headers.get('content-type') ?? '';
+            if (contentType.includes('text/markdown')) {
+              return {
+                url,
+                hasMarkdownExtension: false,
+                servesMarkdown: true,
+                status: response.status,
+              };
+            }
 
-        // Check if the URL serves markdown via content-type
-        try {
-          const response = await ctx.http.fetch(url, {
-            method: 'HEAD',
-            headers: { Accept: 'text/markdown' },
-          });
-          const contentType = response.headers.get('content-type') ?? '';
-          if (contentType.includes('text/markdown')) {
+            // Try .md variant candidates
+            const candidates = toMdUrls(url);
+            for (const mdUrl of candidates) {
+              try {
+                const mdResponse = await ctx.http.fetch(mdUrl, { method: 'HEAD' });
+                if (mdResponse.ok) {
+                  return {
+                    url,
+                    hasMarkdownExtension: false,
+                    servesMarkdown: false,
+                    status: response.status,
+                    mdVariantAvailable: true,
+                  };
+                }
+              } catch {
+                // Try next candidate
+              }
+            }
+
             return {
               url,
               hasMarkdownExtension: false,
-              servesMarkdown: true,
+              servesMarkdown: false,
               status: response.status,
+              mdVariantAvailable: false,
+            };
+          } catch (err) {
+            return {
+              url,
+              hasMarkdownExtension: false,
+              servesMarkdown: false,
+              status: 0,
+              error: err instanceof Error ? err.message : String(err),
             };
           }
-
-          // Try .md variant candidates
-          const candidates = toMdUrls(url);
-          for (const mdUrl of candidates) {
-            try {
-              const mdResponse = await ctx.http.fetch(mdUrl, { method: 'HEAD' });
-              if (mdResponse.ok) {
-                return {
-                  url,
-                  hasMarkdownExtension: false,
-                  servesMarkdown: false,
-                  status: response.status,
-                  mdVariantAvailable: true,
-                };
-              }
-            } catch {
-              // Try next candidate
-            }
-          }
-
-          return {
-            url,
-            hasMarkdownExtension: false,
-            servesMarkdown: false,
-            status: response.status,
-            mdVariantAvailable: false,
-          };
-        } catch (err) {
-          return {
-            url,
-            hasMarkdownExtension: false,
-            servesMarkdown: false,
-            status: 0,
-            error: err instanceof Error ? err.message : String(err),
-          };
-        }
-      }),
-    );
-    results.push(...batchResults);
+        }),
+      );
+      out.push(...batchResults);
+    }
+    return out;
   }
+
+  // Only check same-origin links for markdown support (cross-origin links
+  // are outside the site owner's control and shouldn't affect the result)
+  const results = await checkMarkdown(sameToTest);
 
   const markdownLinks = results.filter((r) => r.hasMarkdownExtension || r.servesMarkdown).length;
   const mdVariantsAvailable = results.filter((r) => r.mdVariantAvailable).length;
@@ -147,6 +164,11 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
     (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
+  const crossNote =
+    crossOriginLinks.length > 0
+      ? ` (${crossOriginLinks.length} external link${crossOriginLinks.length === 1 ? '' : 's'} excluded)`
+      : '';
+
   const details: Record<string, unknown> = {
     totalLinks,
     testedLinks: results.length,
@@ -157,14 +179,26 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     markdownRate: Math.round(markdownRate * 100),
     fetchErrors,
     rateLimited,
+    crossOriginExcluded: crossOriginLinks.length,
   };
+
+  if (results.length === 0) {
+    // All links are cross-origin; can't assess markdown support
+    return {
+      id: 'llms-txt-links-markdown',
+      category: 'llms-txt',
+      status: 'skip',
+      message: `All ${totalLinks} links are external; cannot assess markdown support`,
+      details,
+    };
+  }
 
   if (markdownRate >= 0.9) {
     return {
       id: 'llms-txt-links-markdown',
       category: 'llms-txt',
       status: 'pass',
-      message: `${markdownLinks}/${results.length} ${linkLabel} point to markdown content (${Math.round(markdownRate * 100)}%)${suffix}`,
+      message: `${markdownLinks}/${results.length} same-origin ${linkLabel} point to markdown content (${Math.round(markdownRate * 100)}%)${suffix}${crossNote}`,
       details,
     };
   }
@@ -174,7 +208,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
       id: 'llms-txt-links-markdown',
       category: 'llms-txt',
       status: 'warn',
-      message: `Links point to HTML, but ${mdVariantsAvailable} have .md variants available${suffix}`,
+      message: `Same-origin links point to HTML, but ${mdVariantsAvailable} have .md variants available${suffix}${crossNote}`,
       details,
     };
   }
@@ -183,7 +217,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     id: 'llms-txt-links-markdown',
     category: 'llms-txt',
     status: 'fail',
-    message: `Links point to HTML and no markdown alternatives detected${suffix}`,
+    message: `Same-origin links point to HTML and no markdown alternatives detected${suffix}${crossNote}`,
     details,
   };
 }
