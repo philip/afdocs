@@ -43,8 +43,8 @@ describe('content-start-position', () => {
     return ctx;
   }
 
-  function singlePageCtx(domain: string) {
-    return makeCtx(`# Docs\n> Summary\n## Links\n- [Page](http://${domain}/docs/page): A page\n`);
+  function singlePageCtx(path: string) {
+    return makeCtx(`# Docs\n> Summary\n## Links\n- [Page](http://test.local${path}): A page\n`);
   }
 
   // ── Setext heading detection ──
@@ -53,7 +53,7 @@ describe('content-start-position', () => {
     // Turndown converts <h1> to setext (underline) style by default
     server.use(
       http.get(
-        'http://csp-pass.local/docs/page',
+        'http://test.local/docs/csp-pass',
         () =>
           new HttpResponse(
             '<html><body><h1>Getting Started</h1><p>Welcome to our documentation.</p></body></html>',
@@ -62,7 +62,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-pass.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-pass'));
     expect(result.status).toBe('pass');
     expect(result.details?.medianPercent).toBe(0);
   });
@@ -73,7 +73,7 @@ describe('content-start-position', () => {
     // Turndown uses ATX style for h3+
     server.use(
       http.get(
-        'http://csp-atx.local/docs/page',
+        'http://test.local/docs/csp-atx',
         () =>
           new HttpResponse(
             '<html><body><h3>API Reference</h3><p>Endpoint details below.</p></body></html>',
@@ -82,7 +82,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-atx.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-atx'));
     expect(result.status).toBe('pass');
     const pageResults = result.details?.pageResults as Array<{ contentStartPercent: number }>;
     expect(pageResults[0].contentStartPercent).toBe(0);
@@ -102,12 +102,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-css.local/docs/page',
+        'http://test.local/docs/csp-css',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-css.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-css'));
     // Content should be found (the heading after CSS), not at position 0
     const pageResults = result.details?.pageResults as Array<{
       contentStartChar: number;
@@ -130,12 +130,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-js.local/docs/page',
+        'http://test.local/docs/csp-js',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-js.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-js'));
     const pageResults = result.details?.pageResults as Array<{ contentStartChar: number }>;
     expect(pageResults[0].contentStartChar).toBeGreaterThan(0);
   });
@@ -153,12 +153,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-nav.local/docs/page',
+        'http://test.local/docs/csp-nav',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-nav.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-nav'));
     const pageResults = result.details?.pageResults as Array<{ contentStartChar: number }>;
     expect(pageResults[0].contentStartChar).toBeGreaterThan(0);
   });
@@ -173,12 +173,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-prose.local/docs/page',
+        'http://test.local/docs/csp-prose',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-prose.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-prose'));
     const pageResults = result.details?.pageResults as Array<{
       contentStartChar: number;
       totalChars: number;
@@ -200,12 +200,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-empty.local/docs/page',
+        'http://test.local/docs/csp-empty',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-empty.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-empty'));
     expect(result.status).toBe('fail');
     const pageResults = result.details?.pageResults as Array<{ contentStartPercent: number }>;
     expect(pageResults[0].contentStartPercent).toBeGreaterThan(50);
@@ -216,12 +216,12 @@ describe('content-start-position', () => {
   it('handles empty HTML gracefully', async () => {
     server.use(
       http.get(
-        'http://csp-blank.local/docs/page',
+        'http://test.local/docs/csp-blank',
         () => new HttpResponse('', { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-blank.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-blank'));
     const pageResults = result.details?.pageResults as Array<{ contentStartPercent: number }>;
     // 0% when totalChars is 0
     expect(pageResults[0].contentStartPercent).toBe(0);
@@ -248,12 +248,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-warnp.local/docs/page',
+        'http://test.local/docs/csp-warnp',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-warnp.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-warnp'));
     const pageResults = result.details?.pageResults as Array<{
       contentStartPercent: number;
       status: string;
@@ -277,12 +277,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-failp.local/docs/page',
+        'http://test.local/docs/csp-failp',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-failp.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-failp'));
     expect(result.status).toBe('fail');
     expect(result.details?.failBucket).toBe(1);
     expect(result.message).toContain('past 50%');
@@ -294,7 +294,7 @@ describe('content-start-position', () => {
     // Page 1: content starts immediately (pass)
     server.use(
       http.get(
-        'http://csp-worst.local/docs/good',
+        'http://test.local/docs/good',
         () =>
           new HttpResponse('<html><body><h1>Docs</h1><p>Good page.</p></body></html>', {
             status: 200,
@@ -310,7 +310,7 @@ describe('content-start-position', () => {
     ).join('\n');
     server.use(
       http.get(
-        'http://csp-worst.local/docs/bad',
+        'http://test.local/docs/bad',
         () =>
           new HttpResponse(
             `<html><head><style>${cssRules}</style></head><body><h3>Late Content</h3></body></html>`,
@@ -319,7 +319,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Good](http://csp-worst.local/docs/good): Good\n- [Bad](http://csp-worst.local/docs/bad): Bad\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Good](http://test.local/docs/good): Good\n- [Bad](http://test.local/docs/bad): Bad\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.passBucket).toBeGreaterThanOrEqual(1);
@@ -329,9 +329,9 @@ describe('content-start-position', () => {
   // ── Fetch errors ──
 
   it('handles fetch errors gracefully and includes count in message', async () => {
-    server.use(http.get('http://csp-err.local/docs/page', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/csp-err', () => HttpResponse.error()));
 
-    const result = await check.run(singlePageCtx('csp-err.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-err'));
     expect(result.status).toBe('fail');
     expect(result.details?.fetchErrors).toBe(1);
     expect(result.message).toContain('failed to fetch');
@@ -342,17 +342,17 @@ describe('content-start-position', () => {
   it('appends fetch error count when some pages succeed', async () => {
     server.use(
       http.get(
-        'http://csp-partial.local/docs/good',
+        'http://test.local/docs/good',
         () =>
           new HttpResponse('<html><body><h1>Works</h1><p>Content.</p></body></html>', {
             status: 200,
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
-      http.get('http://csp-partial.local/docs/broken', () => HttpResponse.error()),
+      http.get('http://test.local/docs/broken', () => HttpResponse.error()),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Good](http://csp-partial.local/docs/good): OK\n- [Broken](http://csp-partial.local/docs/broken): Broken\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Good](http://test.local/docs/good): OK\n- [Broken](http://test.local/docs/broken): Broken\n`;
     const result = await check.run(makeCtx(content));
     expect(result.details?.fetchErrors).toBe(1);
     expect(result.message).toContain('1 failed to fetch');
@@ -363,13 +363,13 @@ describe('content-start-position', () => {
   it('samples when more links than maxLinksToTest', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://csp-sample.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://csp-sample.local/docs/page${i}`,
+          `http://test.local/docs/page${i}`,
           () =>
             new HttpResponse(`<html><body><h1>Page ${i}</h1><p>Content here.</p></body></html>`, {
               status: 200,
@@ -404,7 +404,7 @@ describe('content-start-position', () => {
   it('reports per-page position details', async () => {
     server.use(
       http.get(
-        'http://csp-detail.local/docs/page',
+        'http://test.local/docs/csp-detail',
         () =>
           new HttpResponse(
             '<html><body><h1>Title</h1><p>A paragraph of meaningful documentation content for testing.</p></body></html>',
@@ -413,7 +413,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-detail.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-detail'));
     const pageResults = result.details?.pageResults as Array<{
       url: string;
       contentStartChar: number;
@@ -421,7 +421,7 @@ describe('content-start-position', () => {
       contentStartPercent: number;
     }>;
     expect(pageResults).toHaveLength(1);
-    expect(pageResults[0].url).toBe('http://csp-detail.local/docs/page');
+    expect(pageResults[0].url).toBe('http://test.local/docs/csp-detail');
     expect(pageResults[0].totalChars).toBeGreaterThan(0);
     expect(pageResults[0].contentStartChar).toBeGreaterThanOrEqual(0);
     expect(pageResults[0].contentStartPercent).toBeGreaterThanOrEqual(0);
@@ -433,7 +433,7 @@ describe('content-start-position', () => {
     const markdownContent = '# API Guide\n\nThis page documents the `<head>` element.\n';
     server.use(
       http.get(
-        'http://csp-md.local/docs/page',
+        'http://test.local/docs/csp-md',
         () =>
           new HttpResponse(markdownContent, {
             status: 200,
@@ -442,7 +442,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-md.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-md'));
     expect(result.status).toBe('pass');
     const pageResults = result.details?.pageResults as Array<{
       contentStartChar: number;
@@ -457,7 +457,7 @@ describe('content-start-position', () => {
     const markdownContent = '# Checkout\n\nSet up `<head>` tags in your HTML page.\n';
     server.use(
       http.get(
-        'http://csp-plain.local/docs/page',
+        'http://test.local/docs/csp-plain',
         () =>
           new HttpResponse(markdownContent, {
             status: 200,
@@ -466,7 +466,7 @@ describe('content-start-position', () => {
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-plain.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-plain'));
     expect(result.status).toBe('pass');
     const pageResults = result.details?.pageResults as Array<{
       contentStartPercent: number;
@@ -521,12 +521,12 @@ describe('content-start-position', () => {
 
     server.use(
       http.get(
-        'http://csp-breadcrumb.local/docs/page',
+        'http://test.local/docs/csp-breadcrumb',
         () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
       ),
     );
 
-    const result = await check.run(singlePageCtx('csp-breadcrumb.local'));
+    const result = await check.run(singlePageCtx('/docs/csp-breadcrumb'));
     const pageResults = result.details?.pageResults as Array<{ contentStartChar: number }>;
     // "Go back" and "Up next" should be skipped, content starts at heading
     expect(pageResults[0].contentStartChar).toBeGreaterThan(0);

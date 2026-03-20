@@ -46,7 +46,7 @@ describe('page-size-html', () => {
   it('passes when HTML converts to small markdown', async () => {
     server.use(
       http.get(
-        'http://ps-html-pass.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<html><body><h1>Hello</h1><p>Short page.</p></body></html>', {
             status: 200,
@@ -55,7 +55,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-pass.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.testedPages).toBe(1);
@@ -71,7 +71,7 @@ describe('page-size-html', () => {
     const bigContent = '<p>' + 'x'.repeat(200) + '</p>';
     server.use(
       http.get(
-        'http://ps-html-fail.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${bigContent}</body></html>`, {
             status: 200,
@@ -80,7 +80,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-fail.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const ctx = createContext('http://test.local', {
       requestDelay: 0,
       thresholds: { pass: 10, fail: 50 },
@@ -105,7 +105,7 @@ describe('page-size-html', () => {
     const html = `<html><head><style>body { color: red; }</style></head><body><h1>Title</h1></body></html>`;
     server.use(
       http.get(
-        'http://ps-html-ratio.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(html, {
             status: 200,
@@ -114,7 +114,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-ratio.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     const pageResults = result.details?.pageResults as Array<{
       conversionRatio: number;
@@ -124,9 +124,9 @@ describe('page-size-html', () => {
   });
 
   it('handles fetch errors gracefully', async () => {
-    server.use(http.get('http://ps-html-err.local/docs/page1', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/page1', () => HttpResponse.error()));
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-err.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.fetchErrors).toBe(1);
@@ -135,13 +135,13 @@ describe('page-size-html', () => {
   it('samples when more links than maxLinksToTest', async () => {
     const links = Array.from(
       { length: 5 },
-      (_, i) => `- [Page ${i}](http://ps-html-sample.local/docs/page${i}): Page ${i}`,
+      (_, i) => `- [Page ${i}](http://test.local/docs/page${i}): Page ${i}`,
     ).join('\n');
 
     for (let i = 0; i < 5; i++) {
       server.use(
         http.get(
-          `http://ps-html-sample.local/docs/page${i}`,
+          `http://test.local/docs/page${i}`,
           () =>
             new HttpResponse(`<html><body><h1>Page ${i}</h1></body></html>`, {
               status: 200,
@@ -175,7 +175,7 @@ describe('page-size-html', () => {
       '# API Guide\n\nThis is a markdown page about the `<head>` element.\n\nMore content here.';
     server.use(
       http.get(
-        'http://ps-html-md.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(markdownContent, {
             status: 200,
@@ -184,7 +184,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-md.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     const pageResults = result.details?.pageResults as Array<{
@@ -200,7 +200,7 @@ describe('page-size-html', () => {
     const markdownContent = '# Checkout Guide\n\nSet up `<head>` tags in your HTML page.\n';
     server.use(
       http.get(
-        'http://ps-html-plain.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(markdownContent, {
             status: 200,
@@ -209,7 +209,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-plain.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     const pageResults = result.details?.pageResults as Array<{
       htmlCharacters: number;
@@ -223,7 +223,7 @@ describe('page-size-html', () => {
     // Create HTML that converts to ~25 chars (between pass=10 and fail=50)
     server.use(
       http.get(
-        'http://ps-html-warn.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<html><body><p>Some medium length content here.</p></body></html>', {
             status: 200,
@@ -232,7 +232,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-warn.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const ctx = createContext('http://test.local', {
       requestDelay: 0,
       thresholds: { pass: 10, fail: 50 },
@@ -257,7 +257,7 @@ describe('page-size-html', () => {
     // Response with no standard content-type but body is clearly HTML
     server.use(
       http.get(
-        'http://ps-html-detect.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<!DOCTYPE html><html><body><h1>Detected</h1><p>HTML content.</p></body></html>',
@@ -269,7 +269,7 @@ describe('page-size-html', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://ps-html-detect.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     const pageResults = result.details?.pageResults as Array<{
       htmlCharacters: number;
@@ -283,19 +283,19 @@ describe('page-size-html', () => {
   it('includes fetch error count in message suffix', async () => {
     server.use(
       http.get(
-        'http://ps-html-suffix.local/docs/good',
+        'http://test.local/docs/good',
         () =>
           new HttpResponse('<html><body><h1>OK</h1></body></html>', {
             status: 200,
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
-      http.get('http://ps-html-suffix.local/docs/broken', () => HttpResponse.error()),
+      http.get('http://test.local/docs/broken', () => HttpResponse.error()),
     );
 
     const content = `# Docs\n> Summary\n## Links
-- [Good](http://ps-html-suffix.local/docs/good): OK
-- [Broken](http://ps-html-suffix.local/docs/broken): Broken
+- [Good](http://test.local/docs/good): OK
+- [Broken](http://test.local/docs/broken): Broken
 `;
     const result = await check.run(makeCtx(content));
     expect(result.details?.fetchErrors).toBe(1);

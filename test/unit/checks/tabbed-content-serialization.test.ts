@@ -46,7 +46,7 @@ describe('tabbed-content-serialization', () => {
   it('passes when page has no tabbed content', async () => {
     server.use(
       http.get(
-        'http://tcs-notabs.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('<html><body><h1>Hello</h1><p>No tabs here.</p></body></html>', {
             status: 200,
@@ -55,7 +55,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-notabs.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.message).toContain('No tabbed content');
@@ -72,7 +72,7 @@ describe('tabbed-content-serialization', () => {
     `;
     server.use(
       http.get(
-        'http://tcs-small.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${tabHtml}</body></html>`, {
             status: 200,
@@ -81,7 +81,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-small.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     expect(result.details?.totalGroupsFound).toBe(1);
@@ -101,7 +101,7 @@ describe('tabbed-content-serialization', () => {
     `;
     server.use(
       http.get(
-        'http://tcs-big.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${tabHtml}</body></html>`, {
             status: 200,
@@ -110,16 +110,16 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-big.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.message).toContain('over 100K');
   });
 
   it('handles fetch errors gracefully', async () => {
-    server.use(http.get('http://tcs-err.local/docs/page1', () => HttpResponse.error()));
+    server.use(http.get('http://test.local/docs/page1', () => HttpResponse.error()));
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-err.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('fail');
     expect(result.details?.fetchErrors).toBe(1);
@@ -128,7 +128,7 @@ describe('tabbed-content-serialization', () => {
   it('skips conversion for markdown responses', async () => {
     server.use(
       http.get(
-        'http://tcs-md.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse('# Hello\n\nNo tabs in markdown.', {
             status: 200,
@@ -137,7 +137,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-md.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     const tabbedPages = result.details?.tabbedPages as Array<{ totalTabbedChars: number }>;
@@ -153,7 +153,7 @@ describe('tabbed-content-serialization', () => {
     `;
     server.use(
       http.get(
-        'http://tcs-details.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${tabHtml}</body></html>`, {
             status: 200,
@@ -162,7 +162,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-details.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.details?.tabbedPages).toBeDefined();
     const tabbedPages = result.details?.tabbedPages as Array<{
@@ -176,7 +176,7 @@ describe('tabbed-content-serialization', () => {
     const mdContent = `# Guide\n\n<Tabs>\n<Tab name="Python">\n\npip install foo\n\n</Tab>\n<Tab name="Node">\n\nnpm install foo\n\n</Tab>\n</Tabs>\n`;
     server.use(
       http.get(
-        'http://tcs-mdx.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(mdContent, {
             status: 200,
@@ -185,7 +185,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-mdx.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('pass');
     const tabbedPages = result.details?.tabbedPages as Array<{
@@ -207,7 +207,7 @@ describe('tabbed-content-serialization', () => {
 
     server.use(
       http.get(
-        'http://tcs-spa.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(spaHtml, {
             status: 200,
@@ -215,7 +215,7 @@ describe('tabbed-content-serialization', () => {
           }),
       ),
       http.get(
-        'http://tcs-spa.local/docs/page1.md',
+        'http://test.local/docs/page1.md',
         () =>
           new HttpResponse(mdContent, {
             status: 200,
@@ -224,7 +224,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-spa.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const ctx = makeCtx(content);
     // Simulate rendering-strategy having flagged this URL as an SPA shell
     ctx.previousResults.set('rendering-strategy', {
@@ -233,7 +233,7 @@ describe('tabbed-content-serialization', () => {
       status: 'fail',
       message: 'SPA shell detected',
       details: {
-        pageResults: [{ url: 'http://tcs-spa.local/docs/page1', status: 'fail' }],
+        pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }],
       },
     });
     const result = await check.run(ctx);
@@ -259,7 +259,7 @@ describe('tabbed-content-serialization', () => {
     `;
     server.use(
       http.get(
-        'http://tcs-warn.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${tabHtml}</body></html>`, {
             status: 200,
@@ -268,7 +268,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-warn.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.status).toBe('warn');
     expect(result.message).toContain('50K–100K');
@@ -285,17 +285,17 @@ describe('tabbed-content-serialization', () => {
     `;
     server.use(
       http.get(
-        'http://tcs-partial1.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(`<html><body>${tabHtml}</body></html>`, {
             status: 200,
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
-      http.get('http://tcs-partial2.local/docs/page2', () => HttpResponse.error()),
+      http.get('http://test.local/docs/page2', () => HttpResponse.error()),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-partial1.local/docs/page1): First\n- [Page 2](http://tcs-partial2.local/docs/page2): Second\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n- [Page 2](http://test.local/docs/page2): Second\n`;
     const result = await check.run(makeCtx(content));
     expect(result.message).toContain('1 failed to fetch');
     expect(result.details?.fetchErrors).toBe(1);
@@ -311,7 +311,7 @@ describe('tabbed-content-serialization', () => {
 
     server.use(
       http.get(
-        'http://tcs-spa-notabs.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(spaHtml, {
             status: 200,
@@ -320,16 +320,16 @@ describe('tabbed-content-serialization', () => {
       ),
       // .md candidate returns 404 so tryMdFallback returns null
       http.get(
-        'http://tcs-spa-notabs.local/docs/page1.md',
+        'http://test.local/docs/page1.md',
         () => new HttpResponse('Not found', { status: 404 }),
       ),
       http.get(
-        'http://tcs-spa-notabs.local/docs/page1/index.md',
+        'http://test.local/docs/page1/index.md',
         () => new HttpResponse('Not found', { status: 404 }),
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-spa-notabs.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const ctx = makeCtx(content);
     ctx.previousResults.set('rendering-strategy', {
       id: 'rendering-strategy',
@@ -337,7 +337,7 @@ describe('tabbed-content-serialization', () => {
       status: 'fail',
       message: 'SPA shell detected',
       details: {
-        pageResults: [{ url: 'http://tcs-spa-notabs.local/docs/page1', status: 'fail' }],
+        pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }],
       },
     });
     const result = await check.run(ctx);
@@ -355,7 +355,7 @@ describe('tabbed-content-serialization', () => {
     // Regular server-rendered HTML with no tabs
     server.use(
       http.get(
-        'http://tcs-nospa.local/docs/page1',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
             '<html><body><h1>Hello</h1><p>' + 'Real content. '.repeat(100) + '</p></body></html>',
@@ -367,7 +367,7 @@ describe('tabbed-content-serialization', () => {
       ),
       // This .md URL has tabs, but should NOT be fetched
       http.get(
-        'http://tcs-nospa.local/docs/page1.md',
+        'http://test.local/docs/page1.md',
         () =>
           new HttpResponse('<Tabs><Tab name="A">A</Tab></Tabs>', {
             status: 200,
@@ -376,7 +376,7 @@ describe('tabbed-content-serialization', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://tcs-nospa.local/docs/page1): First\n`;
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
     const result = await check.run(makeCtx(content));
     expect(result.message).toContain('No tabbed content');
     const tabbedPages = result.details?.tabbedPages as Array<{ source: string }>;
