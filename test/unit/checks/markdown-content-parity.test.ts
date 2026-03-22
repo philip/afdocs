@@ -695,4 +695,1149 @@ Our support team is available around the clock to help with technical questions.
     const pageResults = result.details?.pageResults as Array<{ totalSegments: number }>;
     expect(pageResults[0].totalSegments).toBeGreaterThan(0);
   });
+
+  it('strips heading anchor links with aria-label="Anchor"', async () => {
+    // Hugo/Congo theme adds <a aria-label="Anchor">#</a> inside every heading.
+    // Without stripping, each heading becomes "Heading Text #" which doesn't
+    // match the markdown "Heading Text", causing false mismatches.
+    const anchorSpan = (id: string) =>
+      `<span class="absolute opacity-0"><a href="#${id}" aria-label="Anchor">#</a></span>`;
+    const html = `<html><body><main>
+      <h1>Guide Title</h1>
+      <h2 id="setup" class="relative group">Setup ${anchorSpan('setup')}</h2>
+      <p>Install the package using npm to add it to your project dependencies list.</p>
+      <p>Then import the client module and configure it with your API credentials here.</p>
+      <h2 id="auth" class="relative group">Authentication ${anchorSpan('auth')}</h2>
+      <p>Use bearer tokens for authentication with the API endpoints on every request.</p>
+      <p>Include your API key in the Authorization header of every request you send.</p>
+      <h2 id="usage" class="relative group">Usage ${anchorSpan('usage')}</h2>
+      <p>Call the initialize method first to set up the connection pool and configuration.</p>
+      <p>Then use the client fetch method to make requests to the remote server endpoint.</p>
+      <h2 id="errors" class="relative group">Error Handling ${anchorSpan('errors')}</h2>
+      <p>Error responses include a JSON body with a code field and a message for details.</p>
+      <p>Wrap API calls in try-catch blocks to handle network and validation errors properly.</p>
+    </main></body></html>`;
+
+    const markdown = `# Guide Title
+
+## Setup
+
+Install the package using npm to add it to your project dependencies list.
+
+Then import the client module and configure it with your API credentials here.
+
+## Authentication
+
+Use bearer tokens for authentication with the API endpoints on every request.
+
+Include your API key in the Authorization header of every request you send.
+
+## Usage
+
+Call the initialize method first to set up the connection pool and configuration.
+
+Then use the client fetch method to make requests to the remote server endpoint.
+
+## Error Handling
+
+Error responses include a JSON body with a code field and a message for details.
+
+Wrap API calls in try-catch blocks to handle network and validation errors properly.`;
+
+    const url = 'http://mcp-anchor.local/docs/guide';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-anchor.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('filters llms.txt directive banner text as noise', async () => {
+    // Sites using the llms.txt directive add a visually-hidden banner like
+    // "For AI agents: a documentation index is available at /llms.txt..."
+    // This is template chrome that doesn't exist in the raw markdown content.
+    const html = `<html><body><main>
+      <div class="not-prose absolute w-px h-px overflow-hidden" style="clip:rect(0,0,0,0)">
+        For AI agents: a documentation index is available at /llms.txt for this site.
+      </div>
+      <h1>Getting Started</h1>
+      <p>Install the package using npm to add it to your project dependencies list.</p>
+      <p>Then import the client module and configure it with your API credentials here.</p>
+      <p>Run the following commands to get started with the installation process now.</p>
+      <p>After installation import the client and call the initialize method first please.</p>
+      <p>The client will automatically detect your configuration from environment variables.</p>
+      <p>You can override any configuration option by passing it to the constructor directly.</p>
+      <p>Make sure your API key is set before attempting to make any requests to the server.</p>
+      <p>The library validates all configuration options and throws helpful error messages.</p>
+      <p>Connection pooling is handled automatically for optimal performance and throughput.</p>
+      <p>TLS certificates are verified by default to ensure secure communication channels.</p>
+    </main></body></html>`;
+
+    const markdown = `# Getting Started
+
+Install the package using npm to add it to your project dependencies list.
+
+Then import the client module and configure it with your API credentials here.
+
+Run the following commands to get started with the installation process now.
+
+After installation import the client and call the initialize method first please.
+
+The client will automatically detect your configuration from environment variables.
+
+You can override any configuration option by passing it to the constructor directly.
+
+Make sure your API key is set before attempting to make any requests to the server.
+
+The library validates all configuration options and throws helpful error messages.
+
+Connection pooling is handled automatically for optimal performance and throughput.
+
+TLS certificates are verified by default to ensure secure communication channels.`;
+
+    const url = 'http://mcp-directive.local/docs/start';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-directive.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('does not match angle brackets across lines during normalization', async () => {
+    // A literal '<' in one paragraph (e.g., "< 5,000 tokens") must not match
+    // with a '>' in a completely different paragraph, which would strip the '<'
+    // from the full normalized markdown text and break containment matching.
+    const html = `<html><body><main>
+      <h1>Skill Structure</h1>
+      <p>Instructions should be under five thousand tokens for optimal loading performance.</p>
+      <p>The recommended size is &lt; 5,000 tokens to keep activation latency low for users.</p>
+      <p>Resources are loaded on demand rather than eagerly to reduce initial context usage.</p>
+      <p>The platform validates all configuration options and throws helpful error messages.</p>
+      <p>Connection pooling is handled automatically for optimal performance and throughput.</p>
+      <p>TLS certificates are verified by default to ensure secure communication channels.</p>
+      <p>Error responses include a JSON body with a code field and a message for details.</p>
+      <p>Wrap API calls in try-catch blocks to handle network and validation errors properly.</p>
+      <p>Rate limiting is applied per API key with a maximum of one hundred requests per minute.</p>
+      <p>The SDK supports automatic retries with exponential backoff for transient failures.</p>
+      <p>Use the &lt;YOUR_API_KEY&gt; placeholder in configuration files for your actual key.</p>
+    </main></body></html>`;
+
+    const markdown = `# Skill Structure
+
+Instructions should be under five thousand tokens for optimal loading performance.
+
+The recommended size is < 5,000 tokens to keep activation latency low for users.
+
+Resources are loaded on demand rather than eagerly to reduce initial context usage.
+
+The platform validates all configuration options and throws helpful error messages.
+
+Connection pooling is handled automatically for optimal performance and throughput.
+
+TLS certificates are verified by default to ensure secure communication channels.
+
+Error responses include a JSON body with a code field and a message for details.
+
+Wrap API calls in try-catch blocks to handle network and validation errors properly.
+
+Rate limiting is applied per API key with a maximum of one hundred requests per minute.
+
+The SDK supports automatic retries with exponential backoff for transient failures.
+
+Use the <YOUR_API_KEY> placeholder in configuration files for your actual key.`;
+
+    const url = 'http://mcp-angles.local/docs/structure';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-angles.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  // --- Session 2 regression tests ---
+
+  it('normalizes typographic quotes to match straight quotes', async () => {
+    // Hugo and other markdown processors convert straight quotes to curly
+    // quotes in HTML output. The raw markdown retains straight quotes.
+    // normalize() must convert curly quotes to straight so both sides match.
+    const html = `<html><body><main>
+      <h1>Configuration</h1>
+      <p>The agent\u2019s context window determines how much content it can process at once.</p>
+      <p>Set the \u201Cverbose\u201D flag to enable detailed logging for debugging purposes.</p>
+      <p>When you\u2019re ready to deploy, run the build command to generate production assets.</p>
+      <p>The platform\u2019s API supports both synchronous and asynchronous request patterns.</p>
+      <p>It\u2019s important to validate all input parameters before sending requests upstream.</p>
+      <p>The \u201Cstrict mode\u201D setting enforces additional validation rules on all endpoints.</p>
+      <p>Your application\u2019s performance depends heavily on the caching strategy you choose.</p>
+      <p>The library\u2019s retry logic handles transient failures with exponential backoff.</p>
+      <p>Each endpoint\u2019s rate limit is documented in the API reference section online.</p>
+      <p>The \u201Cdebug\u201D environment variable controls the verbosity of log output levels.</p>
+    </main></body></html>`;
+
+    const markdown = `# Configuration
+
+The agent's context window determines how much content it can process at once.
+
+Set the "verbose" flag to enable detailed logging for debugging purposes.
+
+When you're ready to deploy, run the build command to generate production assets.
+
+The platform's API supports both synchronous and asynchronous request patterns.
+
+It's important to validate all input parameters before sending requests upstream.
+
+The "strict mode" setting enforces additional validation rules on all endpoints.
+
+Your application's performance depends heavily on the caching strategy you choose.
+
+The library's retry logic handles transient failures with exponential backoff.
+
+Each endpoint's rate limit is documented in the API reference section online.
+
+The "debug" environment variable controls the verbosity of log output levels.`;
+
+    const url = 'http://mcp-quotes.local/docs/config';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-quotes.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('strips zero-width characters that break substring matching', async () => {
+    // Mintlify injects U+200B (zero-width space) before heading anchors.
+    // Without stripping, "Install\u200Bation" !== "Installation".
+    const html = `<html><body><main>
+      <h1>Install\u200Bation Guide</h1>
+      <p>Begin by installing the command\u200B line tool using your preferred package manager.</p>
+      <p>After install\u200Bation run the init command to create a configuration file locally.</p>
+      <p>The configuration file stores your API key and preferred region settings securely.</p>
+      <p>Next authenticate by running the login command with your account credentials here.</p>
+      <p>Once authenticated you can begin making API calls and managing your resources now.</p>
+      <p>The dashboard provides a visual overview of all your resources and their status.</p>
+      <p>Check the troubleshooting guide if you encounter any issues during the setup.</p>
+      <p>Our support team is available around the clock to help with technical questions.</p>
+      <p>The setup process takes approximately five minutes from start to finish today.</p>
+      <p>All configuration changes take effect immediately without requiring a restart.</p>
+    </main></body></html>`;
+
+    const markdown = `# Installation Guide
+
+Begin by installing the command line tool using your preferred package manager.
+
+After installation run the init command to create a configuration file locally.
+
+The configuration file stores your API key and preferred region settings securely.
+
+Next authenticate by running the login command with your account credentials here.
+
+Once authenticated you can begin making API calls and managing your resources now.
+
+The dashboard provides a visual overview of all your resources and their status.
+
+Check the troubleshooting guide if you encounter any issues during the setup.
+
+Our support team is available around the clock to help with technical questions.
+
+The setup process takes approximately five minutes from start to finish today.
+
+All configuration changes take effect immediately without requiring a restart.`;
+
+    const url = 'http://mcp-zwsp.local/docs/install';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-zwsp.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('strips .sr-only screen-reader text from headings', async () => {
+    // Starlight adds <span class="sr-only">Section titled "..."</span> to
+    // heading anchors. Without stripping, headings get extra text that
+    // doesn't appear in the markdown.
+    const srOnly = (title: string) => `<span class="sr-only">Section titled ${title}</span>`;
+    const html = `<html><body><main>
+      <h1>API Reference</h1>
+      <h2>Authentication ${srOnly('Authentication')}</h2>
+      <p>Use bearer tokens for authentication with the API endpoints on every request.</p>
+      <p>Include your API key in the Authorization header of every request you send.</p>
+      <h2>Rate Limiting ${srOnly('Rate Limiting')}</h2>
+      <p>Requests are limited to one hundred per minute per API key by default now.</p>
+      <p>Contact support to request a higher rate limit for your production workloads.</p>
+      <h2>Errors ${srOnly('Errors')}</h2>
+      <p>Error responses include a JSON body with a code field and a message for details.</p>
+      <p>All error codes are documented in the error reference section of the API docs.</p>
+      <h2>Pagination ${srOnly('Pagination')}</h2>
+      <p>Use cursor-based pagination with the after parameter in your requests to pages.</p>
+      <p>Each page returns up to fifty items by default unless configured otherwise here.</p>
+    </main></body></html>`;
+
+    const markdown = `# API Reference
+
+## Authentication
+
+Use bearer tokens for authentication with the API endpoints on every request.
+
+Include your API key in the Authorization header of every request you send.
+
+## Rate Limiting
+
+Requests are limited to one hundred per minute per API key by default now.
+
+Contact support to request a higher rate limit for your production workloads.
+
+## Errors
+
+Error responses include a JSON body with a code field and a message for details.
+
+All error codes are documented in the error reference section of the API docs.
+
+## Pagination
+
+Use cursor-based pagination with the after parameter in your requests to pages.
+
+Each page returns up to fifty items by default unless configured otherwise here.`;
+
+    const url = 'http://mcp-sronly.local/docs/api';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-sronly.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('handles list bullets before emphasis markers correctly', async () => {
+    // Markdown list items starting with * followed by **bold** must be parsed
+    // as bullet + bold, not as emphasis. Without correct ordering,
+    // "* **SMTP Host**: configure..." is parsed as *...*emphasis, producing
+    // mangled text like "SMTP Host*: configure...".
+    const html = `<html><body><main>
+      <h1>Email Configuration</h1>
+      <p>Configure the following settings in your email provider dashboard panel.</p>
+      <ul>
+        <li><strong>SMTP Host</strong>: Use smtp.example.com for all outgoing mail delivery.</li>
+        <li><strong>SMTP Port</strong>: Use port 587 for TLS connections to the server.</li>
+        <li><strong>Username</strong>: Your full email address is used as the login username.</li>
+        <li><strong>Password</strong>: Generate an app-specific password in your account settings.</li>
+        <li><strong>TLS Mode</strong>: Enable STARTTLS for secure connections to the mail server.</li>
+        <li><strong>From Address</strong>: Set the sender address that appears in outgoing emails.</li>
+        <li><strong>Reply To</strong>: Configure a different reply-to address if needed for routing.</li>
+        <li><strong>Timeout</strong>: Set the connection timeout to thirty seconds for reliability.</li>
+        <li><strong>Max Retries</strong>: Configure up to three retries for failed delivery attempts.</li>
+        <li><strong>Batch Size</strong>: Limit batch sending to one hundred recipients per request.</li>
+      </ul>
+    </main></body></html>`;
+
+    const markdown = `# Email Configuration
+
+Configure the following settings in your email provider dashboard panel.
+
+* **SMTP Host**: Use smtp.example.com for all outgoing mail delivery.
+* **SMTP Port**: Use port 587 for TLS connections to the server.
+* **Username**: Your full email address is used as the login username.
+* **Password**: Generate an app-specific password in your account settings.
+* **TLS Mode**: Enable STARTTLS for secure connections to the mail server.
+* **From Address**: Set the sender address that appears in outgoing emails.
+* **Reply To**: Configure a different reply-to address if needed for routing.
+* **Timeout**: Set the connection timeout to thirty seconds for reliability.
+* **Max Retries**: Configure up to three retries for failed delivery attempts.
+* **Batch Size**: Limit batch sending to one hundred recipients per request.`;
+
+    const url = 'http://mcp-bullets.local/docs/email';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-bullets.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  // --- Session 3 regression tests ---
+
+  it('strips CSS-in-JS style blocks inside pre elements', async () => {
+    // CSS-in-JS libraries (Emotion/Leafygreen) inject <style> tags inside
+    // <pre> blocks. node-html-parser treats <pre> content as raw text, so
+    // querySelectorAll('style') can't find them. They must be stripped from
+    // the text output directly.
+    const html = `<html><body><main>
+      <h1>Code Example</h1>
+      <p>The following example demonstrates the basic initialization and configuration.</p>
+      <pre><code><style>.css-1a2b3c{color:red;font-size:14px;line-height:1.5;margin:0;padding:8px}</style>const client = new Client()
+client.connect()</code></pre>
+      <p>After connecting you can start making requests to the API endpoints directly.</p>
+      <p>The client handles connection pooling and retry logic automatically for you.</p>
+      <p>Configure the timeout setting to control how long requests wait for responses.</p>
+      <p>Error handling is built in and provides detailed error messages for debugging.</p>
+      <p>The library supports both promise-based and callback-based programming styles.</p>
+      <p>All requests are authenticated automatically using the configured API credentials.</p>
+      <p>Rate limiting information is included in response headers for monitoring usage.</p>
+      <p>The connection pool size defaults to ten but is configurable per environment.</p>
+      <p>TLS certificate verification is enabled by default for security best practices.</p>
+    </main></body></html>`;
+
+    const markdown = `# Code Example
+
+The following example demonstrates the basic initialization and configuration.
+
+\`\`\`
+const client = new Client()
+client.connect()
+\`\`\`
+
+After connecting you can start making requests to the API endpoints directly.
+
+The client handles connection pooling and retry logic automatically for you.
+
+Configure the timeout setting to control how long requests wait for responses.
+
+Error handling is built in and provides detailed error messages for debugging.
+
+The library supports both promise-based and callback-based programming styles.
+
+All requests are authenticated automatically using the configured API credentials.
+
+Rate limiting information is included in response headers for monitoring usage.
+
+The connection pool size defaults to ten but is configurable per environment.
+
+TLS certificate verification is enabled by default for security best practices.`;
+
+    const url = 'http://mcp-cssinjs.local/docs/example';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-cssinjs.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    // Without CSS-in-JS stripping, the style content would leak into a segment
+    // and appear as missing content
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('deduplicates repeated segments so chrome is counted once', async () => {
+    // Breadcrumb text or nav titles can appear multiple times in the DOM.
+    // Without deduplication, 3 copies of the same breadcrumb count as 3
+    // missing segments instead of 1, inflating the percentage.
+    const html = `<html><body><main>
+      <div class="breadcrumb">Docs &gt; Getting Started &gt; Installation and Setup Guide</div>
+      <div class="breadcrumb">Docs &gt; Getting Started &gt; Installation and Setup Guide</div>
+      <div class="breadcrumb">Docs &gt; Getting Started &gt; Installation and Setup Guide</div>
+      <h1>Installation</h1>
+      <p>Install the package using npm to add it to your project dependencies list today.</p>
+      <p>Then import the client module and configure it with your API credentials here.</p>
+      <p>Run the following commands to get started with the installation process now.</p>
+      <p>After installation import the client and call the initialize method first please.</p>
+      <p>The client will automatically detect your configuration from environment variables.</p>
+      <p>You can override any configuration option by passing it to the constructor directly.</p>
+      <p>Make sure your API key is set before attempting to make any requests to the server.</p>
+      <p>The library validates all configuration options and throws helpful error messages.</p>
+      <p>Connection pooling is handled automatically for optimal performance and throughput.</p>
+      <p>TLS certificates are verified by default to ensure secure communication channels.</p>
+    </main></body></html>`;
+
+    const markdown = `# Installation
+
+Install the package using npm to add it to your project dependencies list today.
+
+Then import the client module and configure it with your API credentials here.
+
+Run the following commands to get started with the installation process now.
+
+After installation import the client and call the initialize method first please.
+
+The client will automatically detect your configuration from environment variables.
+
+You can override any configuration option by passing it to the constructor directly.
+
+Make sure your API key is set before attempting to make any requests to the server.
+
+The library validates all configuration options and throws helpful error messages.
+
+Connection pooling is handled automatically for optimal performance and throughput.
+
+TLS certificates are verified by default to ensure secure communication channels.`;
+
+    const url = 'http://mcp-dedup.local/docs/install';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-dedup.local');
+    const result = await check.run(ctx);
+    // With deduplication: 1 breadcrumb miss out of 11 unique segments = 9% (warn)
+    // Without deduplication: 3 breadcrumb misses out of 13 segments = 23% (fail)
+    expect(result.status).not.toBe('fail');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    // Should count the breadcrumb only once, not three times
+    expect(pageResults[0].missingSegments).toBeLessThanOrEqual(1);
+  });
+
+  it('preserves underscores in code identifiers during emphasis stripping', async () => {
+    // The emphasis regex must use * only, not _. Stripping _ as emphasis
+    // would mangle code identifiers like mongoc_client_get_database into
+    // mongocclientget_database, breaking containment matching.
+    const html = `<html><body><main>
+      <h1>MongoDB C Driver Reference</h1>
+      <p>Use mongoc_client_get_database to obtain a database handle from the client.</p>
+      <p>Call mongoc_collection_find_with_opts to query documents with filter options.</p>
+      <p>The mongoc_cursor_next function advances the cursor to the next result document.</p>
+      <p>Release resources with mongoc_client_destroy when the client is no longer needed.</p>
+      <p>Use mongoc_database_get_collection to get a collection handle from the database.</p>
+      <p>The mongoc_collection_insert_one function inserts a single document into collection.</p>
+      <p>Call mongoc_collection_update_one to modify a single document matching the filter.</p>
+      <p>Use mongoc_collection_delete_one to remove a single document matching the filter.</p>
+      <p>The mongoc_client_get_default_database returns the database from the connection URI.</p>
+      <p>Call mongoc_collection_count_documents to count documents matching a given filter.</p>
+    </main></body></html>`;
+
+    const markdown = `# MongoDB C Driver Reference
+
+Use mongoc_client_get_database to obtain a database handle from the client.
+
+Call mongoc_collection_find_with_opts to query documents with filter options.
+
+The mongoc_cursor_next function advances the cursor to the next result document.
+
+Release resources with mongoc_client_destroy when the client is no longer needed.
+
+Use mongoc_database_get_collection to get a collection handle from the database.
+
+The mongoc_collection_insert_one function inserts a single document into collection.
+
+Call mongoc_collection_update_one to modify a single document matching the filter.
+
+Use mongoc_collection_delete_one to remove a single document matching the filter.
+
+The mongoc_client_get_default_database returns the database from the connection URI.
+
+Call mongoc_collection_count_documents to count documents matching a given filter.`;
+
+    const url = 'http://mcp-underscore.local/docs/mongodb';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-underscore.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('preserves angle-bracket placeholders like <YOUR_API_KEY> in text', async () => {
+    // node-html-parser decodes &lt;YOUR_API_KEY&gt; to <YOUR_API_KEY> in .text
+    // output. The tag stripping regex must recognize this is not a real HTML tag
+    // and preserve the content. normalize() then strips the angle brackets so
+    // both HTML-side and markdown-side produce "YOUR_API_KEY".
+    const html = `<html><body><main>
+      <h1>Authentication Setup</h1>
+      <p>Replace &lt;YOUR_API_KEY&gt; with the key from your dashboard settings page.</p>
+      <p>Set the &lt;REGION&gt; parameter to match your deployment region preference.</p>
+      <p>The &lt;CLUSTER_NAME&gt; value identifies your specific database cluster instance.</p>
+      <p>Use &lt;PROJECT_ID&gt; from the project settings page in the admin console.</p>
+      <p>The endpoint URL follows the pattern https://&lt;REGION&gt;.api.example.com path.</p>
+      <p>Configure &lt;MAX_CONNECTIONS&gt; based on your expected concurrent usage levels.</p>
+      <p>The &lt;TIMEOUT_MS&gt; parameter controls how long each request waits for response.</p>
+      <p>Set &lt;LOG_LEVEL&gt; to debug for verbose logging during development and testing.</p>
+      <p>Replace &lt;WEBHOOK_SECRET&gt; with the signing secret from webhook settings page.</p>
+      <p>The &lt;BASE_URL&gt; defaults to the production endpoint unless overridden locally.</p>
+    </main></body></html>`;
+
+    const markdown = `# Authentication Setup
+
+Replace <YOUR_API_KEY> with the key from your dashboard settings page.
+
+Set the <REGION> parameter to match your deployment region preference.
+
+The <CLUSTER_NAME> value identifies your specific database cluster instance.
+
+Use <PROJECT_ID> from the project settings page in the admin console.
+
+The endpoint URL follows the pattern https://<REGION>.api.example.com path.
+
+Configure <MAX_CONNECTIONS> based on your expected concurrent usage levels.
+
+The <TIMEOUT_MS> parameter controls how long each request waits for response.
+
+Set <LOG_LEVEL> to debug for verbose logging during development and testing.
+
+Replace <WEBHOOK_SECRET> with the signing secret from webhook settings page.
+
+The <BASE_URL> defaults to the production endpoint unless overridden locally.`;
+
+    const url = 'http://mcp-placeholder.local/docs/auth';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-placeholder.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('strips HTML comments from text output', async () => {
+    // node-html-parser can leave <!-- --> comments in .text output,
+    // especially inside <pre> blocks (e.g., Leafygreen spacer comments).
+    // These must be stripped so they don't appear as spurious segment text.
+    const html = `<html><body><main>
+      <h1>Code Example</h1>
+      <p>The following example demonstrates the basic initialization and setup process.</p>
+      <pre><code><!-- spacer -->const client = new Client()<!-- spacer -->
+client.initialize()</code></pre>
+      <p>After initializing you can start making requests to the API endpoints now.</p>
+      <p>The client handles connection pooling and retry logic automatically for you.</p>
+      <p>Configure the timeout setting to control how long requests wait for response.</p>
+      <p>Error handling is built in and provides detailed error messages for debugging.</p>
+      <p>The library supports both promise-based and callback-based programming styles.</p>
+      <p>All requests are authenticated automatically using your configured API credentials.</p>
+      <p>Rate limiting information is included in response headers for monitoring usage.</p>
+      <p>The connection pool size defaults to ten but is configurable per environment.</p>
+      <p>TLS certificate verification is enabled by default for security best practices.</p>
+    </main></body></html>`;
+
+    const markdown = `# Code Example
+
+The following example demonstrates the basic initialization and setup process.
+
+\`\`\`
+const client = new Client()
+client.initialize()
+\`\`\`
+
+After initializing you can start making requests to the API endpoints now.
+
+The client handles connection pooling and retry logic automatically for you.
+
+Configure the timeout setting to control how long requests wait for response.
+
+Error handling is built in and provides detailed error messages for debugging.
+
+The library supports both promise-based and callback-based programming styles.
+
+All requests are authenticated automatically using your configured API credentials.
+
+Rate limiting information is included in response headers for monitoring usage.
+
+The connection pool size defaults to ten but is configurable per environment.
+
+TLS certificate verification is enabled by default for security best practices.`;
+
+    const url = 'http://mcp-comments.local/docs/example';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-comments.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('preserves markdown syntax inside inline code backticks', async () => {
+    // Documentation that shows markdown syntax as examples uses inline code
+    // like `[text](url)` or `**bold**`. In HTML, <code> preserves the literal
+    // syntax. On the markdown side, extractMarkdownText() must not strip link
+    // or emphasis syntax that's inside backticks, or the two sides won't match.
+    const html = `<html><body><main>
+      <h1>Markdown Syntax Guide</h1>
+      <p>Use <code>[text](url)</code> to create links in your documentation pages.</p>
+      <p>Use <code>**bold text**</code> to add bold emphasis to important words.</p>
+      <p>Use <code>*italic text*</code> to add italic emphasis to specific terms.</p>
+      <p>Use <code>![alt](image.png)</code> to embed images in your markdown pages.</p>
+      <p>The link syntax is flexible and supports both relative and absolute URL paths.</p>
+      <p>Bold and italic can be combined using <code>***bold italic***</code> for emphasis.</p>
+      <p>All formatting syntax is preserved exactly as written inside code spans here.</p>
+      <p>Inline code is delimited by backticks and renders in a monospace font style.</p>
+      <p>Nested formatting inside code spans is treated as literal text not markup.</p>
+      <p>These examples cover the most common markdown formatting patterns in use.</p>
+    </main></body></html>`;
+
+    const markdown = `# Markdown Syntax Guide
+
+Use \`[text](url)\` to create links in your documentation pages.
+
+Use \`**bold text**\` to add bold emphasis to important words.
+
+Use \`*italic text*\` to add italic emphasis to specific terms.
+
+Use \`![alt](image.png)\` to embed images in your markdown pages.
+
+The link syntax is flexible and supports both relative and absolute URL paths.
+
+Bold and italic can be combined using \`***bold italic***\` for emphasis.
+
+All formatting syntax is preserved exactly as written inside code spans here.
+
+Inline code is delimited by backticks and renders in a monospace font style.
+
+Nested formatting inside code spans is treated as literal text not markup.
+
+These examples cover the most common markdown formatting patterns in use.`;
+
+    const url = 'http://mcp-codespan.local/docs/syntax';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-codespan.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('preserves entity-decoded HTML tag names in prose text', async () => {
+    // Documentation that discusses HTML elements (e.g., "strip <nav> and
+    // <aside> elements") has those tags entity-encoded in HTML as &lt;nav&gt;.
+    // node-html-parser decodes them back to <nav> in .text output. The tag
+    // stripping regex must NOT delete these because the real <nav> elements
+    // were already removed at the DOM level. Without this fix, the HTML text
+    // has empty gaps ("strip , , and  elements") while the markdown has the
+    // tag names ("strip nav, aside, and footer elements").
+    const html = `<html><body><main>
+      <h1>Content Extraction</h1>
+      <p>The extractor strips non-content elements from the page before comparing.</p>
+      <p>Chrome elements like &lt;nav&gt;, &lt;aside&gt;, and &lt;footer&gt; are removed from the DOM.</p>
+      <p>The &lt;header&gt; element is also stripped because it typically contains site navigation.</p>
+      <p>Elements like &lt;script&gt; and &lt;style&gt; are removed to exclude non-visible content.</p>
+      <p>The &lt;button&gt; element is stripped because buttons are interactive, not documentation.</p>
+      <p>After stripping, the remaining content is extracted as plain text for comparison.</p>
+      <p>The &lt;noscript&gt; fallback content is also removed as it duplicates script content.</p>
+      <p>SVG elements are stripped using the &lt;svg&gt; tag to remove inline graphics and icons.</p>
+      <p>This approach ensures only meaningful documentation content is used for matching.</p>
+      <p>The content container is selected using semantic elements like main and article tags.</p>
+    </main></body></html>`;
+
+    const markdown = `# Content Extraction
+
+The extractor strips non-content elements from the page before comparing.
+
+Chrome elements like \`<nav>\`, \`<aside>\`, and \`<footer>\` are removed from the DOM.
+
+The \`<header>\` element is also stripped because it typically contains site navigation.
+
+Elements like \`<script>\` and \`<style>\` are removed to exclude non-visible content.
+
+The \`<button>\` element is stripped because buttons are interactive, not documentation.
+
+After stripping, the remaining content is extracted as plain text for comparison.
+
+The \`<noscript>\` fallback content is also removed as it duplicates script content.
+
+SVG elements are stripped using the \`<svg>\` tag to remove inline graphics and icons.
+
+This approach ensures only meaningful documentation content is used for matching.
+
+The content container is selected using semantic elements like main and article tags.`;
+
+    const url = 'http://mcp-entitytags.local/docs/extraction';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-entitytags.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('protects fenced code block content from markdown stripping', async () => {
+    // Documentation with example markdown/llms.txt content inside fenced code
+    // blocks should not have headings, links, blockquotes, or list items
+    // stripped from the code block content. The HTML side preserves this
+    // literal text inside <pre><code> tags.
+    const html = `<html><body><main>
+      <h1>Example Format</h1>
+      <p>The following shows a typical llms.txt file structure for documentation.</p>
+      <pre><code># MongoDB Documentation
+
+&gt; MongoDB is the leading document database. This index covers all
+&gt; products, drivers, and tools documentation.
+
+## Products
+
+- [Atlas](https://www.mongodb.com/docs/atlas/llms.txt): Cloud database
+- [Compass](https://www.mongodb.com/docs/compass/llms.txt): GUI tool</code></pre>
+      <p>Each section starts with a level two heading followed by a list of links.</p>
+      <p>The blockquote after the title provides a brief description of the documentation.</p>
+      <p>Links use standard markdown syntax with the URL pointing to sub-project files.</p>
+      <p>The structure is designed to be both human-readable and machine-parseable today.</p>
+      <p>Sites can include as many sections as needed to cover all their documentation.</p>
+      <p>The format is intentionally simple to encourage broad adoption across platforms.</p>
+      <p>No special tooling is required to create or maintain these index files for sites.</p>
+    </main></body></html>`;
+
+    const markdown = `# Example Format
+
+The following shows a typical llms.txt file structure for documentation.
+
+\`\`\`
+# MongoDB Documentation
+
+> MongoDB is the leading document database. This index covers all
+> products, drivers, and tools documentation.
+
+## Products
+
+- [Atlas](https://www.mongodb.com/docs/atlas/llms.txt): Cloud database
+- [Compass](https://www.mongodb.com/docs/compass/llms.txt): GUI tool
+\`\`\`
+
+Each section starts with a level two heading followed by a list of links.
+
+The blockquote after the title provides a brief description of the documentation.
+
+Links use standard markdown syntax with the URL pointing to sub-project files.
+
+The structure is designed to be both human-readable and machine-parseable today.
+
+Sites can include as many sections as needed to cover all their documentation.
+
+The format is intentionally simple to encourage broad adoption across platforms.
+
+No special tooling is required to create or maintain these index files for sites.`;
+
+    const url = 'http://mcp-codeblock.local/docs/format';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-codeblock.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('handles double-backtick code spans containing literal backticks', async () => {
+    // Markdown uses double-backtick delimiters to show literal triple backticks:
+    // `` ``` `` renders as <code>```</code> in HTML
+    const html = `<html><body>
+      <h1>Code Fence Documentation</h1>
+      <p>Open a code fence with <code>\`\`\`</code> and close it with another <code>\`\`\`</code> delimiter.</p>
+      <p>Tilde fences use <code>~~~</code> as their delimiter instead of backticks here.</p>
+      <p>The opening and closing delimiters must use the same character type to match.</p>
+      <p>Code fences can include an optional info string after the opening delimiter marker.</p>
+      <p>The info string typically specifies the programming language for syntax highlighting.</p>
+      <p>Indented code blocks are an alternative to fenced code blocks for simple cases.</p>
+      <p>Blank lines inside a fenced code block are preserved exactly as written in source.</p>
+      <p>The closing fence must have at least as many backticks as the opening fence marker.</p>
+      <p>Fenced code blocks can contain any content including raw HTML tags and entities.</p>
+      <p>Nested code fences require using more backticks than the inner fence uses here.</p>
+    </body></html>`;
+
+    const markdown = `# Code Fence Documentation
+
+Open a code fence with \`\` \`\`\` \`\` and close it with another \`\` \`\`\` \`\` delimiter.
+
+Tilde fences use \`~~~\` as their delimiter instead of backticks here.
+
+The opening and closing delimiters must use the same character type to match.
+
+Code fences can include an optional info string after the opening delimiter marker.
+
+The info string typically specifies the programming language for syntax highlighting.
+
+Indented code blocks are an alternative to fenced code blocks for simple cases.
+
+Blank lines inside a fenced code block are preserved exactly as written in source.
+
+The closing fence must have at least as many backticks as the opening fence marker.
+
+Fenced code blocks can contain any content including raw HTML tags and entities.
+
+Nested code fences require using more backticks than the inner fence uses here.`;
+
+    const url = 'http://mcp-dblbacktick.local/docs/fences';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-dblbacktick.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('does not let bare triple backticks cascade into distant backtick pairing', async () => {
+    // When unmatched triple backticks appear in prose (e.g., discussing code
+    // fence syntax), the single-backtick regex must not pair one of the
+    // backticks with a distant backtick, swallowing content in between.
+    const html = `<html><body>
+      <h1>Delimiter Matching Rules</h1>
+      <p>Mismatched delimiters (opening \`\`\` closing ~~~) produce unclosed fences.</p>
+      <p>The <code>afdocs</code> tool validates that all code fences are properly closed.</p>
+      <p>Common mistakes include forgetting to close a fence or mixing delimiter types.</p>
+      <p>Always verify your markdown renders correctly before publishing documentation.</p>
+      <p>The <code>llms.txt</code> file should also be checked for unclosed code fences.</p>
+      <p>Automated linting can catch these issues before they reach production servers.</p>
+      <p>Consider adding a pre-commit hook that validates markdown fence structure first.</p>
+      <p>The check reports which line number contains the unclosed fence for debugging.</p>
+      <p>Fix unclosed fences by adding the matching closing delimiter at the right spot.</p>
+      <p>Some editors highlight unclosed fences to help you spot them while writing docs.</p>
+    </body></html>`;
+
+    const markdown = `# Delimiter Matching Rules
+
+Mismatched delimiters (opening \`\`\` closing ~~~) produce unclosed fences.
+
+The \`afdocs\` tool validates that all code fences are properly closed.
+
+Common mistakes include forgetting to close a fence or mixing delimiter types.
+
+Always verify your markdown renders correctly before publishing documentation.
+
+The \`llms.txt\` file should also be checked for unclosed code fences.
+
+Automated linting can catch these issues before they reach production servers.
+
+Consider adding a pre-commit hook that validates markdown fence structure first.
+
+The check reports which line number contains the unclosed fence for debugging.
+
+Fix unclosed fences by adding the matching closing delimiter at the right spot.
+
+Some editors highlight unclosed fences to help you spot them while writing docs.`;
+
+    const url = 'http://mcp-barebacktick.local/docs/delimiters';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-barebacktick.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('applies CommonMark space stripping to multi-backtick code span content', async () => {
+    // CommonMark: when code span content starts and ends with a space (and
+    // isn't entirely spaces), one space is stripped from each end.
+    // `` ``` `` renders as ``` (spaces stripped), not  ```  (with spaces).
+    const html = `<html><body>
+      <h1>Fence Delimiter Reference</h1>
+      <p>A backtick fence (<code>\`\`\`</code>) opens a code block for multi-line content.</p>
+      <p>The info string after <code>\`\`\`</code> specifies the language for highlighting.</p>
+      <p>This documentation explains how to properly format code blocks in markdown files.</p>
+      <p>Proper formatting ensures that syntax highlighting works correctly in renderers.</p>
+      <p>All major markdown processors support fenced code blocks with language hints now.</p>
+      <p>The CommonMark specification defines the exact rules for fence delimiter matching.</p>
+      <p>GitHub Flavored Markdown extends CommonMark with additional features for tables.</p>
+      <p>Documentation generators like Hugo and Jekyll also support fenced code blocks well.</p>
+      <p>Testing your markdown output helps catch formatting issues before they go live now.</p>
+      <p>Use a linter to automatically verify code fence syntax across all your documents.</p>
+    </body></html>`;
+
+    const markdown = `# Fence Delimiter Reference
+
+A backtick fence (\`\` \`\`\` \`\`) opens a code block for multi-line content.
+
+The info string after \`\` \`\`\` \`\` specifies the language for highlighting.
+
+This documentation explains how to properly format code blocks in markdown files.
+
+Proper formatting ensures that syntax highlighting works correctly in renderers.
+
+All major markdown processors support fenced code blocks with language hints now.
+
+The CommonMark specification defines the exact rules for fence delimiter matching.
+
+GitHub Flavored Markdown extends CommonMark with additional features for tables.
+
+Documentation generators like Hugo and Jekyll also support fenced code blocks well.
+
+Testing your markdown output helps catch formatting issues before they go live now.
+
+Use a linter to automatically verify code fence syntax across all your documents.`;
+
+    const url = 'http://mcp-cmark-space.local/docs/fences';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-cmark-space.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
 });

@@ -30,6 +30,16 @@ const STRIP_TAGS = [
   'aside',
 ];
 
+/**
+ * Tags that were removed at the DOM level (STRIP_TAGS). If these tag names
+ * appear in `.text` output, they came from entity-decoded content (e.g.,
+ * `&lt;nav&gt;` → `<nav>` in prose discussing HTML elements), not from
+ * actual DOM elements. The text-level tag stripping regex should keep their
+ * content rather than deleting it, so both sides produce matching text
+ * after normalize() strips the angle brackets.
+ */
+const DOM_STRIPPED_TAGS = new Set(STRIP_TAGS);
+
 /** CSS selectors for common doc-site chrome that lives inside <main>. */
 const STRIP_SELECTORS = [
   '[aria-label="breadcrumb"]',
@@ -46,6 +56,7 @@ const STRIP_SELECTORS = [
   '[rel="prev"]',
   '[rel="next"]',
   '.sr-only',
+  '[aria-label="Anchor"]',
 ];
 
 /**
@@ -61,6 +72,7 @@ const NOISE_PATTERNS = [
   /^join our .* server/, // "Join our Discord Server..."
   /^loading video content/,
   /^\/.+\/.+/, // breadcrumb paths like "/Connect to Neon/..."
+  /^for ai agents:/, // llms.txt directive banner text
 ];
 
 interface PageParityResult {
@@ -337,43 +349,110 @@ function extractHtmlText(html: string): string {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<div[\s>]/gi, '\n<div ')
     .replace(/<\/[^>\s]+>/g, '')
-    .replace(/<([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g, (_match, tag, rest) =>
-      HTML_TAG_NAMES.has(tag.toLowerCase()) ? '' : tag + rest,
-    );
+    .replace(/<([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g, (_match, tag, rest) => {
+      const lower = tag.toLowerCase();
+      // Tags already removed at the DOM level can't appear as real elements
+      // in .text output — they must be entity-decoded text (e.g., prose
+      // discussing <nav> elements). Keep the tag name as text content.
+      if (DOM_STRIPPED_TAGS.has(lower)) return tag;
+      // Other known tags (span, div, code, etc.) appear in <pre> block
+      // text output from syntax highlighting — strip them entirely.
+      if (HTML_TAG_NAMES.has(lower)) return '';
+      // Unknown "tags" are angle-bracket placeholders like <YOUR_API_KEY>
+      // decoded from entities — keep the full content.
+      return tag + rest;
+    });
 }
 
 /**
  * Extract plain text from markdown by stripping all formatting.
+ *
+ * Code content (both fenced blocks and inline spans) is protected from
+ * stripping via placeholders. Without this, content like `# Heading` or
+ * `[link](url)` inside code blocks/spans would have its markdown syntax
+ * stripped (headings, links, blockquotes, emphasis), while the HTML side
+ * preserves the literal text inside <pre><code> and <code> tags. The
+ * placeholder approach hides code content from the stripping regexes,
+ * then restores it after all stripping is done.
  */
 function extractMarkdownText(markdown: string): string {
-  return (
-    markdown
-      // Remove code fences but keep code content
-      .replace(/^```[\w]*\n?/gm, '')
-      // Remove heading markers
-      .replace(/^#{1,6}\s+/gm, '')
-      // Remove setext-style heading underlines
-      .replace(/^[=-]+$/gm, '')
-      // Remove link/image URLs, keep text: [text](url) → text
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-      // Remove reference-style link definitions
-      .replace(/^\[.*?\]:\s+.*$/gm, '')
-      // Remove list bullets/numbers (before emphasis, so leading * isn't
-      // misinterpreted as an emphasis marker)
-      .replace(/^[\s]*[-*+]\s+/gm, '')
-      .replace(/^[\s]*\d+\.\s+/gm, '')
-      // Remove inline code backticks but keep content (before emphasis
-      // stripping so that underscores in code identifiers aren't mangled)
-      .replace(/`([^`]+)`/g, '$1')
-      // Remove emphasis markers (* only — underscores are too common in
-      // code identifiers like mongoc_client_get_database and cause false
-      // mismatches when stripped as emphasis)
-      .replace(/(\*{1,3})(.*?)\1/g, '$2')
-      // Remove blockquote markers
-      .replace(/^>\s?/gm, '')
-      // Remove horizontal rules
-      .replace(/^[-*_]{3,}$/gm, '')
-  );
+  let text = markdown;
+
+  // Step 1: Protect fenced code block content from subsequent stripping.
+  // Replace entire fenced blocks (``` ... ```) with placeholders so
+  // heading/link/emphasis/blockquote regexes don't modify literal content
+  // that the HTML side preserves as-is inside <pre><code> tags.
+  const codeBlocks: string[] = [];
+  text = text.replace(/^```[\w]*\n([\s\S]*?)^```\s*$/gm, (_match, content) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(content);
+    return `\x00BLOCK${idx}\x00`;
+  });
+
+  // Step 2: Protect inline code spans from subsequent stripping.
+  // Replace `...` with placeholders so link/emphasis regexes don't
+  // modify literal content that the HTML side preserves as-is.
+  //
+  // Multi-backtick spans (`` `...` ``, ``` ``...`` ```, etc.) must be
+  // processed before single-backtick spans. CommonMark allows using N
+  // backticks as delimiters to include literal backticks in code spans.
+  // If single-backtick matching runs first, it misparses the delimiters
+  // and pairs stray backticks with distant ones, swallowing large chunks
+  // of surrounding text into protected placeholders. This prevents
+  // bullet/emphasis stripping from running on those lines.
+  //
+  // Per CommonMark, a backtick string is a run of backticks NOT preceded
+  // or followed by another backtick. The lookbehind/lookahead assertions
+  // enforce this so that `` inside ``` isn't treated as a valid delimiter.
+  const codeSpans: string[] = [];
+  text = text.replace(/(?<!`)``(?!`)([\s\S]*?)(?<!`)``(?!`)/g, (_match, content) => {
+    const idx = codeSpans.length;
+    // CommonMark space stripping: if content starts and ends with a space
+    // and isn't entirely spaces, strip one space from each end. This matches
+    // what HTML rendering produces (browsers show the trimmed content).
+    let trimmed = content;
+    if (trimmed.startsWith(' ') && trimmed.endsWith(' ') && trimmed.trim().length > 0) {
+      trimmed = trimmed.slice(1, -1);
+    }
+    codeSpans.push(trimmed);
+    return `\x00CODE${idx}\x00`;
+  });
+  text = text.replace(/(?<!`)`([^`]+)`(?!`)/g, (_match, content) => {
+    const idx = codeSpans.length;
+    codeSpans.push(content);
+    return `\x00CODE${idx}\x00`;
+  });
+
+  // Step 3: Strip markdown formatting on non-code text
+  text = text
+    // Remove heading markers
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove setext-style heading underlines
+    .replace(/^[=-]+$/gm, '')
+    // Remove link/image URLs, keep text: [text](url) → text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // Remove reference-style link definitions
+    .replace(/^\[.*?\]:\s+.*$/gm, '')
+    // Remove list bullets/numbers (before emphasis, so leading * isn't
+    // misinterpreted as an emphasis marker)
+    .replace(/^[\s]*[-*+]\s+/gm, '')
+    .replace(/^[\s]*\d+\.\s+/gm, '')
+    // Remove emphasis markers (* only — underscores are too common in
+    // code identifiers like mongoc_client_get_database and cause false
+    // mismatches when stripped as emphasis)
+    .replace(/(\*{1,3})(.*?)\1/g, '$2')
+    // Remove blockquote markers
+    .replace(/^>\s?/gm, '')
+    // Remove horizontal rules
+    .replace(/^[-*_]{3,}$/gm, '');
+
+  // Step 4: Restore code content (without backticks/fence markers)
+  // eslint-disable-next-line no-control-regex
+  text = text.replace(/\x00CODE(\d+)\x00/g, (_match, idxStr) => codeSpans[parseInt(idxStr, 10)]);
+  // eslint-disable-next-line no-control-regex
+  text = text.replace(/\x00BLOCK(\d+)\x00/g, (_match, idxStr) => codeBlocks[parseInt(idxStr, 10)]);
+
+  return text;
 }
 
 /**
@@ -395,7 +474,10 @@ function normalize(text: string): string {
       // Strip angle brackets but keep content — normalizes <YOUR_API_KEY> to
       // YOUR_API_KEY so HTML-side (entities decoded, tags stripped) and
       // markdown-side (raw angle brackets) produce the same text.
-      .replace(/<([^>]+)>/g, '$1')
+      // Uses [^>\n] to prevent cross-line matching: a stray '<' (e.g.,
+      // '< 5,000 tokens') must not match a '>' hundreds of lines later,
+      // which would distort the normalized text and break containment checks.
+      .replace(/<([^>\n]+)>/g, '$1')
       .toLowerCase()
       .replace(/\s+/g, ' ')
       .trim()
