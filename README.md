@@ -124,7 +124,7 @@ const result = await check.run(ctx);
 
 ## Test helpers
 
-afdocs includes vitest helpers so you can add agent-friendliness checks to your docs site's CI pipeline.
+afdocs includes vitest helpers so you can add agent-friendliness checks to your docs site's CI pipeline. For a ready-to-copy setup with a GitHub Actions workflow, see the [`examples/`](examples/) directory.
 
 ### Setup
 

@@ -1,0 +1,13 @@
+# Replace with your documentation site URL
+url: https://docs.example.com
+
+# Optional: run only specific checks (omit to run all 22)
+# checks:
+#   - llms-txt-exists
+#   - llms-txt-valid
+#   - llms-txt-size
+
+# Optional: tune sampling behavior
+# options:
+#   maxLinksToTest: 50
+#   samplingStrategy: deterministic
