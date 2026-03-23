@@ -1,17 +1,34 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { runChecks } from '../runner.js';
 import { loadConfig } from './config.js';
-import type { AgentDocsConfig, CheckResult } from '../types.js';
+import { getChecksSorted } from '../checks/registry.js';
+import type { AgentDocsConfig, CheckResult, ReportResult } from '../types.js';
 
 // Ensure all checks are registered
 import '../checks/index.js';
 
+const STATUS_ICON: Record<string, string> = {
+  pass: '\u2713',
+  warn: '\u26A0',
+  fail: '\u2717',
+  skip: '\u2192',
+  error: '!',
+};
+
+function resolveConfig(
+  configOrDir: AgentDocsConfig | string | undefined,
+): Promise<AgentDocsConfig> {
+  if (typeof configOrDir === 'object') return Promise.resolve(configOrDir);
+  return loadConfig(typeof configOrDir === 'string' ? configOrDir : undefined);
+}
+
 /**
  * Auto-generates vitest tests from an agent-docs config file.
+ * Produces a single pass/fail test with a summary of all check results.
  *
- * Usage in a test file:
+ * Usage:
  * ```ts
- * import { describeAgentDocs } from 'agent-docs-testing/helpers';
+ * import { describeAgentDocs } from 'afdocs/helpers';
  * describeAgentDocs();
  * ```
  */
@@ -20,17 +37,14 @@ export function describeAgentDocs(configOrDir?: AgentDocsConfig | string): void 
     let results: CheckResult[];
 
     it('should run checks', async () => {
-      const config =
-        typeof configOrDir === 'object'
-          ? configOrDir
-          : await loadConfig(typeof configOrDir === 'string' ? configOrDir : undefined);
+      const config = await resolveConfig(configOrDir);
 
       const report = await runChecks(config.url, {
         checkIds: config.checks,
         ...config.options,
       });
       results = report.results;
-    });
+    }, 120_000);
 
     it('should have no failing checks', () => {
       expect(results).toBeDefined();
@@ -45,34 +59,54 @@ export function describeAgentDocs(configOrDir?: AgentDocsConfig | string): void 
 
 /**
  * Auto-generates individual vitest tests per check from an agent-docs config.
+ * Each check appears as its own test line in CI output, giving clear visibility
+ * into which checks passed, warned, failed, or were skipped.
  *
  * Usage:
  * ```ts
- * import { describeAgentDocsPerCheck } from 'agent-docs-testing/helpers';
+ * import { describeAgentDocsPerCheck } from 'afdocs/helpers';
  * describeAgentDocsPerCheck();
  * ```
  */
 export function describeAgentDocsPerCheck(configOrDir?: AgentDocsConfig | string): void {
   describe('Agent-Friendly Documentation', () => {
-    let _results: Map<string, CheckResult>;
+    let report: ReportResult;
+    let resultsByCheck: Map<string, CheckResult>;
 
-    // Run all checks once, then assert per-check
-    it('should run checks', async () => {
-      const config =
-        typeof configOrDir === 'object'
-          ? configOrDir
-          : await loadConfig(typeof configOrDir === 'string' ? configOrDir : undefined);
-
-      const report = await runChecks(config.url, {
+    // Run all checks once upfront
+    beforeAll(async () => {
+      const config = await resolveConfig(configOrDir);
+      report = await runChecks(config.url, {
         checkIds: config.checks,
         ...config.options,
       });
-      _results = new Map(report.results.map((r) => [r.id, r]));
-    });
+      resultsByCheck = new Map(report.results.map((r) => [r.id, r]));
+    }, 120_000);
 
-    // Individual check assertions will be generated after the setup test runs.
-    // Since vitest doesn't support dynamic test generation after suite setup,
-    // users should use describeAgentDocs() for the simple case or import
-    // checks individually for per-check control.
+    // Register a test per known check. Checks not included in the run
+    // (filtered via config.checks) are reported as skipped rather than
+    // silently passing, so CI output accurately reflects what was tested.
+    const allChecks = getChecksSorted();
+
+    for (const check of allChecks) {
+      it(check.id, (ctx) => {
+        const result = resultsByCheck?.get(check.id);
+        if (!result) {
+          // Check was filtered out by config
+          ctx.skip();
+          return;
+        }
+
+        const icon = STATUS_ICON[result.status] ?? '?';
+        console.log(`${icon} [${result.status}] ${result.message}`);
+
+        if (result.status === 'fail') {
+          expect.fail(`${result.message}`);
+        }
+        if (result.status === 'error') {
+          expect.fail(`Check error: ${result.message}`);
+        }
+      });
+    }
   });
 }

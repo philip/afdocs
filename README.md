@@ -124,11 +124,51 @@ const result = await check.run(ctx);
 
 ## Test helpers
 
-afdocs includes vitest helpers so you can add agent-friendliness checks to your docs site's test suite.
+afdocs includes vitest helpers so you can add agent-friendliness checks to your docs site's CI pipeline.
 
-### Config-driven
+### Setup
 
-Create `agent-docs.config.yml`:
+Install afdocs and vitest:
+
+```bash
+npm install -D afdocs vitest
+```
+
+Create `agent-docs.config.yml` in your project root (or a `tests/` subdirectory):
+
+```yaml
+url: https://docs.example.com
+```
+
+Create a test file:
+
+```ts
+import { describeAgentDocsPerCheck } from 'afdocs/helpers';
+
+describeAgentDocsPerCheck();
+```
+
+Run it:
+
+```bash
+npx vitest run agent-docs.test.ts
+```
+
+Each check appears as its own test in the output, so you can see exactly what passed, warned, failed, or was skipped:
+
+```
+ ✓ Agent-Friendly Documentation > llms-txt-exists
+ ✓ Agent-Friendly Documentation > llms-txt-valid
+ ✓ Agent-Friendly Documentation > llms-txt-size
+ × Agent-Friendly Documentation > markdown-url-support
+ ↓ Agent-Friendly Documentation > page-size-markdown
+```
+
+Checks that fail cause the test to fail. Checks that warn still pass (they're informational). Checks skipped due to unmet dependencies or config filtering show as skipped.
+
+### Running a subset of checks
+
+If your platform doesn't support certain checks (for example, you can't serve markdown), you can limit which checks run via the config:
 
 ```yaml
 url: https://docs.example.com
@@ -136,9 +176,27 @@ checks:
   - llms-txt-exists
   - llms-txt-valid
   - llms-txt-size
+  - http-status-codes
+  - auth-gate-detection
 ```
 
-Then in your test file:
+Only the listed checks will run. The rest show as skipped in the test output.
+
+### Config resolution
+
+The helpers look for `agent-docs.config.yml` (or `.yaml`) starting from `process.cwd()` and walking up the directory tree, so the config works whether your test file is at the project root or in a subdirectory. You can also pass an explicit directory:
+
+```ts
+describeAgentDocsPerCheck(__dirname);
+```
+
+### Timeouts
+
+The helpers set a 120-second timeout on the check run automatically. No vitest timeout configuration is needed.
+
+### Summary helper
+
+If you don't need per-check granularity, `describeAgentDocs` provides a simpler two-test suite (one to run checks, one to assert no failures):
 
 ```ts
 import { describeAgentDocs } from 'afdocs/helpers';
@@ -146,9 +204,9 @@ import { describeAgentDocs } from 'afdocs/helpers';
 describeAgentDocs();
 ```
 
-This reads the config and generates one test assertion covering all specified checks.
-
 ### Direct imports
+
+For full control, use the programmatic API directly:
 
 ```ts
 import { createContext, getCheck } from 'afdocs';

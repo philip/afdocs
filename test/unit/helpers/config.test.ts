@@ -51,4 +51,31 @@ describe('loadConfig', () => {
 
     await expect(loadConfig(TMP_DIR)).rejects.toThrow('missing required "url" field');
   });
+
+  it('walks up directories to find config', async () => {
+    const parentDir = TMP_DIR;
+    const childDir = resolve(TMP_DIR, 'sub/nested');
+    await mkdir(childDir, { recursive: true });
+    await writeFile(
+      resolve(parentDir, 'agent-docs.config.yml'),
+      'url: https://parent.example.com\n',
+    );
+
+    const config = await loadConfig(childDir);
+    expect(config.url).toBe('https://parent.example.com');
+  });
+
+  it('finds config in immediate dir before walking up', async () => {
+    const parentDir = TMP_DIR;
+    const childDir = resolve(TMP_DIR, 'sub');
+    await mkdir(childDir, { recursive: true });
+    await writeFile(
+      resolve(parentDir, 'agent-docs.config.yml'),
+      'url: https://parent.example.com\n',
+    );
+    await writeFile(resolve(childDir, 'agent-docs.config.yml'), 'url: https://child.example.com\n');
+
+    const config = await loadConfig(childDir);
+    expect(config.url).toBe('https://child.example.com');
+  });
 });
