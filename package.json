@@ -55,6 +55,10 @@
     "type": "git",
     "url": "https://github.com/agent-ecosystem/afdocs.git"
   },
+  "bugs": {
+    "url": "https://github.com/agent-ecosystem/afdocs/issues"
+  },
+  "homepage": "https://github.com/agent-ecosystem/afdocs",
   "license": "MIT",
   "engines": {
     "node": ">=22"
