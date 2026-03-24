@@ -210,6 +210,59 @@ Just text, no links here.
     expect(result.message).toContain('sampled links');
   });
 
+  it('passes for .txt companion files that contain markdown', async () => {
+    server.use(
+      http.head(
+        'http://test.local/llms-full.txt',
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        'http://test.local/llms-full.txt',
+        () =>
+          new HttpResponse(
+            '# Full docs\n\n## API Reference\n\n- [Endpoint](http://test.local/api.md): API',
+            {
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+            },
+          ),
+      ),
+    );
+
+    const content = `# Test\n> Summary\n## Links\n- [Full docs](http://test.local/llms-full.txt): Complete documentation\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails for .txt files that do not contain markdown', async () => {
+    server.use(
+      http.head(
+        'http://test.local/robots.txt',
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        'http://test.local/robots.txt',
+        () =>
+          new HttpResponse('User-agent: *\nDisallow: /private/', {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+    );
+
+    const content = `# Test\n> Summary\n## Links\n- [Robots](http://test.local/robots.txt): Robots file\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.status).toBe('fail');
+  });
+
   it('uses toMdUrls to find .md variants (handles trailing slash and .html)', async () => {
     server.use(
       http.head(
