@@ -1,6 +1,7 @@
 import { registerCheck } from '../registry.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
 import { toMdUrls } from '../../helpers/to-md-urls.js';
+import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
 
 interface LinkMarkdownResult {
@@ -105,6 +106,27 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
                 servesMarkdown: true,
                 status: response.status,
               };
+            }
+
+            // For .txt URLs (e.g. llms-full.txt, llms-small.txt companion files),
+            // content-sniff because they may contain markdown served as text/plain
+            if (new URL(url).pathname.endsWith('.txt')) {
+              try {
+                const getResp = await ctx.http.fetch(url);
+                if (getResp.ok) {
+                  const body = await getResp.text();
+                  if (looksLikeMarkdown(body)) {
+                    return {
+                      url,
+                      hasMarkdownExtension: false,
+                      servesMarkdown: true,
+                      status: response.status,
+                    };
+                  }
+                }
+              } catch {
+                // Fall through to .md variant check
+              }
             }
 
             // Try .md variant candidates
