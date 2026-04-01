@@ -121,6 +121,103 @@ describe('check command', () => {
     writeSpy.mockRestore();
   });
 
+  it('runs with scorecard format', async () => {
+    server.use(
+      http.get('http://cmd-scorecard.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-scorecard.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-scorecard.local',
+      '--checks',
+      'llms-txt-exists',
+      '--format',
+      'scorecard',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Agent-Friendly Docs Scorecard');
+    expect(output).toContain('Overall Score');
+    expect(output).toContain('/ 100');
+
+    writeSpy.mockRestore();
+  });
+
+  it('runs json format with --score flag', async () => {
+    server.use(
+      http.get('http://cmd-json-score.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-json-score.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-json-score.local',
+      '--checks',
+      'llms-txt-exists',
+      '--format',
+      'json',
+      '--score',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.scoring).toBeDefined();
+    expect(parsed.scoring.overall).toBeTypeOf('number');
+    expect(parsed.scoring.grade).toBeTypeOf('string');
+
+    writeSpy.mockRestore();
+  });
+
+  it('rejects invalid format option', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-invalid-fmt.local',
+      '--format',
+      'xml',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Invalid format');
+    expect(output).toContain('xml');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
   it('does not set exit code 1 when all pass', async () => {
     server.use(
       http.get('http://cmd-pass.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),

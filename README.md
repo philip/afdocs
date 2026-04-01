@@ -64,23 +64,34 @@ afdocs check https://docs.example.com --checks llms-txt-exists,llms-txt-valid,ll
 # JSON output
 afdocs check https://docs.example.com --format json
 
+# Scorecard with overall score, category scores, and fix suggestions
+afdocs check https://docs.example.com --format scorecard
+
+# Add fix suggestions to the standard text output
+afdocs check https://docs.example.com --fixes
+
+# JSON output with scoring data
+afdocs check https://docs.example.com --format json --score
+
 # Adjust thresholds
 afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80000
 ```
 
 ### Options
 
-| Option                  | Default  | Description                                  |
-| ----------------------- | -------- | -------------------------------------------- |
-| `--format <format>`     | `text`   | Output format: `text` or `json`              |
-| `-v, --verbose`         |          | Show per-page details for checks with issues |
-| `--checks <ids>`        | all      | Comma-separated list of check IDs            |
-| `--sampling <strategy>` | `random` | URL sampling strategy (see below)            |
-| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests             |
-| `--request-delay <ms>`  | `200`    | Delay between requests                       |
-| `--max-links <n>`       | `50`     | Maximum links to test in link checks         |
-| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)             |
-| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)             |
+| Option                  | Default  | Description                                           |
+| ----------------------- | -------- | ----------------------------------------------------- |
+| `--format <format>`     | `text`   | Output format: `text`, `json`, or `scorecard`         |
+| `-v, --verbose`         |          | Show per-page details for checks with issues          |
+| `--fixes`               |          | Show fix suggestions for warn/fail checks (text mode) |
+| `--score`               |          | Include scoring data in JSON output                   |
+| `--checks <ids>`        | all      | Comma-separated list of check IDs                     |
+| `--sampling <strategy>` | `random` | URL sampling strategy (see below)                     |
+| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests                      |
+| `--request-delay <ms>`  | `200`    | Delay between requests                                |
+| `--max-links <n>`       | `50`     | Maximum links to test in link checks                  |
+| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)                      |
+| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)                      |
 
 ### Sampling strategies
 
@@ -121,6 +132,73 @@ const ctx = createContext('https://docs.example.com');
 const check = getCheck('llms-txt-exists')!;
 const result = await check.run(ctx);
 ```
+
+## Scoring
+
+afdocs includes a scoring module that assigns a 0-100 numerical score to a documentation site's agent-friendliness. The score reflects how well agents can actually use the documentation, not just how many boxes are ticked: checks are weighted by impact, multi-page checks use proportional scoring (3/50 pages failing is different from 48/50), and interaction effects between checks are modeled as coefficients.
+
+### Scorecard output
+
+`--format scorecard` renders the full scorecard: overall score with letter grade, per-category scores, interaction diagnostics (system-level findings that emerge from combinations of check results), and per-check results with fix suggestions.
+
+```
+Agent-Friendly Docs Scorecard
+==============================
+
+  Overall Score: 72 / 100 (C)
+
+  Category Scores:
+    Content Discoverability           72 / 100 (C)
+    Markdown Availability             60 / 100 (C)
+    Page Size and Truncation Risk     45 / 100 (D)
+    ...
+
+  Interaction Diagnostics:
+    [!] Markdown support is undiscoverable
+        Your site serves markdown at .md URLs, but agents have no way to
+        discover this. ...
+
+        Fix: Add a blockquote directive near the top of each docs page ...
+
+  Check Results:
+    Content Discoverability
+      PASS  llms-txt-exists        llms.txt found at /llms.txt
+      WARN  llms-txt-size          llms.txt is 65,000 characters
+            Fix: If it grows further, split into nested llms.txt files ...
+      FAIL  llms-txt-directive     No directive detected on any tested page
+            Fix: Add a blockquote near the top of each page ...
+```
+
+### Letter grades
+
+| Grade | Score  | Description                                                                 |
+| ----- | ------ | --------------------------------------------------------------------------- |
+| A     | 90-100 | Excellent. Agents can effectively navigate and consume this documentation.  |
+| B     | 75-89  | Good. Minor improvements possible; agents can use most content.             |
+| C     | 60-74  | Functional but with notable gaps. Some content is inaccessible or degraded. |
+| D     | 40-59  | Significant barriers. Agents struggle to use this documentation.            |
+| F     | 0-39   | Poor. Agents likely cannot use this documentation in a meaningful way.      |
+
+### Programmatic scoring
+
+The scoring module is available as a pure function for programmatic consumers:
+
+```ts
+import { computeScore } from 'afdocs';
+// or import from the dedicated subpath:
+// import { computeScore } from 'afdocs/scoring';
+
+const report = await runChecks('https://docs.example.com');
+const score = computeScore(report);
+
+console.log(score.overall); // 72
+console.log(score.grade); // 'C'
+console.log(score.categoryScores); // { 'content-discoverability': { score: 80, grade: 'B' }, ... }
+console.log(score.diagnostics); // [{ id: 'markdown-undiscoverable', severity: 'warning', ... }]
+console.log(score.resolutions); // { 'llms-txt-directive': 'Add a blockquote near the top...' }
+```
+
+`computeScore` takes a `ReportResult` and returns a standalone `ScoreResult`. It does not modify the report. Composition is the consumer's responsibility: the CLI formatters compose them; external consumers call `computeScore()` directly.
 
 ## Test helpers
 

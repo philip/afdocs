@@ -18,6 +18,11 @@
       "types": "./dist/helpers/index.d.ts",
       "import": "./dist/helpers/index.js",
       "default": "./dist/helpers/index.js"
+    },
+    "./scoring": {
+      "types": "./dist/scoring/index.d.ts",
+      "import": "./dist/scoring/index.js",
+      "default": "./dist/scoring/index.js"
     }
   },
   "scripts": {
