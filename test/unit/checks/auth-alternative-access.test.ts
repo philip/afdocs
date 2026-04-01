@@ -115,7 +115,7 @@ describe('auth-alternative-access', () => {
         {
           'llms-txt-exists': {
             id: 'llms-txt-exists',
-            category: 'llms-txt',
+            category: 'content-discoverability',
             status: 'pass',
             message: 'Found',
           },
@@ -211,7 +211,7 @@ describe('auth-alternative-access', () => {
         {
           'llms-txt-exists': {
             id: 'llms-txt-exists',
-            category: 'llms-txt',
+            category: 'content-discoverability',
             status: 'pass',
             message: 'Found',
           },
@@ -262,7 +262,7 @@ describe('auth-alternative-access', () => {
         {
           'llms-txt-exists': {
             id: 'llms-txt-exists',
-            category: 'llms-txt',
+            category: 'content-discoverability',
             status: 'pass',
             message: 'Found',
           },

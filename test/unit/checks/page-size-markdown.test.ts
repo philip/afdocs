@@ -25,7 +25,7 @@ describe('page-size-markdown', () => {
       ];
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'Found',
         details: { discoveredFiles: discovered },

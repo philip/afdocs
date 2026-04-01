@@ -99,7 +99,7 @@ describe('getPageUrls', () => {
       ];
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'Found',
         details: { discoveredFiles: discovered },
@@ -109,7 +109,7 @@ describe('getPageUrls', () => {
       // skips the direct llms.txt fetch and falls through to sitemap.
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'fail',
         message: 'No llms.txt found',
         details: { discoveredFiles: [] },
@@ -659,7 +659,7 @@ describe('discoverAndSamplePages', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },
@@ -755,7 +755,7 @@ describe('discoverAndSamplePages', () => {
     const ctx = createContext('http://sample-warn.local', { requestDelay: 0 });
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'fail',
       message: 'No llms.txt found',
       details: { discoveredFiles: [] },

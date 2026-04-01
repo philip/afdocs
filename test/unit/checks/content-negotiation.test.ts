@@ -25,7 +25,7 @@ describe('content-negotiation', () => {
       ];
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'Found',
         details: { discoveredFiles: discovered },
@@ -33,7 +33,7 @@ describe('content-negotiation', () => {
     } else {
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'fail',
         message: 'No llms.txt found',
         details: { discoveredFiles: [] },
@@ -185,7 +185,7 @@ describe('content-negotiation', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },
@@ -255,7 +255,7 @@ describe('content-negotiation', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },

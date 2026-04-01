@@ -8,7 +8,7 @@ async function checkLlmsTxtSize(ctx: CheckContext): Promise<CheckResult> {
   if (discovered.length === 0) {
     return {
       id: 'llms-txt-size',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No llms.txt files to measure',
       dependsOn: ['llms-txt-exists'],
@@ -31,7 +31,7 @@ async function checkLlmsTxtSize(ctx: CheckContext): Promise<CheckResult> {
   if (maxSize <= passThreshold) {
     return {
       id: 'llms-txt-size',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: `llms.txt is ${maxSize.toLocaleString()} characters (under ${passThreshold.toLocaleString()} threshold)`,
       details,
@@ -41,7 +41,7 @@ async function checkLlmsTxtSize(ctx: CheckContext): Promise<CheckResult> {
   if (maxSize <= failThreshold) {
     return {
       id: 'llms-txt-size',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'warn',
       message: `llms.txt is ${maxSize.toLocaleString()} characters (between ${passThreshold.toLocaleString()} and ${failThreshold.toLocaleString()}; consider splitting)`,
       details,
@@ -50,7 +50,7 @@ async function checkLlmsTxtSize(ctx: CheckContext): Promise<CheckResult> {
 
   return {
     id: 'llms-txt-size',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'fail',
     message: `llms.txt is ${maxSize.toLocaleString()} characters (exceeds ${failThreshold.toLocaleString()} threshold; will be truncated by most agents)`,
     details,
@@ -59,7 +59,7 @@ async function checkLlmsTxtSize(ctx: CheckContext): Promise<CheckResult> {
 
 registerCheck({
   id: 'llms-txt-size',
-  category: 'llms-txt',
+  category: 'content-discoverability',
   description: 'Whether llms.txt fits within agent truncation limits',
   dependsOn: ['llms-txt-exists'],
   run: checkLlmsTxtSize,

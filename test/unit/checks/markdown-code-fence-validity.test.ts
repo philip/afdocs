@@ -48,7 +48,7 @@ describe('markdown-code-fence-validity', () => {
     // Populate llms-txt-exists result
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: llmsTxtFiles ? 'pass' : 'fail',
       message: llmsTxtFiles ? 'Found' : 'Not found',
       details: { discoveredFiles: llmsTxtFiles ?? [] },

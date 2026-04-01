@@ -80,7 +80,7 @@ describe('runner', () => {
   it('catches check errors and reports status "error"', async () => {
     registerCheck({
       id: '_test-throws',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Test check that throws',
       dependsOn: [],
       run: () => {
@@ -102,7 +102,7 @@ describe('runner', () => {
   it('catches non-Error thrown values', async () => {
     registerCheck({
       id: '_test-throws-string',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Test check that throws a string',
       dependsOn: [],
       run: () => {
@@ -161,24 +161,24 @@ describe('runner', () => {
     // Register test checks to control the OR-group scenario precisely
     registerCheck({
       id: '_test-dep-a',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Dep A',
       dependsOn: [],
       run: async () => ({
         id: '_test-dep-a',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'fail',
         message: 'Failed',
       }),
     });
     registerCheck({
       id: '_test-or-child',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Child with OR dep',
       dependsOn: [['_test-dep-a', '_test-dep-b']],
       run: async () => ({
         id: '_test-or-child',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),
@@ -200,24 +200,24 @@ describe('runner', () => {
   it('runs check when OR-group dep passes', async () => {
     registerCheck({
       id: '_test-dep-pass',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Dep that passes',
       dependsOn: [],
       run: async () => ({
         id: '_test-dep-pass',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),
     });
     registerCheck({
       id: '_test-or-passes',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Child with OR dep that passes',
       dependsOn: [['_test-dep-pass', '_test-dep-never']],
       run: async () => ({
         id: '_test-or-passes',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),

@@ -17,7 +17,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   if (discovered.length === 0) {
     return {
       id: 'llms-txt-links-resolve',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No llms.txt files to check links for',
       dependsOn: ['llms-txt-exists'],
@@ -38,7 +38,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   if (allLinks.size === 0) {
     return {
       id: 'llms-txt-links-resolve',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No HTTP(S) links found in llms.txt',
     };
@@ -181,7 +181,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
     const allResolved = crossBroken.length === 0;
     return {
       id: 'llms-txt-links-resolve',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: allResolved ? 'pass' : 'warn',
       message: allResolved
         ? `All ${crossResults.length} links are external and resolve (${totalLinks} total links)`
@@ -193,7 +193,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   if (sameResolveRate === 1) {
     return {
       id: 'llms-txt-links-resolve',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: crossBroken.length > 0 ? 'warn' : 'pass',
       message:
         `All ${sameResults.length} same-origin ${linkLabel} resolve (${totalLinks} total links)${sameSuffix}` +
@@ -205,7 +205,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   if (sameResolveRate > LINK_RESOLVE_THRESHOLD) {
     return {
       id: 'llms-txt-links-resolve',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'warn',
       message:
         `${sameResolved}/${sameResults.length} same-origin ${linkLabel} resolve (${Math.round(sameResolveRate * 100)}%); ${sameBroken.length} broken${sameSuffix}` +
@@ -216,7 +216,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
 
   return {
     id: 'llms-txt-links-resolve',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'fail',
     message:
       `Only ${sameResolved}/${sameResults.length} same-origin ${linkLabel} resolve (${Math.round(sameResolveRate * 100)}%); ${sameBroken.length} broken${sameSuffix}` +
@@ -227,7 +227,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
 
 registerCheck({
   id: 'llms-txt-links-resolve',
-  category: 'llms-txt',
+  category: 'content-discoverability',
   description: 'Whether the URLs listed in llms.txt actually resolve',
   dependsOn: ['llms-txt-exists'],
   run: checkLlmsTxtLinksResolve,

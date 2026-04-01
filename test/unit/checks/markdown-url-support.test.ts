@@ -30,7 +30,7 @@ describe('markdown-url-support', () => {
       ];
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'Found',
         details: { discoveredFiles: discovered },
@@ -38,7 +38,7 @@ describe('markdown-url-support', () => {
     } else {
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'fail',
         message: 'No llms.txt found',
         details: { discoveredFiles: [] },
@@ -226,7 +226,7 @@ describe('markdown-url-support', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },
@@ -307,7 +307,7 @@ describe('markdown-url-support', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },

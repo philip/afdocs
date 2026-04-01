@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { extractMarkdownLinks } from '../../../src/checks/llms-txt/llms-txt-valid.js';
+import { extractMarkdownLinks } from '../../../src/checks/content-discoverability/llms-txt-valid.js';
 import { createContext } from '../../../src/runner.js';
 import { getCheck } from '../../../src/checks/registry.js';
 import '../../../src/checks/index.js';
@@ -33,7 +33,7 @@ describe('llms-txt-valid', () => {
     ];
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: { discoveredFiles: discovered },

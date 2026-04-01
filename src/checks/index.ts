@@ -1,11 +1,12 @@
 // Import all check modules to trigger registration
 
-// Category 1: llms.txt
-import './llms-txt/llms-txt-exists.js';
-import './llms-txt/llms-txt-valid.js';
-import './llms-txt/llms-txt-size.js';
-import './llms-txt/llms-txt-links-resolve.js';
-import './llms-txt/llms-txt-links-markdown.js';
+// Category 1: Content Discoverability
+import './content-discoverability/llms-txt-exists.js';
+import './content-discoverability/llms-txt-valid.js';
+import './content-discoverability/llms-txt-size.js';
+import './content-discoverability/llms-txt-links-resolve.js';
+import './content-discoverability/llms-txt-links-markdown.js';
+import './content-discoverability/llms-txt-directive.js';
 
 // Category 2: Markdown Availability
 import './markdown-availability/markdown-url-support.js';
@@ -26,17 +27,14 @@ import './content-structure/markdown-code-fence-validity.js';
 import './url-stability/http-status-codes.js';
 import './url-stability/redirect-behavior.js';
 
-// Category 6: Agent Discoverability
-import './agent-discoverability/llms-txt-directive.js';
-
-// Category 7: Observability
+// Category 6: Observability
 import './observability/llms-txt-freshness.js';
 import './observability/markdown-content-parity.js';
 import './observability/cache-header-hygiene.js';
 
-// Category 8: Authentication
+// Category 7: Authentication
 import './authentication/auth-gate-detection.js';
 import './authentication/auth-alternative-access.js';
 
 export { getCheck, getAllChecks, getChecksSorted } from './registry.js';
-export { extractMarkdownLinks } from './llms-txt/llms-txt-valid.js';
+export { extractMarkdownLinks } from './content-discoverability/llms-txt-valid.js';

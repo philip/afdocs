@@ -8,10 +8,15 @@ function makeReport(overrides?: Partial<ReportResult>): ReportResult {
     url: 'http://example.com',
     timestamp: '2026-01-01T00:00:00.000Z',
     results: [
-      { id: 'llms-txt-exists', category: 'llms-txt', status: 'pass', message: 'Found' },
+      {
+        id: 'llms-txt-exists',
+        category: 'content-discoverability',
+        status: 'pass',
+        message: 'Found',
+      },
       {
         id: 'llms-txt-valid',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'warn',
         message: 'Non-standard structure',
       },
@@ -21,7 +26,12 @@ function makeReport(overrides?: Partial<ReportResult>): ReportResult {
         status: 'fail',
         message: 'No .md URLs',
       },
-      { id: 'llms-txt-size', category: 'llms-txt', status: 'skip', message: 'Skipped' },
+      {
+        id: 'llms-txt-size',
+        category: 'content-discoverability',
+        status: 'skip',
+        message: 'Skipped',
+      },
       { id: 'page-size-html', category: 'page-size', status: 'error', message: 'Timeout' },
     ],
     summary: { total: 5, pass: 1, warn: 1, fail: 1, skip: 1, error: 1 },
@@ -238,7 +248,7 @@ describe('formatText', () => {
         results: [
           {
             id: 'llms-txt-links-resolve',
-            category: 'llms-txt',
+            category: 'content-discoverability',
             status: 'fail',
             message: '2 broken links',
             details: {
@@ -392,7 +402,12 @@ describe('formatText', () => {
     it('shows nothing extra for checks with no details', () => {
       const report = makeReport({
         results: [
-          { id: 'llms-txt-exists', category: 'llms-txt', status: 'pass', message: 'Found' },
+          {
+            id: 'llms-txt-exists',
+            category: 'content-discoverability',
+            status: 'pass',
+            message: 'Found',
+          },
         ],
         summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
       });

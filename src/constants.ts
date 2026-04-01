@@ -15,14 +15,13 @@ export const DEFAULT_OPTIONS: CheckOptions = {
 };
 
 export const CATEGORIES = [
-  { id: 'llms-txt', name: 'llms.txt', order: 1 },
+  { id: 'content-discoverability', name: 'Content Discoverability', order: 1 },
   { id: 'markdown-availability', name: 'Markdown Availability', order: 2 },
   { id: 'page-size', name: 'Page Size and Truncation Risk', order: 3 },
   { id: 'content-structure', name: 'Content Structure', order: 4 },
   { id: 'url-stability', name: 'URL Stability and Redirects', order: 5 },
-  { id: 'agent-discoverability', name: 'Agent Discoverability Directives', order: 6 },
-  { id: 'observability', name: 'Observability and Content Health', order: 7 },
-  { id: 'authentication', name: 'Authentication and Access', order: 8 },
+  { id: 'observability', name: 'Observability and Content Health', order: 6 },
+  { id: 'authentication', name: 'Authentication and Access', order: 7 },
 ] as const;
 
 export const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(

@@ -85,7 +85,7 @@ function searchContent(
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'llms-txt-directive';
-  const category = 'agent-discoverability';
+  const category = 'content-discoverability';
 
   const { urls: pageUrls, totalPages, sampled, warnings } = await discoverAndSamplePages(ctx);
 
@@ -246,7 +246,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
 registerCheck({
   id: 'llms-txt-directive',
-  category: 'agent-discoverability',
+  category: 'content-discoverability',
   description: 'Whether pages include a directive pointing to llms.txt',
   dependsOn: [],
   run: check,

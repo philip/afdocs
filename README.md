@@ -7,12 +7,12 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers.
+afdocs runs 22 checks across 7 categories to evaluate how well your docs serve agent consumers.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
 >
-> Implements [spec v0.2.1](https://agentdocsspec.com/spec) (2026-03-15).
+> Implements [spec v0.3.0](https://agentdocsspec.com/spec) (2026-03-31).
 
 ## Quick start
 
@@ -25,7 +25,7 @@ Example output:
 ```
 Agent-Friendly Docs Check: https://react.dev
 
-llms-txt
+content-discoverability
   ✓ llms-txt-exists: llms.txt found at 1 location(s)
   ✓ llms-txt-valid: llms.txt follows the proposed structure
   ✓ llms-txt-size: llms.txt is 14,347 characters (under 50,000 threshold)
@@ -224,9 +224,9 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-22 checks across 8 categories.
+22 checks across 7 categories.
 
-### Category 1: llms.txt
+### Category 1: Content Discoverability
 
 | Check                     | Description                                               |
 | ------------------------- | --------------------------------------------------------- |
@@ -235,6 +235,7 @@ describe('agent-friendliness', () => {
 | `llms-txt-size`           | Whether `llms.txt` fits within agent truncation limits    |
 | `llms-txt-links-resolve`  | Whether URLs in `llms.txt` return 200                     |
 | `llms-txt-links-markdown` | Whether URLs in `llms.txt` point to markdown content      |
+| `llms-txt-directive`      | Whether pages include a directive pointing to `llms.txt`  |
 
 ### Category 2: Markdown Availability
 
@@ -267,13 +268,7 @@ describe('agent-friendliness', () => {
 | `http-status-codes` | Whether error pages return correct status codes |
 | `redirect-behavior` | Whether redirects are same-host HTTP redirects  |
 
-### Category 6: Agent Discoverability Directives
-
-| Check                | Description                                              |
-| -------------------- | -------------------------------------------------------- |
-| `llms-txt-directive` | Whether pages include a directive pointing to `llms.txt` |
-
-### Category 7: Observability and Content Health
+### Category 6: Observability and Content Health
 
 | Check                     | Description                                    |
 | ------------------------- | ---------------------------------------------- |
@@ -281,7 +276,7 @@ describe('agent-friendliness', () => {
 | `markdown-content-parity` | Whether markdown and HTML versions match       |
 | `cache-header-hygiene`    | Whether cache headers allow timely updates     |
 
-### Category 8: Authentication and Access
+### Category 7: Authentication and Access
 
 | Check                     | Description                                                          |
 | ------------------------- | -------------------------------------------------------------------- |
