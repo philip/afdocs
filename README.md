@@ -171,13 +171,14 @@ Agent-Friendly Docs Scorecard
 
 ### Letter grades
 
-| Grade | Score  | Description                                                                 |
-| ----- | ------ | --------------------------------------------------------------------------- |
-| A     | 90-100 | Excellent. Agents can effectively navigate and consume this documentation.  |
-| B     | 75-89  | Good. Minor improvements possible; agents can use most content.             |
-| C     | 60-74  | Functional but with notable gaps. Some content is inaccessible or degraded. |
-| D     | 40-59  | Significant barriers. Agents struggle to use this documentation.            |
-| F     | 0-39   | Poor. Agents likely cannot use this documentation in a meaningful way.      |
+| Grade | Score | Description                                                                 |
+| ----- | ----- | --------------------------------------------------------------------------- |
+| A+    | 100   | Perfect. Every check passes.                                                |
+| A     | 90-99 | Excellent. Agents can effectively navigate and consume this documentation.  |
+| B     | 80-89 | Good. Minor improvements possible; agents can use most content.             |
+| C     | 70-79 | Functional but with notable gaps. Some content is inaccessible or degraded. |
+| D     | 60-69 | Significant barriers. Agents struggle to use this documentation.            |
+| F     | 0-59  | Poor. Agents likely cannot use this documentation in a meaningful way.      |
 
 ### Programmatic scoring
 

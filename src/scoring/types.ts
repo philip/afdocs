@@ -1,4 +1,4 @@
-export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type Grade = 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
 
 export type DiagnosticSeverity = 'critical' | 'warning' | 'info';
 

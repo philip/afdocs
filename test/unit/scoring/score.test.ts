@@ -27,21 +27,22 @@ function makeReport(results: CheckResult[]): ReportResult {
 
 describe('toGrade', () => {
   it('assigns correct grades', () => {
-    expect(toGrade(100)).toBe('A');
+    expect(toGrade(100)).toBe('A+');
+    expect(toGrade(99)).toBe('A');
     expect(toGrade(90)).toBe('A');
     expect(toGrade(89)).toBe('B');
-    expect(toGrade(75)).toBe('B');
-    expect(toGrade(74)).toBe('C');
-    expect(toGrade(60)).toBe('C');
-    expect(toGrade(59)).toBe('D');
-    expect(toGrade(40)).toBe('D');
-    expect(toGrade(39)).toBe('F');
+    expect(toGrade(80)).toBe('B');
+    expect(toGrade(79)).toBe('C');
+    expect(toGrade(70)).toBe('C');
+    expect(toGrade(69)).toBe('D');
+    expect(toGrade(60)).toBe('D');
+    expect(toGrade(59)).toBe('F');
     expect(toGrade(0)).toBe('F');
   });
 });
 
 describe('computeScore', () => {
-  it('scores a perfect report as 100 (A)', () => {
+  it('scores a perfect report as 100 (A+)', () => {
     const results: CheckResult[] = [
       makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
       makeResult('llms-txt-valid', 'content-discoverability', 'pass'),
@@ -72,7 +73,7 @@ describe('computeScore', () => {
     ];
     const score = computeScore(makeReport(results));
     expect(score.overall).toBe(100);
-    expect(score.grade).toBe('A');
+    expect(score.grade).toBe('A+');
     expect(score.cap).toBeUndefined();
     expect(score.diagnostics).toHaveLength(0);
   });
@@ -180,6 +181,29 @@ describe('computeScore', () => {
     // Lowest wins: 39
     expect(score.cap).toBeDefined();
     expect(score.cap!.cap).toBe(39);
+    expect(score.overall).toBeLessThanOrEqual(39);
+  });
+
+  it('applies no-viable-path cap at 39', () => {
+    // No llms.txt, rendering not run, no markdown -> no-viable-path fires
+    // Use skip for rendering-strategy so only no-viable-path and llms-txt-exists caps apply
+    const results: CheckResult[] = [
+      makeResult('llms-txt-exists', 'content-discoverability', 'fail'),
+      makeResult('rendering-strategy', 'page-size', 'skip'),
+      makeResult('markdown-url-support', 'markdown-availability', 'fail'),
+      // Pass some checks so raw score would be above 39
+      makeResult('http-status-codes', 'url-stability', 'pass'),
+      makeResult('redirect-behavior', 'url-stability', 'pass'),
+      makeResult('auth-gate-detection', 'authentication', 'pass'),
+      makeResult('auth-alternative-access', 'authentication', 'pass'),
+      makeResult('cache-header-hygiene', 'observability', 'pass'),
+    ];
+    const score = computeScore(makeReport(results));
+    expect(score.diagnostics.find((d) => d.id === 'no-viable-path')).toBeDefined();
+    expect(score.cap).toBeDefined();
+    // no-viable-path cap (39) beats llms-txt-exists cap (59)
+    expect(score.cap!.cap).toBe(39);
+    expect(score.cap!.checkId).toBe('no-viable-path');
     expect(score.overall).toBeLessThanOrEqual(39);
   });
 

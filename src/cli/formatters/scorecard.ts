@@ -21,6 +21,7 @@ const STATUS_COLORS: Record<string, (s: string) => string> = {
 };
 
 const GRADE_COLORS: Record<string, (s: string) => string> = {
+  'A+': chalk.green,
   A: chalk.green,
   B: chalk.green,
   C: chalk.yellow,

@@ -57,8 +57,12 @@ export function computeScore(report: ReportResult): ScoreResult {
 
   const rawScore = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
 
+  // Diagnostics (evaluated before caps so no-viable-path can trigger a cap)
+  const diagnostics = evaluateDiagnostics(resultMap);
+  const triggeredDiagnostics = new Set(diagnostics.map((d) => d.id));
+
   // Apply critical check caps
-  const cap = computeCap(checkScores, resultMap);
+  const cap = computeCap(checkScores, resultMap, triggeredDiagnostics);
   const overall = Math.round(cap ? Math.min(rawScore, cap.cap) : rawScore);
 
   // Category scores
@@ -81,9 +85,6 @@ export function computeScore(report: ReportResult): ScoreResult {
       grade: toGrade(catMax > 0 ? Math.round((catEarned / catMax) * 100) : 0),
     };
   }
-
-  // Diagnostics
-  const diagnostics = evaluateDiagnostics(resultMap);
 
   // Resolutions
   const resolutions: Record<string, string> = {};
@@ -117,6 +118,7 @@ export function computeScore(report: ReportResult): ScoreResult {
 function computeCap(
   checkScores: Record<string, CheckScore>,
   results: Map<string, CheckResult>,
+  triggeredDiagnostics: Set<string>,
 ): ScoreCap | undefined {
   const caps: ScoreCap[] = [];
 
@@ -150,6 +152,16 @@ function computeCap(
     }
   }
 
+  // No viable content path: no llms.txt, no discoverable markdown, HTML path
+  // broken or untested. Agents have no effective way to get content.
+  if (triggeredDiagnostics.has('no-viable-path')) {
+    caps.push({
+      cap: 39,
+      checkId: 'no-viable-path',
+      reason: 'Agents have no effective way to access documentation content.',
+    });
+  }
+
   if (caps.length === 0) return undefined;
 
   // Lowest cap wins
@@ -162,9 +174,10 @@ function computeCap(
 // ---------------------------------------------------------------------------
 
 export function toGrade(score: number): Grade {
+  if (score >= 100) return 'A+';
   if (score >= 90) return 'A';
-  if (score >= 75) return 'B';
-  if (score >= 60) return 'C';
-  if (score >= 40) return 'D';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
   return 'F';
 }

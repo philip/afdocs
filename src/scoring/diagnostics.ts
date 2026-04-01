@@ -116,7 +116,19 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
     severity: 'critical',
     triggers: (results, triggered) => {
       const exists = results.get('llms-txt-exists');
-      if (exists?.status !== 'fail') return false;
+
+      // llms.txt either missing or effectively broken (<10% of links resolve)
+      const llmsUsable = (() => {
+        if (exists?.status === 'fail') return false;
+        if (exists?.status !== 'pass' && exists?.status !== 'warn') return false;
+        const linksResolve = results.get('llms-txt-links-resolve');
+        if (!linksResolve) return true; // not tested, assume usable
+        const resolveRate = linksResolve.details?.resolveRate as number | undefined;
+        if (resolveRate !== undefined && resolveRate < 10) return false;
+        return true;
+      })();
+
+      if (llmsUsable) return false;
 
       const rs = results.get('rendering-strategy');
       if (rs && rs.status !== 'fail' && rs.status !== 'skip') return false;
@@ -127,15 +139,27 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
 
       return false;
     },
-    message: () =>
-      'Agents have no effective way to access your documentation. There is ' +
-      'no llms.txt for navigation, no discoverable markdown path, and the ' +
-      "HTML responses either don't contain content or weren't tested. This " +
-      'is the lowest-possible agent accessibility state.',
+    message: (results) => {
+      const exists = results.get('llms-txt-exists');
+      const linksResolve = results.get('llms-txt-links-resolve');
+      const resolveRate = linksResolve?.details?.resolveRate as number | undefined;
+
+      const llmsReason =
+        exists?.status === 'fail'
+          ? 'There is no llms.txt for navigation'
+          : `The llms.txt exists but only ${resolveRate ?? 0}% of links resolve, making it effectively unusable`;
+
+      return (
+        `Agents have no effective way to access your documentation. ${llmsReason}, ` +
+        'there is no discoverable markdown path, and the HTML responses either ' +
+        "don't contain content or weren't tested. This is the lowest-possible " +
+        'agent accessibility state.'
+      );
+    },
     resolution:
       'The single highest-impact action is creating an llms.txt at your ' +
-      'site root. If your site uses client-side rendering, enabling ' +
-      'server-side rendering is the second priority.',
+      'site root with working links. If your site uses client-side rendering, ' +
+      'enabling server-side rendering is the second priority.',
   },
 
   {

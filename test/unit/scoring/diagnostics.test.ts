@@ -141,9 +141,38 @@ describe('diagnostics', () => {
       expect(diags.find((d) => d.id === 'no-viable-path')).toBeDefined();
     });
 
-    it('does not trigger when llms-txt-exists passes', () => {
+    it('does not trigger when llms-txt-exists passes and links resolve', () => {
       const results = resultsMap(
         r('llms-txt-exists', 'pass'),
+        r('llms-txt-links-resolve', 'pass', { resolveRate: 100 }),
+        r('rendering-strategy', 'fail'),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'no-viable-path')).toBeUndefined();
+    });
+
+    it('triggers when llms.txt exists but links are broken (<10% resolve)', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'pass'),
+        r('llms-txt-links-resolve', 'fail', { resolveRate: 0 }),
+        r('rendering-strategy', 'fail', {
+          serverRendered: 0,
+          sparseContent: 0,
+          spaShells: 20,
+        }),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      const diag = diags.find((d) => d.id === 'no-viable-path');
+      expect(diag).toBeDefined();
+      expect(diag!.message).toContain('0% of links resolve');
+    });
+
+    it('does not trigger when llms.txt links resolve at 10%+', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'pass'),
+        r('llms-txt-links-resolve', 'fail', { resolveRate: 15 }),
         r('rendering-strategy', 'fail'),
         r('markdown-url-support', 'fail'),
       );
