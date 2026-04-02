@@ -50,8 +50,9 @@ export const CHECK_WEIGHTS: Record<string, CheckWeight> = {
   'auth-alternative-access': w('medium', 0.5),
   'redirect-behavior': w('medium', 0.6),
 
+  'llms-txt-links-markdown': w('high', 0.25),
+
   // Low
-  'llms-txt-links-markdown': w('low'),
   'section-header-quality': w('low', 0.5),
   'cache-header-hygiene': w('low', 0.5),
 };

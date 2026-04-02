@@ -27,14 +27,14 @@ describe('weights', () => {
   it('has 3 critical, 7 high, 9 medium, 3 low checks', () => {
     const tiers = Object.values(CHECK_WEIGHTS).map((w) => w.tier);
     expect(tiers.filter((t) => t === 'critical')).toHaveLength(3);
-    expect(tiers.filter((t) => t === 'high')).toHaveLength(7);
+    expect(tiers.filter((t) => t === 'high')).toHaveLength(8);
     expect(tiers.filter((t) => t === 'medium')).toHaveLength(9);
-    expect(tiers.filter((t) => t === 'low')).toHaveLength(3);
+    expect(tiers.filter((t) => t === 'low')).toHaveLength(2);
   });
 
-  it('sums to 121 max raw score', () => {
+  it('sums to 126 max raw score', () => {
     const total = Object.values(CHECK_WEIGHTS).reduce((sum, w) => sum + w.weight, 0);
-    expect(total).toBe(121);
+    expect(total).toBe(126);
   });
 
   it('assigns warn coefficients correctly', () => {
@@ -44,9 +44,10 @@ describe('weights', () => {
     expect(getCheckWeight('llms-txt-directive')!.warnCoefficient).toBe(0.6);
     // 0.50 tier
     expect(getCheckWeight('llms-txt-exists')!.warnCoefficient).toBe(0.5);
+    // 0.25 tier
+    expect(getCheckWeight('llms-txt-links-markdown')!.warnCoefficient).toBe(0.25);
     // No warn state
     expect(getCheckWeight('http-status-codes')!.warnCoefficient).toBeUndefined();
-    expect(getCheckWeight('llms-txt-links-markdown')!.warnCoefficient).toBeUndefined();
     expect(getCheckWeight('markdown-code-fence-validity')!.warnCoefficient).toBeUndefined();
   });
 });
