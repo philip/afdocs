@@ -29,7 +29,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   if (discovered.length === 0) {
     return {
       id: 'llms-txt-links-markdown',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No llms.txt files to check links for',
       dependsOn: ['llms-txt-exists'],
@@ -62,7 +62,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   if (totalLinks === 0) {
     return {
       id: 'llms-txt-links-markdown',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No HTTP(S) links found in llms.txt',
     };
@@ -208,7 +208,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     // All links are cross-origin; can't assess markdown support
     return {
       id: 'llms-txt-links-markdown',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: `All ${totalLinks} links are external; cannot assess markdown support`,
       details,
@@ -218,7 +218,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   if (markdownRate >= 0.9) {
     return {
       id: 'llms-txt-links-markdown',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: `${markdownLinks}/${results.length} same-origin ${linkLabel} point to markdown content (${Math.round(markdownRate * 100)}%)${suffix}${crossNote}`,
       details,
@@ -228,7 +228,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
   if (mdVariantsAvailable > 0) {
     return {
       id: 'llms-txt-links-markdown',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'warn',
       message: `Same-origin links point to HTML, but ${mdVariantsAvailable} have .md variants available${suffix}${crossNote}`,
       details,
@@ -237,7 +237,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
 
   return {
     id: 'llms-txt-links-markdown',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'fail',
     message: `Same-origin links point to HTML and no markdown alternatives detected${suffix}${crossNote}`,
     details,
@@ -246,7 +246,7 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
 
 registerCheck({
   id: 'llms-txt-links-markdown',
-  category: 'llms-txt',
+  category: 'content-discoverability',
   description: 'Whether the URLs in llms.txt point to markdown content',
   dependsOn: ['llms-txt-exists'],
   run: checkLlmsTxtLinksMarkdown,

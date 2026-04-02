@@ -7,12 +7,12 @@ Test your documentation site against the [Agent-Friendly Documentation Spec](htt
 
 Agents don't use docs like humans. They hit truncation limits, get walls of CSS instead of content, can't follow cross-host redirects, and don't know about quality-of-life improvements like `llms.txt` or `.md` docs pages that would make life swell. Maybe this is because the industry has lacked guidance - until now.
 
-afdocs runs 22 checks across 8 categories to evaluate how well your docs serve agent consumers.
+afdocs runs 22 checks across 7 categories to evaluate how well your docs serve agent consumers.
 
 > **Status: Early development (0.x)**
 > This project is under active development. Check IDs, CLI flags, and output formats may change between minor versions. Feel free to try it out, but don't build automation against specific output until 1.0.
 >
-> Implements [spec v0.2.1](https://agentdocsspec.com/spec) (2026-03-15).
+> Implements [spec v0.3.0](https://agentdocsspec.com/spec) (2026-03-31).
 
 ## Quick start
 
@@ -25,7 +25,7 @@ Example output:
 ```
 Agent-Friendly Docs Check: https://react.dev
 
-llms-txt
+content-discoverability
   ✓ llms-txt-exists: llms.txt found at 1 location(s)
   ✓ llms-txt-valid: llms.txt follows the proposed structure
   ✓ llms-txt-size: llms.txt is 14,347 characters (under 50,000 threshold)
@@ -64,23 +64,34 @@ afdocs check https://docs.example.com --checks llms-txt-exists,llms-txt-valid,ll
 # JSON output
 afdocs check https://docs.example.com --format json
 
+# Scorecard with overall score, category scores, and fix suggestions
+afdocs check https://docs.example.com --format scorecard
+
+# Add fix suggestions to the standard text output
+afdocs check https://docs.example.com --fixes
+
+# JSON output with scoring data
+afdocs check https://docs.example.com --format json --score
+
 # Adjust thresholds
 afdocs check https://docs.example.com --pass-threshold 30000 --fail-threshold 80000
 ```
 
 ### Options
 
-| Option                  | Default  | Description                                  |
-| ----------------------- | -------- | -------------------------------------------- |
-| `--format <format>`     | `text`   | Output format: `text` or `json`              |
-| `-v, --verbose`         |          | Show per-page details for checks with issues |
-| `--checks <ids>`        | all      | Comma-separated list of check IDs            |
-| `--sampling <strategy>` | `random` | URL sampling strategy (see below)            |
-| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests             |
-| `--request-delay <ms>`  | `200`    | Delay between requests                       |
-| `--max-links <n>`       | `50`     | Maximum links to test in link checks         |
-| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)             |
-| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)             |
+| Option                  | Default  | Description                                           |
+| ----------------------- | -------- | ----------------------------------------------------- |
+| `--format <format>`     | `text`   | Output format: `text`, `json`, or `scorecard`         |
+| `-v, --verbose`         |          | Show per-page details for checks with issues          |
+| `--fixes`               |          | Show fix suggestions for warn/fail checks (text mode) |
+| `--score`               |          | Include scoring data in JSON output                   |
+| `--checks <ids>`        | all      | Comma-separated list of check IDs                     |
+| `--sampling <strategy>` | `random` | URL sampling strategy (see below)                     |
+| `--max-concurrency <n>` | `3`      | Maximum concurrent HTTP requests                      |
+| `--request-delay <ms>`  | `200`    | Delay between requests                                |
+| `--max-links <n>`       | `50`     | Maximum links to test in link checks                  |
+| `--pass-threshold <n>`  | `50000`  | Size pass threshold (characters)                      |
+| `--fail-threshold <n>`  | `100000` | Size fail threshold (characters)                      |
 
 ### Sampling strategies
 
@@ -121,6 +132,76 @@ const ctx = createContext('https://docs.example.com');
 const check = getCheck('llms-txt-exists')!;
 const result = await check.run(ctx);
 ```
+
+## Scoring
+
+afdocs includes a scoring module that assigns a 0-100 numerical score to a documentation site's agent-friendliness. The score reflects how well agents can actually use the documentation, not just how many boxes are ticked: checks are weighted by impact, multi-page checks use proportional scoring (3/50 pages failing is different from 48/50), and interaction effects between checks are modeled as coefficients.
+
+For a full explanation of how scores are calculated, including check weights, warn coefficients, score caps, and interaction diagnostics, see [How the Agent-Friendly Docs Score Works](SCORING.md).
+
+### Scorecard output
+
+`--format scorecard` renders the full scorecard: overall score with letter grade, per-category scores, interaction diagnostics (system-level findings that emerge from combinations of check results), and per-check results with fix suggestions.
+
+```
+Agent-Friendly Docs Scorecard
+==============================
+
+  Overall Score: 72 / 100 (C)
+
+  Category Scores:
+    Content Discoverability           72 / 100 (C)
+    Markdown Availability             60 / 100 (C)
+    Page Size and Truncation Risk     45 / 100 (D)
+    ...
+
+  Interaction Diagnostics:
+    [!] Markdown support is undiscoverable
+        Your site serves markdown at .md URLs, but agents have no way to
+        discover this. ...
+
+        Fix: Add a blockquote directive near the top of each docs page ...
+
+  Check Results:
+    Content Discoverability
+      PASS  llms-txt-exists        llms.txt found at /llms.txt
+      WARN  llms-txt-size          llms.txt is 65,000 characters
+            Fix: If it grows further, split into nested llms.txt files ...
+      FAIL  llms-txt-directive     No directive detected on any tested page
+            Fix: Add a blockquote near the top of each page ...
+```
+
+### Letter grades
+
+| Grade | Score | Description                                                                 |
+| ----- | ----- | --------------------------------------------------------------------------- |
+| A+    | 100   | Perfect. Every check passes.                                                |
+| A     | 90-99 | Excellent. Agents can effectively navigate and consume this documentation.  |
+| B     | 80-89 | Good. Minor improvements possible; agents can use most content.             |
+| C     | 70-79 | Functional but with notable gaps. Some content is inaccessible or degraded. |
+| D     | 60-69 | Significant barriers. Agents struggle to use this documentation.            |
+| F     | 0-59  | Poor. Agents likely cannot use this documentation in a meaningful way.      |
+
+### Programmatic scoring
+
+The scoring module is available as a pure function for programmatic consumers:
+
+```ts
+import { computeScore } from 'afdocs';
+// or import from the dedicated subpath:
+// import { computeScore } from 'afdocs/scoring';
+
+const report = await runChecks('https://docs.example.com');
+const score = computeScore(report);
+
+console.log(score.overall); // 72
+console.log(score.grade); // 'C'
+console.log(score.categoryScores); // { 'content-discoverability': { score: 80, grade: 'B' }, ... }
+console.log(score.diagnostics); // [{ id: 'markdown-undiscoverable', severity: 'warning', ... }]
+console.log(score.resolutions); // { 'llms-txt-directive': 'Add a blockquote near the top...' }
+```
+
+`computeScore` takes a `ReportResult` and returns a standalone `ScoreResult`. It does not modify the report. Composition is the consumer's responsibility: the CLI formatters compose them; external consumers call `computeScore()` directly.
 
 ## Test helpers
 
@@ -224,9 +305,9 @@ describe('agent-friendliness', () => {
 
 ## Checks
 
-22 checks across 8 categories.
+22 checks across 7 categories.
 
-### Category 1: llms.txt
+### Category 1: Content Discoverability
 
 | Check                     | Description                                               |
 | ------------------------- | --------------------------------------------------------- |
@@ -235,6 +316,7 @@ describe('agent-friendliness', () => {
 | `llms-txt-size`           | Whether `llms.txt` fits within agent truncation limits    |
 | `llms-txt-links-resolve`  | Whether URLs in `llms.txt` return 200                     |
 | `llms-txt-links-markdown` | Whether URLs in `llms.txt` point to markdown content      |
+| `llms-txt-directive`      | Whether pages include a directive pointing to `llms.txt`  |
 
 ### Category 2: Markdown Availability
 
@@ -267,13 +349,7 @@ describe('agent-friendliness', () => {
 | `http-status-codes` | Whether error pages return correct status codes |
 | `redirect-behavior` | Whether redirects are same-host HTTP redirects  |
 
-### Category 6: Agent Discoverability Directives
-
-| Check                | Description                                              |
-| -------------------- | -------------------------------------------------------- |
-| `llms-txt-directive` | Whether pages include a directive pointing to `llms.txt` |
-
-### Category 7: Observability and Content Health
+### Category 6: Observability and Content Health
 
 | Check                     | Description                                    |
 | ------------------------- | ---------------------------------------------- |
@@ -281,7 +357,7 @@ describe('agent-friendliness', () => {
 | `markdown-content-parity` | Whether markdown and HTML versions match       |
 | `cache-header-hygiene`    | Whether cache headers allow timely updates     |
 
-### Category 8: Authentication and Access
+### Category 7: Authentication and Access
 
 | Check                     | Description                                                          |
 | ------------------------- | -------------------------------------------------------------------- |

@@ -52,7 +52,7 @@ function makeCtx(host: string, llmsTxtUrls: string[], basePath = '') {
   ];
   ctx.previousResults.set('llms-txt-exists', {
     id: 'llms-txt-exists',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'pass',
     message: 'Found',
     details: { discoveredFiles: discovered },
@@ -301,7 +301,7 @@ describe('llms-txt-freshness', () => {
     const ctx = createContext(`http://${host}/docs`, { requestDelay: 0 });
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message: 'Found',
       details: {

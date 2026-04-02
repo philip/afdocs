@@ -53,7 +53,7 @@ async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
   if (discovered.length === 0) {
     return {
       id: 'llms-txt-valid',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'skip',
       message: 'No llms.txt files to validate',
       dependsOn: ['llms-txt-exists'],
@@ -72,7 +72,7 @@ async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
   if (allValid) {
     return {
       id: 'llms-txt-valid',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'pass',
       message:
         'llms.txt follows the proposed structure (H1, blockquote, heading-delimited link sections)',
@@ -87,7 +87,7 @@ async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
       .join('; ');
     return {
       id: 'llms-txt-valid',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'warn',
       message: `llms.txt contains parseable links but doesn't fully follow the proposed structure: ${issuesSummary}`,
       details,
@@ -96,7 +96,7 @@ async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
 
   return {
     id: 'llms-txt-valid',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'fail',
     message: 'llms.txt exists but contains no parseable links',
     details,
@@ -105,7 +105,7 @@ async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
 
 registerCheck({
   id: 'llms-txt-valid',
-  category: 'llms-txt',
+  category: 'content-discoverability',
   description: 'Whether llms.txt follows the proposed structure from llmstxt.org',
   dependsOn: ['llms-txt-exists'],
   run: checkLlmsTxtValid,

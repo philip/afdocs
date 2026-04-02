@@ -1,4 +1,4 @@
-import { extractMarkdownLinks } from '../checks/llms-txt/llms-txt-valid.js';
+import { extractMarkdownLinks } from '../checks/content-discoverability/llms-txt-valid.js';
 import { MAX_SITEMAP_URLS } from '../constants.js';
 import { isNonPageUrl } from './to-md-urls.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';

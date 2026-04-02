@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import type { ReportResult, CheckResult } from '../../types.js';
 import { SPEC_BASE_URL } from '../../constants.js';
+import { getResolution } from '../../scoring/resolutions.js';
 
 const STATUS_ICONS: Record<string, string> = {
   pass: chalk.green('✓'),
@@ -175,10 +176,12 @@ function formatVerboseDetails(result: CheckResult): string[] {
 
 export interface FormatTextOptions {
   verbose?: boolean;
+  fixes?: boolean;
 }
 
 export function formatText(report: ReportResult, options?: FormatTextOptions): string {
   const verbose = options?.verbose ?? false;
+  const fixes = options?.fixes ?? false;
   const lines: string[] = [];
 
   lines.push('');
@@ -200,6 +203,12 @@ export function formatText(report: ReportResult, options?: FormatTextOptions): s
       lines.push(formatResult(result, report.results));
       if (verbose) {
         lines.push(...formatVerboseDetails(result));
+      }
+      if (fixes) {
+        const resolution = getResolution(result);
+        if (resolution) {
+          lines.push(`      ${chalk.cyan('Fix:')} ${resolution}`);
+        }
       }
     }
     lines.push('');

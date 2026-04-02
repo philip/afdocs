@@ -8,10 +8,15 @@ function makeReport(overrides?: Partial<ReportResult>): ReportResult {
     url: 'http://example.com',
     timestamp: '2026-01-01T00:00:00.000Z',
     results: [
-      { id: 'llms-txt-exists', category: 'llms-txt', status: 'pass', message: 'Found' },
+      {
+        id: 'llms-txt-exists',
+        category: 'content-discoverability',
+        status: 'pass',
+        message: 'Found',
+      },
       {
         id: 'llms-txt-valid',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'warn',
         message: 'Non-standard structure',
       },
@@ -21,7 +26,12 @@ function makeReport(overrides?: Partial<ReportResult>): ReportResult {
         status: 'fail',
         message: 'No .md URLs',
       },
-      { id: 'llms-txt-size', category: 'llms-txt', status: 'skip', message: 'Skipped' },
+      {
+        id: 'llms-txt-size',
+        category: 'content-discoverability',
+        status: 'skip',
+        message: 'Skipped',
+      },
       { id: 'page-size-html', category: 'page-size', status: 'error', message: 'Timeout' },
     ],
     summary: { total: 5, pass: 1, warn: 1, fail: 1, skip: 1, error: 1 },
@@ -238,7 +248,7 @@ describe('formatText', () => {
         results: [
           {
             id: 'llms-txt-links-resolve',
-            category: 'llms-txt',
+            category: 'content-discoverability',
             status: 'fail',
             message: '2 broken links',
             details: {
@@ -392,7 +402,12 @@ describe('formatText', () => {
     it('shows nothing extra for checks with no details', () => {
       const report = makeReport({
         results: [
-          { id: 'llms-txt-exists', category: 'llms-txt', status: 'pass', message: 'Found' },
+          {
+            id: 'llms-txt-exists',
+            category: 'content-discoverability',
+            status: 'pass',
+            message: 'Found',
+          },
         ],
         summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
       });
@@ -501,6 +516,80 @@ describe('formatText', () => {
   });
 });
 
+describe('formatText with fixes', () => {
+  it('shows Fix: lines for warn/fail checks', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'Not found',
+        },
+        {
+          id: 'llms-txt-valid',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'OK',
+        },
+      ],
+      summary: { total: 2, pass: 1, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { fixes: true });
+    expect(output).toContain('Fix:');
+    expect(output).toContain('Create an llms.txt file');
+  });
+
+  it('does not show Fix: for passing checks', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'Found',
+        },
+      ],
+      summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { fixes: true });
+    expect(output).not.toContain('Fix:');
+  });
+
+  it('does not show Fix: lines without fixes flag', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'Not found',
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report);
+    expect(output).not.toContain('Fix:');
+  });
+
+  it('shows Fix: for warn checks', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-valid',
+          category: 'content-discoverability',
+          status: 'warn',
+          message: 'Non-standard structure',
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { fixes: true });
+    expect(output).toContain('Fix:');
+    expect(output).toContain('parseable links');
+  });
+});
+
 describe('formatJson', () => {
   it('returns valid JSON', () => {
     const output = formatJson(makeReport());
@@ -514,5 +603,53 @@ describe('formatJson', () => {
     const output = formatJson(makeReport());
     expect(output).toContain('\n');
     expect(output).toContain('  ');
+  });
+
+  it('does not include scoring by default', () => {
+    const output = formatJson(makeReport());
+    const parsed = JSON.parse(output);
+    expect(parsed.scoring).toBeUndefined();
+  });
+
+  it('includes scoring when score option is true', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'Found',
+        },
+      ],
+      summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatJson(report, { score: true });
+    const parsed = JSON.parse(output);
+    expect(parsed.scoring).toBeDefined();
+    expect(parsed.scoring.overall).toBeTypeOf('number');
+    expect(parsed.scoring.grade).toBeTypeOf('string');
+    expect(parsed.scoring.categoryScores).toBeDefined();
+    expect(parsed.scoring.checkScores).toBeDefined();
+    expect(parsed.scoring.diagnostics).toBeInstanceOf(Array);
+    expect(parsed.scoring.resolutions).toBeDefined();
+  });
+
+  it('preserves report fields alongside scoring', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'Found',
+        },
+      ],
+      summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatJson(report, { score: true });
+    const parsed = JSON.parse(output);
+    expect(parsed.url).toBe('http://example.com');
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.scoring).toBeDefined();
   });
 });

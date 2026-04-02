@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { runChecks } from '../../src/runner.js';
+import { createContext, normalizeUrl, runChecks } from '../../src/runner.js';
 import { registerCheck } from '../../src/checks/registry.js';
 import '../../src/checks/index.js';
 
@@ -10,6 +10,58 @@ const server = setupServer();
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'bypass' });
   return () => server.close();
+});
+
+describe('normalizeUrl', () => {
+  it('prepends https:// to bare domains', () => {
+    expect(normalizeUrl('example.com')).toBe('https://example.com');
+  });
+
+  it('prepends https:// to domains with paths', () => {
+    expect(normalizeUrl('docs.example.com/api')).toBe('https://docs.example.com/api');
+  });
+
+  it('leaves https:// URLs unchanged', () => {
+    expect(normalizeUrl('https://example.com')).toBe('https://example.com');
+  });
+
+  it('leaves http:// URLs unchanged', () => {
+    expect(normalizeUrl('http://example.com')).toBe('http://example.com');
+  });
+
+  it('is case-insensitive for scheme detection', () => {
+    expect(normalizeUrl('HTTPS://example.com')).toBe('HTTPS://example.com');
+    expect(normalizeUrl('Http://example.com')).toBe('Http://example.com');
+  });
+});
+
+describe('createContext URL normalization', () => {
+  it('prepends https:// when no scheme is provided', () => {
+    const ctx = createContext('example.com');
+    expect(ctx.baseUrl).toBe('https://example.com');
+    expect(ctx.origin).toBe('https://example.com');
+  });
+
+  it('prepends https:// for bare domain with path', () => {
+    const ctx = createContext('docs.example.com/api');
+    expect(ctx.baseUrl).toBe('https://docs.example.com/api');
+    expect(ctx.origin).toBe('https://docs.example.com');
+  });
+
+  it('leaves https:// URLs unchanged', () => {
+    const ctx = createContext('https://example.com');
+    expect(ctx.baseUrl).toBe('https://example.com');
+  });
+
+  it('leaves http:// URLs unchanged', () => {
+    const ctx = createContext('http://example.com');
+    expect(ctx.baseUrl).toBe('http://example.com');
+  });
+
+  it('strips trailing slash after normalization', () => {
+    const ctx = createContext('example.com/');
+    expect(ctx.baseUrl).toBe('https://example.com');
+  });
 });
 
 describe('runner', () => {
@@ -80,7 +132,7 @@ describe('runner', () => {
   it('catches check errors and reports status "error"', async () => {
     registerCheck({
       id: '_test-throws',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Test check that throws',
       dependsOn: [],
       run: () => {
@@ -102,7 +154,7 @@ describe('runner', () => {
   it('catches non-Error thrown values', async () => {
     registerCheck({
       id: '_test-throws-string',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Test check that throws a string',
       dependsOn: [],
       run: () => {
@@ -161,24 +213,24 @@ describe('runner', () => {
     // Register test checks to control the OR-group scenario precisely
     registerCheck({
       id: '_test-dep-a',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Dep A',
       dependsOn: [],
       run: async () => ({
         id: '_test-dep-a',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'fail',
         message: 'Failed',
       }),
     });
     registerCheck({
       id: '_test-or-child',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Child with OR dep',
       dependsOn: [['_test-dep-a', '_test-dep-b']],
       run: async () => ({
         id: '_test-or-child',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),
@@ -200,24 +252,24 @@ describe('runner', () => {
   it('runs check when OR-group dep passes', async () => {
     registerCheck({
       id: '_test-dep-pass',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Dep that passes',
       dependsOn: [],
       run: async () => ({
         id: '_test-dep-pass',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),
     });
     registerCheck({
       id: '_test-or-passes',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       description: 'Child with OR dep that passes',
       dependsOn: [['_test-dep-pass', '_test-dep-never']],
       run: async () => ({
         id: '_test-or-passes',
-        category: 'llms-txt',
+        category: 'content-discoverability',
         status: 'pass',
         message: 'OK',
       }),

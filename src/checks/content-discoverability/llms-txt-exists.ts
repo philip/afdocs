@@ -168,7 +168,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
         : '';
     return {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'fail',
       message: `No llms.txt found at any candidate location (${candidates.join(', ')})${redirectNote}${suffix}`,
       details,
@@ -180,7 +180,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
   if (allCrossHost) {
     return {
       id: 'llms-txt-exists',
-      category: 'llms-txt',
+      category: 'content-discoverability',
       status: 'warn',
       message: `llms.txt found but only reachable via cross-host redirect (agents may not follow it)${suffix}`,
       details,
@@ -197,7 +197,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
 
   return {
     id: 'llms-txt-exists',
-    category: 'llms-txt',
+    category: 'content-discoverability',
     status: 'pass',
     message: `llms.txt found at ${discovered.length} location(s)${suffix}`,
     details,
@@ -206,7 +206,7 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
 
 registerCheck({
   id: 'llms-txt-exists',
-  category: 'llms-txt',
+  category: 'content-discoverability',
   description: 'Whether llms.txt is discoverable at any of the candidate locations',
   dependsOn: [],
   run: checkLlmsTxtExists,
