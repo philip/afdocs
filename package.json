@@ -60,7 +60,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/agent-ecosystem/afdocs.git"
+    "url": "git+https://github.com/agent-ecosystem/afdocs.git"
   },
   "bugs": {
     "url": "https://github.com/agent-ecosystem/afdocs/issues"
