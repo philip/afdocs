@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { runChecks } from '../../runner.js';
+import { normalizeUrl, runChecks } from '../../runner.js';
 import { formatText } from '../formatters/text.js';
 import { formatJson } from '../formatters/json.js';
 import { formatScorecard } from '../formatters/scorecard.js';
@@ -30,7 +30,8 @@ export function registerCheckCommand(program: Command): void {
     .option('-v, --verbose', 'Show per-page details for checks with issues')
     .option('--fixes', 'Show fix suggestions for warn/fail checks')
     .option('--score', 'Include scoring data in JSON output')
-    .action(async (url: string, opts: Record<string, string>) => {
+    .action(async (rawUrl: string, opts: Record<string, string>) => {
+      const url = normalizeUrl(rawUrl);
       const checkIds = opts.checks ? opts.checks.split(',').map((s) => s.trim()) : undefined;
       const format = opts.format as string;
 

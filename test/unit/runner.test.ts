@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { runChecks } from '../../src/runner.js';
+import { createContext, normalizeUrl, runChecks } from '../../src/runner.js';
 import { registerCheck } from '../../src/checks/registry.js';
 import '../../src/checks/index.js';
 
@@ -10,6 +10,58 @@ const server = setupServer();
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'bypass' });
   return () => server.close();
+});
+
+describe('normalizeUrl', () => {
+  it('prepends https:// to bare domains', () => {
+    expect(normalizeUrl('example.com')).toBe('https://example.com');
+  });
+
+  it('prepends https:// to domains with paths', () => {
+    expect(normalizeUrl('docs.example.com/api')).toBe('https://docs.example.com/api');
+  });
+
+  it('leaves https:// URLs unchanged', () => {
+    expect(normalizeUrl('https://example.com')).toBe('https://example.com');
+  });
+
+  it('leaves http:// URLs unchanged', () => {
+    expect(normalizeUrl('http://example.com')).toBe('http://example.com');
+  });
+
+  it('is case-insensitive for scheme detection', () => {
+    expect(normalizeUrl('HTTPS://example.com')).toBe('HTTPS://example.com');
+    expect(normalizeUrl('Http://example.com')).toBe('Http://example.com');
+  });
+});
+
+describe('createContext URL normalization', () => {
+  it('prepends https:// when no scheme is provided', () => {
+    const ctx = createContext('example.com');
+    expect(ctx.baseUrl).toBe('https://example.com');
+    expect(ctx.origin).toBe('https://example.com');
+  });
+
+  it('prepends https:// for bare domain with path', () => {
+    const ctx = createContext('docs.example.com/api');
+    expect(ctx.baseUrl).toBe('https://docs.example.com/api');
+    expect(ctx.origin).toBe('https://docs.example.com');
+  });
+
+  it('leaves https:// URLs unchanged', () => {
+    const ctx = createContext('https://example.com');
+    expect(ctx.baseUrl).toBe('https://example.com');
+  });
+
+  it('leaves http:// URLs unchanged', () => {
+    const ctx = createContext('http://example.com');
+    expect(ctx.baseUrl).toBe('http://example.com');
+  });
+
+  it('strips trailing slash after normalization', () => {
+    const ctx = createContext('example.com/');
+    expect(ctx.baseUrl).toBe('https://example.com');
+  });
 });
 
 describe('runner', () => {

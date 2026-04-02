@@ -33,8 +33,16 @@ function checkDependenciesMet(
   return true;
 }
 
+export function normalizeUrl(url: string): string {
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+}
+
 export function createContext(baseUrl: string, options?: Partial<RunnerOptions>): CheckContext {
   const merged = { ...DEFAULT_OPTIONS, ...options };
+  baseUrl = normalizeUrl(baseUrl);
   const url = new URL(baseUrl);
 
   return {
