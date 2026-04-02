@@ -50,6 +50,7 @@ and the empirical evidence sections in each check definition.
 | `auth-gate-detection`          | Critical | 10     | Auth-gated docs are completely opaque to agents.                                                                                                      |
 | `llms-txt-size`                | High     | 7      | Truncated index defeats the purpose of llms.txt.                                                                                                      |
 | `llms-txt-links-resolve`       | High     | 7      | Broken links in llms.txt send agents down dead ends with high confidence.                                                                             |
+| `llms-txt-links-markdown`      | High     | 7      | Agents work significantly less effectively with HTML content. Pointing to markdown directly is the difference between a good and degraded experience. |
 | `markdown-url-support`         | High     | 7      | Core format capability. Markdown is what agents actually want.                                                                                        |
 | `page-size-markdown`           | High     | 7      | Direct truncation risk on the best-case content path.                                                                                                 |
 | `page-size-html`               | High     | 7      | Affects the majority of agents, which receive HTML.                                                                                                   |
@@ -64,7 +65,6 @@ and the empirical evidence sections in each check definition.
 | `markdown-content-parity`      | Medium   | 4      | Content drift between markdown and HTML leaves agents with outdated info.                                                                             |
 | `auth-alternative-access`      | Medium   | 4      | Partial mitigation for auth-gated sites.                                                                                                              |
 | `redirect-behavior`            | Medium   | 4      | Cross-host redirects are a known friction point for some agents.                                                                                      |
-| `llms-txt-links-markdown`      | High     | 7      | Agents work significantly less effectively with HTML content. Pointing to markdown directly is the difference between a good and degraded experience. |
 | `section-header-quality`       | Low      | 2      | Refinement for tabbed content; only matters when tabs exist.                                                                                          |
 | `cache-header-hygiene`         | Low      | 2      | Aggressive caching rarely causes acute agent failures.                                                                                                |
 
