@@ -137,6 +137,8 @@ const result = await check.run(ctx);
 
 afdocs includes a scoring module that assigns a 0-100 numerical score to a documentation site's agent-friendliness. The score reflects how well agents can actually use the documentation, not just how many boxes are ticked: checks are weighted by impact, multi-page checks use proportional scoring (3/50 pages failing is different from 48/50), and interaction effects between checks are modeled as coefficients.
 
+For a full explanation of how scores are calculated, including check weights, warn coefficients, score caps, and interaction diagnostics, see [How the Agent-Friendly Docs Score Works](SCORING.md).
+
 ### Scorecard output
 
 `--format scorecard` renders the full scorecard: overall score with letter grade, per-category scores, interaction diagnostics (system-level findings that emerge from combinations of check results), and per-check results with fix suggestions.
