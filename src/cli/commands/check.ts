@@ -53,8 +53,12 @@ export function registerCheckCommand(program: Command): void {
       }
 
       if (format !== 'json') {
-        const domain = new URL(url).hostname;
-        process.stderr.write(`Running checks on ${domain}...\n`);
+        const parsed = new URL(url);
+        const target =
+          parsed.pathname && parsed.pathname !== '/'
+            ? `${parsed.hostname}${parsed.pathname}`
+            : parsed.hostname;
+        process.stderr.write(`Running checks on ${target}...\n`);
       }
 
       const report = await runChecks(url, {

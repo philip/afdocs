@@ -50,7 +50,9 @@
     "documentation",
     "testing",
     "llms-txt",
-    "agent-friendly"
+    "agent-friendly",
+    "agent score",
+    "agent friendly docs"
   ],
   "files": [
     "dist/",

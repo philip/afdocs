@@ -146,17 +146,25 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     details.redirectedOrigins = redirectedOrigins;
   }
 
-  // Set effectiveOrigin for downstream checks when content lives at a different host.
-  // Derive from redirect URLs on discovered files, or from the fallback redirectedOrigins.
+  // Set effectiveOrigin for downstream checks when content lives at a different origin.
+  // This covers both true cross-host redirects (e.g. example.com → docs.other.com)
+  // and www canonicalization (e.g. mongodb.com → www.mongodb.com). Downstream checks
+  // need to know the actual origin so sitemap scoping and link classification work.
   if (!ctx.effectiveOrigin) {
-    const crossHostFile = discovered.find((f) => f.crossHostRedirect && f.redirectUrl);
-    if (crossHostFile?.redirectUrl) {
+    // First try: a discovered file that redirected to a different origin
+    const redirectedFile = discovered.find((f) => f.redirectUrl);
+    if (redirectedFile?.redirectUrl) {
       try {
-        ctx.effectiveOrigin = new URL(crossHostFile.redirectUrl).origin;
+        const redirectedOrigin = new URL(redirectedFile.redirectUrl).origin;
+        if (redirectedOrigin !== ctx.origin) {
+          ctx.effectiveOrigin = redirectedOrigin;
+        }
       } catch {
         /* ignore malformed */
       }
-    } else if (redirectedOrigins.length > 0) {
+    }
+    // Second try: origins discovered from cross-host redirect fallback probing
+    if (!ctx.effectiveOrigin && redirectedOrigins.length > 0) {
       ctx.effectiveOrigin = redirectedOrigins[0];
     }
   }

@@ -1,5 +1,6 @@
 import { registerCheck } from '../registry.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
+import { isCrossHostRedirect } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 interface RedirectResult {
@@ -56,13 +57,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
           }
 
           const resolvedTarget = new URL(location, url).toString();
-          const sourceOrigin = new URL(url).origin;
-          const targetOrigin = new URL(resolvedTarget).origin;
 
-          if (sourceOrigin === targetOrigin) {
-            return { url, status, classification: 'same-host', redirectTarget: resolvedTarget };
+          if (isCrossHostRedirect(url, resolvedTarget)) {
+            return { url, status, classification: 'cross-host', redirectTarget: resolvedTarget };
           }
-          return { url, status, classification: 'cross-host', redirectTarget: resolvedTarget };
+          return { url, status, classification: 'same-host', redirectTarget: resolvedTarget };
         } catch (err) {
           return {
             url,

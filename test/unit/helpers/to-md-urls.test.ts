@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toMdUrls } from '../../../src/helpers/to-md-urls.js';
+import { isCrossHostRedirect, toMdUrls } from '../../../src/helpers/to-md-urls.js';
 
 describe('toMdUrls', () => {
   it('returns URL as-is when it already ends in .md', () => {
@@ -62,5 +62,38 @@ describe('toMdUrls', () => {
 
   it('returns empty array for .xml files', () => {
     expect(toMdUrls('https://example.com/sitemap.xml')).toEqual([]);
+  });
+});
+
+describe('isCrossHostRedirect', () => {
+  it('returns false for same host', () => {
+    expect(isCrossHostRedirect('https://example.com/a', 'https://example.com/b')).toBe(false);
+  });
+
+  it('returns false for www to bare domain', () => {
+    expect(isCrossHostRedirect('https://www.example.com/a', 'https://example.com/a')).toBe(false);
+  });
+
+  it('returns false for bare domain to www', () => {
+    expect(
+      isCrossHostRedirect(
+        'https://mongodb.com/docs/llms.txt',
+        'https://www.mongodb.com/docs/llms.txt',
+      ),
+    ).toBe(false);
+  });
+
+  it('returns true for genuinely different hosts', () => {
+    expect(isCrossHostRedirect('https://example.com/a', 'https://other.com/a')).toBe(true);
+  });
+
+  it('returns true for different subdomains (not www)', () => {
+    expect(isCrossHostRedirect('https://docs.example.com/a', 'https://api.example.com/a')).toBe(
+      true,
+    );
+  });
+
+  it('returns false for malformed URLs', () => {
+    expect(isCrossHostRedirect('not-a-url', 'https://example.com')).toBe(false);
   });
 });
