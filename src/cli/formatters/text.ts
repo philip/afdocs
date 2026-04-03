@@ -186,7 +186,11 @@ export function formatText(report: ReportResult, options?: FormatTextOptions): s
 
   lines.push('');
   lines.push(chalk.bold(`Agent-Friendly Docs Check: ${report.url}`));
-  lines.push(chalk.gray(`Timestamp: ${report.timestamp}`));
+  const localTime = (() => {
+    const d = new Date(report.timestamp);
+    return isNaN(d.getTime()) ? report.timestamp : d.toLocaleString();
+  })();
+  lines.push(chalk.gray(`Timestamp: ${localTime}`));
   lines.push('');
 
   // Group by category

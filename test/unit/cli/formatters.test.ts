@@ -43,7 +43,9 @@ describe('formatText', () => {
   it('includes the URL and timestamp', () => {
     const output = formatText(makeReport());
     expect(output).toContain('http://example.com');
-    expect(output).toContain('2026-01-01T00:00:00.000Z');
+    // Timestamp is displayed in local time, not raw ISO
+    const expected = new Date('2026-01-01T00:00:00.000Z').toLocaleString();
+    expect(output).toContain(expected);
   });
 
   it('groups results by category', () => {
@@ -597,6 +599,12 @@ describe('formatJson', () => {
     expect(parsed.url).toBe('http://example.com');
     expect(parsed.results).toHaveLength(5);
     expect(parsed.summary.total).toBe(5);
+  });
+
+  it('preserves raw ISO timestamp', () => {
+    const output = formatJson(makeReport());
+    const parsed = JSON.parse(output);
+    expect(parsed.timestamp).toBe('2026-01-01T00:00:00.000Z');
   });
 
   it('is pretty-printed', () => {

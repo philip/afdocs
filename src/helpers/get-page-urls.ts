@@ -124,7 +124,10 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
         // Only keep same-origin page URLs (skip further .txt nesting)
         try {
           const parsed = new URL(subUrl);
-          if (parsed.origin === ctx.origin && !isNonPageUrl(subUrl)) {
+          if (
+            (parsed.origin === ctx.origin || parsed.origin === siteOrigin) &&
+            !isNonPageUrl(subUrl)
+          ) {
             pageUrls.push(subUrl);
           }
         } catch {
