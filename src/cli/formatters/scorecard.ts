@@ -39,6 +39,12 @@ function gradeColor(grade: string): (s: string) => string {
   return GRADE_COLORS[grade] ?? ((s: string) => s);
 }
 
+function formatLocalTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
 function formatCategoryLine(name: string, score: number, grade: string): string {
   const paddedName = name.padEnd(36);
   const scoreStr = `${score} / 100`;
@@ -73,7 +79,7 @@ export function formatScorecard(report: ReportResult, scoreResult?: ScoreResult)
   lines.push(chalk.bold('Agent-Friendly Docs Scorecard'));
   lines.push(chalk.bold('=============================='));
   lines.push('');
-  lines.push(chalk.gray(`${report.url} · ${report.timestamp}`));
+  lines.push(chalk.gray(`${report.url} · ${formatLocalTime(report.timestamp)}`));
   lines.push('');
 
   // Overall score
