@@ -306,6 +306,33 @@ describe('formatScorecard', () => {
     expect(output).toContain('Weird status');
   });
 
+  it('does not split diagnostic heading on periods in file extensions', () => {
+    const score = makeScoreResult({
+      diagnostics: [
+        {
+          id: 'markdown-undiscoverable',
+          severity: 'warning',
+          message:
+            'Your site serves markdown at .md URLs, but agents have no way to discover this. Without content negotiation, an llms.txt directive on your pages, most agents will default to the HTML path.',
+          resolution: 'Add a blockquote directive.',
+        },
+        {
+          id: 'llms-txt-oversized',
+          severity: 'warning',
+          message:
+            'Your llms.txt is 4,561,591 characters. Agents see roughly the first 100,000 characters.',
+          resolution: 'Split into section-level files.',
+        },
+      ],
+    });
+    const output = formatScorecard(makeReport(), score);
+    // The heading should include the full first sentence, not split on ".md" or "llms.txt"
+    expect(output).toContain(
+      'Your site serves markdown at .md URLs, but agents have no way to discover this',
+    );
+    expect(output).toContain('Your llms.txt is 4,561,591 characters');
+  });
+
   it('handles diagnostic with unknown severity gracefully', () => {
     const score = makeScoreResult({
       diagnostics: [

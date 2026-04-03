@@ -49,9 +49,13 @@ function formatCategoryLine(name: string, score: number, grade: string): string 
 function formatDiagnostic(diag: Diagnostic): string[] {
   const icon = SEVERITY_ICONS[diag.severity] ?? '[?]';
   const lines: string[] = [];
-  lines.push(`    ${icon} ${chalk.bold(diag.message.split('.')[0])}`);
+  // Extract first sentence for heading. Split on ". " (period + space) rather than
+  // bare "." to avoid breaking on file extensions like .md or llms.txt.
+  const firstSentenceEnd = diag.message.indexOf('. ');
+  const heading = firstSentenceEnd !== -1 ? diag.message.slice(0, firstSentenceEnd) : diag.message;
+  lines.push(`    ${icon} ${chalk.bold(heading)}`);
 
-  // Wrap message (skip the first sentence already used as heading)
+  // Full message as detail text
   const fullMsg = diag.message;
   lines.push(`        ${chalk.dim(fullMsg)}`);
   lines.push('');
