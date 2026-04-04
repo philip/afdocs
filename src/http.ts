@@ -1,4 +1,11 @@
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import type { HttpClient, HttpRequestOptions, HttpResponse } from './types.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+const USER_AGENT = `afdocs/${pkg.version}`;
 
 interface RateLimitedHttpClientOptions {
   requestDelay: number;
@@ -41,7 +48,7 @@ export function createHttpClient(options: RateLimitedHttpClientOptions): HttpCli
 
           const response = await globalThis.fetch(url, {
             method: reqOptions?.method ?? 'GET',
-            headers: reqOptions?.headers,
+            headers: { 'User-Agent': USER_AGENT, ...reqOptions?.headers },
             redirect: reqOptions?.redirect ?? 'follow',
             signal: reqOptions?.signal ?? controller.signal,
           });
