@@ -9,6 +9,18 @@ export default defineConfig({
   },
 
   head: [
+    ['meta', { property: 'og:image', content: 'https://afdocs.dev/social-card.png' }],
+    ['meta', { property: 'og:title', content: 'AFDocs' }],
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content: 'Test your documentation site against the Agent-Friendly Documentation Spec',
+      },
+    ],
+    ['meta', { property: 'og:url', content: 'https://afdocs.dev' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: 'https://afdocs.dev/social-card.png' }],
     ['link', { rel: 'icon', type: 'image/x-icon', href: '/favicons/favicon.ico' }],
     [
       'link',
