@@ -123,6 +123,203 @@ const DETAIL_FORMATTERS: Record<string, DetailFormatter> = {
       return formatDetailLine('fail', b.url, info);
     });
   },
+
+  'rendering-strategy': (details) => {
+    const pages = details.pageResults as
+      | Array<{
+          url: string;
+          status: string;
+          analysis?: { spaMarker?: string | null; visibleTextLength?: number };
+          error?: string;
+        }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.status !== 'pass')
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        const marker = p.analysis?.spaMarker;
+        const textLen = p.analysis?.visibleTextLength ?? 0;
+        const info = marker
+          ? `SPA shell (${marker}, ${textLen} chars visible)`
+          : `sparse content (${textLen} chars visible)`;
+        return formatDetailLine(p.status, p.url, info);
+      });
+  },
+
+  'redirect-behavior': (details) => {
+    const pages = details.pageResults as
+      | Array<{ url: string; classification: string; redirectTarget?: string; error?: string }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter(
+        (p) =>
+          p.classification === 'cross-host' ||
+          p.classification === 'js-redirect' ||
+          p.classification === 'fetch-error',
+      )
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        const target = p.redirectTarget ? ` → ${p.redirectTarget}` : '';
+        return formatDetailLine(
+          p.classification === 'cross-host' ? 'warn' : 'fail',
+          p.url,
+          `${p.classification}${target}`,
+        );
+      });
+  },
+
+  'auth-gate-detection': (details) => {
+    const pages = details.pageResults as
+      | Array<{
+          url: string;
+          classification: string;
+          status?: number | null;
+          hint?: string;
+          ssoDomain?: string;
+          error?: string;
+        }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.classification !== 'accessible')
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        let info = p.classification;
+        if (p.ssoDomain) info += ` (${p.ssoDomain})`;
+        else if (p.hint) info += ` (${p.hint})`;
+        else if (p.status) info += ` (HTTP ${p.status})`;
+        return formatDetailLine('fail', p.url, info);
+      });
+  },
+
+  'llms-txt-directive': (details) => {
+    const pages = details.pageResults as
+      | Array<{ url: string; found: boolean; positionPercent?: number; error?: string }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => !p.found || (p.positionPercent != null && p.positionPercent > 10))
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        if (!p.found) return formatDetailLine('fail', p.url, 'no directive found');
+        return formatDetailLine('warn', p.url, `directive at ${p.positionPercent}% of page`);
+      });
+  },
+
+  'tabbed-content-serialization': (details) => {
+    const pages = details.tabbedPages as
+      | Array<{
+          url: string;
+          status: string;
+          tabGroups?: unknown[];
+          totalTabbedChars?: number;
+          error?: string;
+        }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.status !== 'pass')
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        const groups = p.tabGroups?.length ?? 0;
+        const size = formatSize(p.totalTabbedChars ?? 0);
+        return formatDetailLine(p.status, p.url, `${groups} tab groups, ${size} serialized`);
+      });
+  },
+
+  'markdown-content-parity': (details) => {
+    const pages = details.pageResults as
+      | Array<{
+          url: string;
+          status: string;
+          missingPercent?: number;
+          sampleDiffs?: string[];
+          error?: string;
+        }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.status !== 'pass')
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        const pct =
+          p.missingPercent != null ? `${Math.round(p.missingPercent)}% missing` : 'content differs';
+        return formatDetailLine(p.status, p.url, pct);
+      });
+  },
+
+  'http-status-codes': (details) => {
+    const pages = details.pageResults as
+      | Array<{
+          url: string;
+          testUrl?: string;
+          classification: string;
+          status?: number | null;
+          bodyHint?: string;
+          error?: string;
+        }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => p.classification !== 'correct-error')
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.testUrl ?? p.url, p.error);
+        const info = p.bodyHint
+          ? `HTTP ${p.status} (${p.bodyHint})`
+          : `HTTP ${p.status} instead of 404`;
+        return formatDetailLine('fail', p.testUrl ?? p.url, info);
+      });
+  },
+
+  'cache-header-hygiene': (details) => {
+    const endpoints = details.endpointResults as
+      | Array<{
+          url: string;
+          status: string;
+          effectiveMaxAge?: number | null;
+          noStore?: boolean;
+          error?: string;
+        }>
+      | undefined;
+    if (!endpoints) return [];
+    return endpoints
+      .filter((e) => e.status !== 'pass')
+      .map((e) => {
+        if (e.error) return formatDetailLine('fail', e.url, e.error);
+        if (e.noStore) return formatDetailLine(e.status, e.url, 'no-store');
+        if (e.effectiveMaxAge == null) return formatDetailLine(e.status, e.url, 'no cache headers');
+        const age = e.effectiveMaxAge;
+        const human =
+          age >= 86400
+            ? `${Math.round(age / 86400)}d`
+            : age >= 3600
+              ? `${Math.round(age / 3600)}h`
+              : `${age}s`;
+        return formatDetailLine(e.status, e.url, `max-age ${human}`);
+      });
+  },
+
+  'section-header-quality': (details) => {
+    const analyses = details.analyses as
+      | Array<{
+          url: string;
+          framework?: string;
+          genericHeaders?: number;
+          totalHeaders?: number;
+          hasGenericMajority?: boolean;
+        }>
+      | undefined;
+    if (!analyses) return [];
+    return analyses
+      .filter((a) => a.hasGenericMajority)
+      .map((a) => {
+        const ratio = `${a.genericHeaders}/${a.totalHeaders} generic`;
+        const fw = a.framework ? ` (${a.framework})` : '';
+        return formatDetailLine('warn', a.url, `${ratio}${fw}`);
+      });
+  },
 };
 
 function formatDetailLine(status: string, url: string, metric: string): string {
