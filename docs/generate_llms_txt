@@ -53,6 +53,7 @@ cat >> "$OUTPUT" << 'SECTION'
 
 SECTION
 
+echo "- [API Reference Overview](${BASE_URL}/reference/index.md)" >> "$OUTPUT"
 echo "- [CLI Reference](${BASE_URL}/reference/cli.md): flags, output formats, sampling strategies" >> "$OUTPUT"
 echo "- [Programmatic API](${BASE_URL}/reference/programmatic-api.md): TypeScript API for running checks" >> "$OUTPUT"
 echo "- [Scoring API](${BASE_URL}/reference/scoring-api.md): computing scores from check results" >> "$OUTPUT"
@@ -65,3 +66,4 @@ cat >> "$OUTPUT" << 'SECTION'
 SECTION
 
 echo "- [About AFDocs](${BASE_URL}/about.md)" >> "$OUTPUT"
+echo "- [AFDocs Home](${BASE_URL}/index.md)" >> "$OUTPUT"

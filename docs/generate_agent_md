@@ -83,6 +83,7 @@ function processBody(content) {
   const out = [];
   let inStyle = false;
   let inScript = false;
+  let inFence = false;
   let prevBlank = false;
   let started = false;
 
@@ -95,7 +96,20 @@ function processBody(content) {
     if (inScript && /^<\/script>/.test(line))           { inScript = false; continue; }
     if (inScript) continue;
 
-    const stripped = line.replace(/<[^>]+>/g, '');
+    if (/^(`{3,}|~{3,})/.test(line)) inFence = !inFence;
+
+    let stripped;
+    if (inFence) {
+      stripped = line;
+    } else {
+      // Protect inline code spans before stripping HTML tags.
+      // Otherwise angle brackets inside backtick spans (e.g. Record<string, T>)
+      // get incorrectly stripped as HTML.
+      const spans = [];
+      const placeholder = line.replace(/`[^`]+`/g, m => { spans.push(m); return `\x00${spans.length - 1}\x00`; });
+      const htmlStripped = placeholder.replace(/<[^>]+>/g, '');
+      stripped = htmlStripped.replace(/\x00(\d+)\x00/g, (_, i) => spans[+i]);
+    }
     if (/^\s*$/.test(stripped)) {
       if (!prevBlank && started) { out.push(''); prevBlank = true; }
     } else {

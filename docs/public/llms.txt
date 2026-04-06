@@ -29,6 +29,7 @@
 
 ## API Reference
 
+- [API Reference Overview](https://afdocs.dev/reference/index.md)
 - [CLI Reference](https://afdocs.dev/reference/cli.md): flags, output formats, sampling strategies
 - [Programmatic API](https://afdocs.dev/reference/programmatic-api.md): TypeScript API for running checks
 - [Scoring API](https://afdocs.dev/reference/scoring-api.md): computing scores from check results
@@ -37,3 +38,4 @@
 ## About
 
 - [About AFDocs](https://afdocs.dev/about.md)
+- [AFDocs Home](https://afdocs.dev/index.md)
