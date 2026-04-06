@@ -44,6 +44,24 @@ The URL can be a site root or a specific page. When pointing to a site root, `af
 - **`scorecard`** includes the overall score, per-category scores, interaction diagnostics, and fix suggestions for every failing check. This is the best starting point for understanding your site's agent-friendliness.
 - **`json`** produces machine-readable output for scripting and automation. Add `--score` to include scoring data and fix suggestions.
 
+### Config file
+
+| Flag              | Default | Description                                  |
+| ----------------- | ------- | -------------------------------------------- |
+| `--config <path>` |         | Path to a config file (skips auto-discovery) |
+
+Without `--config`, the CLI looks for `agent-docs.config.yml` (or `.yaml`) starting from the current directory and walking up the tree. Config values serve as defaults; any CLI flags you pass override them.
+
+```bash
+# Auto-discover config (typical usage)
+afdocs check --format scorecard
+
+# Use an explicit config file
+afdocs check --config agent-docs.local.yml --format scorecard
+```
+
+See [Config File](/reference/config-file) for the full config format.
+
 ### Check selection
 
 | Flag                 | Default | Description                              |

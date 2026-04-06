@@ -1,6 +1,6 @@
 # Config File
 
-The `agent-docs.config.yml` file lets you define a reusable configuration for running `afdocs` checks. It's currently used by the [vitest test helpers](/ci-integration) and is planned for CLI support ([issue #12](https://github.com/agent-ecosystem/afdocs/issues/12)).
+The `agent-docs.config.yml` file lets you define a reusable configuration for running `afdocs` checks. It works with both the CLI and the [vitest test helpers](/ci-integration).
 
 ## Format
 
@@ -58,9 +58,9 @@ Override default runner options. All fields are optional:
 
 ## Config resolution
 
-The config loader searches for `agent-docs.config.yml` (or `.yaml`) starting from the current working directory and walking up the directory tree, similar to how ESLint and Prettier find their config files. This means the config works whether your test file is at the project root or in a subdirectory.
+The config loader searches for `agent-docs.config.yml` (or `.yaml`) starting from the current working directory and walking up the directory tree, similar to how ESLint and Prettier find their config files. This means the config works whether you're running the CLI from your project root or running a test file from a subdirectory.
 
-You can also pass an explicit directory to the vitest helpers:
+For the vitest helpers, you can also pass an explicit directory:
 
 ```ts
 import { describeAgentDocsPerCheck } from 'afdocs/helpers';
@@ -70,12 +70,18 @@ describeAgentDocsPerCheck(__dirname);
 
 ## Multiple configs
 
-You might maintain separate configs for different contexts (local development, staging, production). Once CLI config support lands ([issue #12](https://github.com/agent-ecosystem/afdocs/issues/12)), you'll be able to select a config at runtime:
+You might maintain separate configs for different contexts (local development, staging, production). Use `--config` to select one at runtime:
 
 ```bash
-# Planned CLI usage
 afdocs check --config agent-docs.local.yml
 afdocs check --config agent-docs.staging.yml
 ```
 
-For now, the vitest helpers always use the auto-discovered `agent-docs.config.yml`. If you need different configs for different environments, use environment variables or conditional logic in your test file to pass different options to the helpers.
+A common pattern: point `agent-docs.config.yml` at your production URL (CI auto-discovers this), and override just the URL on the command line when running locally:
+
+```bash
+# Production config is auto-discovered; URL is overridden for local dev
+afdocs check http://localhost:3000
+```
+
+CLI flags always take precedence over config values.
