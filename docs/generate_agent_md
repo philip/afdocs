@@ -1,0 +1,167 @@
+#!/usr/bin/env node
+//
+// Generates agent-facing markdown versions of all docs pages.
+// Called after vitepress build.
+//
+// For each source .md file:
+//   - VitePress home layout frontmatter is converted to markdown
+//     (hero name/text/tagline/actions and features)
+//   - Other frontmatter (title, outline, etc.) is stripped
+//   - <style> and <script> blocks are stripped
+//   - HTML tags are stripped, text content preserved
+//   - Consecutive blank lines are collapsed
+//
+// Output goes to .vitepress/dist/ at the same relative paths.
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const docsDir = dirname(fileURLToPath(import.meta.url));
+const distDir = join(docsDir, '.vitepress/dist');
+
+if (!existsSync(distDir)) {
+  console.error(`Error: dist directory not found at ${distDir}`);
+  console.error('Run vitepress build before generate_agent_md');
+  process.exit(1);
+}
+
+function findMdFiles(dir) {
+  const skip = new Set(['.vitepress', 'node_modules']);
+  const results = [];
+  for (const entry of readdirSync(dir)) {
+    if (skip.has(entry)) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      results.push(...findMdFiles(full));
+    } else if (entry.endsWith('.md')) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+function splitFrontmatter(content) {
+  if (!content.startsWith('---\n')) return { yaml: null, body: content };
+  const end = content.indexOf('\n---\n', 4);
+  if (end === -1) return { yaml: null, body: content };
+  return { yaml: content.slice(4, end), body: content.slice(end + 5) };
+}
+
+// Convert VitePress home layout YAML to markdown.
+// Renders hero (name, text, tagline, actions) and features as real content.
+function homeYamlToMarkdown(yaml) {
+  const out = [];
+
+  const name = yaml.match(/^  name:\s*(.+)$/m)?.[1]?.trim();
+  const text = yaml.match(/^  text:\s*(.+)$/m)?.[1]?.trim();
+  const tagline = yaml.match(/^  tagline:\s*(.+)$/m)?.[1]?.trim();
+
+  if (name) out.push(`# ${name}`, '');
+  if (text) out.push(text, '');
+  if (tagline) out.push(tagline, '');
+
+  const actions = [...yaml.matchAll(/    - theme: \w+\n      text: (.+)\n      link: (.+)/g)];
+  if (actions.length > 0) {
+    for (const m of actions) out.push(`- [${m[1].trim()}](${m[2].trim()})`);
+    out.push('');
+  }
+
+  const featuresBlock = yaml.match(/^features:\n([\s\S]+)/m)?.[1] ?? '';
+  const features = [...featuresBlock.matchAll(/  - title: (.+)\n    details: (.+)/g)];
+  if (features.length > 0) {
+    out.push('## Features', '');
+    for (const m of features) out.push(`- **${m[1].trim()}**: ${m[2].trim()}`);
+    out.push('');
+  }
+
+  return out.join('\n') + '\n';
+}
+
+function processBody(content) {
+  const lines = content.split('\n');
+  const out = [];
+  let inStyle = false;
+  let inScript = false;
+  let inFence = false;
+  let prevBlank = false;
+  let started = false;
+
+  for (const line of lines) {
+    if (!inStyle && !inScript && /^<style/.test(line)) {
+      inStyle = true;
+      continue;
+    }
+    if (inStyle && /^<\/style>/.test(line)) {
+      inStyle = false;
+      continue;
+    }
+    if (inStyle) continue;
+
+    if (!inStyle && !inScript && /^<script/.test(line)) {
+      inScript = true;
+      continue;
+    }
+    if (inScript && /^<\/script>/.test(line)) {
+      inScript = false;
+      continue;
+    }
+    if (inScript) continue;
+
+    if (/^(`{3,}|~{3,})/.test(line)) inFence = !inFence;
+
+    let stripped;
+    if (inFence) {
+      stripped = line;
+    } else {
+      // Protect inline code spans before stripping HTML tags.
+      // Otherwise angle brackets inside backtick spans (e.g. Record<string, T>)
+      // get incorrectly stripped as HTML.
+      const spans = [];
+      const placeholder = line.replace(/`[^`]+`/g, (m) => {
+        spans.push(m);
+        return `\x00${spans.length - 1}\x00`;
+      });
+      const htmlStripped = placeholder.replace(/<[^>]+>/g, '');
+      stripped = htmlStripped.replace(/\x00(\d+)\x00/g, (_, i) => spans[+i]);
+    }
+    if (/^\s*$/.test(stripped)) {
+      if (!prevBlank && started) {
+        out.push('');
+        prevBlank = true;
+      }
+    } else {
+      out.push(stripped);
+      prevBlank = false;
+      started = true;
+    }
+  }
+
+  while (out.length > 0 && out[out.length - 1] === '') out.pop();
+  return out.join('\n') + '\n';
+}
+
+const srcFiles = findMdFiles(docsDir);
+let count = 0;
+
+for (const src of srcFiles) {
+  const dest = join(distDir, relative(docsDir, src));
+  mkdirSync(dirname(dest), { recursive: true });
+
+  const content = readFileSync(src, 'utf8');
+  const { yaml, body } = splitFrontmatter(content);
+
+  let output;
+  if (yaml !== null && yaml.match(/^layout:\s*home$/m)) {
+    output = homeYamlToMarkdown(yaml) + processBody(body);
+  } else if (yaml !== null) {
+    output = processBody(body);
+  } else {
+    output = processBody(content);
+  }
+
+  writeFileSync(dest, output);
+  count++;
+}
+
+console.log(`Generated agent markdown for ${count} pages in ${distDir}`);

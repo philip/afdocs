@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# Generates public/llms.txt from the docs directory structure.
+# Called before vitepress build.
+
+DOCS_DIR="$(cd "$(dirname "$0")" && pwd)"
+OUTPUT="$DOCS_DIR/public/llms.txt"
+BASE_URL="https://afdocs.dev"
+
+cat > "$OUTPUT" << 'HEADER'
+# AFDocs
+
+> Test your documentation site against the Agent-Friendly Documentation Spec. AFDocs runs 22 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
+
+## The Score
+
+HEADER
+
+echo "- [What Is the Agent Score?](${BASE_URL}/what-is-agent-score.md)" >> "$OUTPUT"
+echo "- [Why Agent-Friendliness Matters](${BASE_URL}/why-agent-friendliness-matters.md)" >> "$OUTPUT"
+echo "- [Score Calculation](${BASE_URL}/agent-score-calculation.md)" >> "$OUTPUT"
+echo "- [Interaction Diagnostics](${BASE_URL}/interaction-diagnostics.md)" >> "$OUTPUT"
+
+cat >> "$OUTPUT" << 'SECTION'
+
+## Get Started
+
+SECTION
+
+echo "- [Quick Start](${BASE_URL}/quick-start.md)" >> "$OUTPUT"
+echo "- [Run Locally](${BASE_URL}/run-locally.md)" >> "$OUTPUT"
+echo "- [Improve Your Score](${BASE_URL}/improve-your-score.md)" >> "$OUTPUT"
+echo "- [CI Integration](${BASE_URL}/ci-integration.md)" >> "$OUTPUT"
+
+cat >> "$OUTPUT" << 'SECTION'
+
+## Checks Reference
+
+SECTION
+
+echo "- [Checks Overview](${BASE_URL}/checks/index.md)" >> "$OUTPUT"
+echo "- [Content Discoverability](${BASE_URL}/checks/content-discoverability.md): llms.txt existence, validity, size, link resolution, markdown links, directive" >> "$OUTPUT"
+echo "- [Markdown Availability](${BASE_URL}/checks/markdown-availability.md): .md URL support, content negotiation" >> "$OUTPUT"
+echo "- [Page Size](${BASE_URL}/checks/page-size.md): rendering strategy, HTML/markdown size, content start position" >> "$OUTPUT"
+echo "- [Content Structure](${BASE_URL}/checks/content-structure.md): tabbed content serialization, header quality, code fence validity" >> "$OUTPUT"
+echo "- [URL Stability](${BASE_URL}/checks/url-stability.md): HTTP status codes, redirect behavior" >> "$OUTPUT"
+echo "- [Observability](${BASE_URL}/checks/observability.md): llms.txt freshness, markdown content parity, cache headers" >> "$OUTPUT"
+echo "- [Authentication](${BASE_URL}/checks/authentication.md): auth gate detection, alternative access paths" >> "$OUTPUT"
+
+cat >> "$OUTPUT" << 'SECTION'
+
+## API Reference
+
+SECTION
+
+echo "- [API Reference Overview](${BASE_URL}/reference/index.md)" >> "$OUTPUT"
+echo "- [CLI Reference](${BASE_URL}/reference/cli.md): flags, output formats, sampling strategies" >> "$OUTPUT"
+echo "- [Programmatic API](${BASE_URL}/reference/programmatic-api.md): TypeScript API for running checks" >> "$OUTPUT"
+echo "- [Scoring API](${BASE_URL}/reference/scoring-api.md): computing scores from check results" >> "$OUTPUT"
+echo "- [Config File](${BASE_URL}/reference/config-file.md): agent-docs.config.yml format and options" >> "$OUTPUT"
+
+cat >> "$OUTPUT" << 'SECTION'
+
+## About
+
+SECTION
+
+echo "- [About AFDocs](${BASE_URL}/about.md)" >> "$OUTPUT"
+echo "- [AFDocs Home](${BASE_URL}/index.md)" >> "$OUTPUT"

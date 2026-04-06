@@ -34,7 +34,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "prepublishOnly": "npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run lint && npm test && npm run build",
+    "docs:dev": "npm run dev --prefix docs",
+    "docs:build": "npm run build --prefix docs",
+    "docs:preview": "npm run preview --prefix docs"
   },
   "lint-staged": {
     "*.{ts,js,mjs}": [
@@ -67,7 +70,7 @@
   "bugs": {
     "url": "https://github.com/agent-ecosystem/afdocs/issues"
   },
-  "homepage": "https://github.com/agent-ecosystem/afdocs",
+  "homepage": "https://afdocs.dev",
   "license": "MIT",
   "engines": {
     "node": ">=22"
