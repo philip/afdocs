@@ -30,6 +30,14 @@ RewriteRule ^(.*)$ /log-agent-signal.php?path=$1&trigger=direct-md [L,QSA]
 # 3. llms.txt requests
 RewriteRule ^llms\.txt$ /log-agent-signal.php?path=llms.txt&trigger=llms-txt [L,QSA]
 
+# VitePress flat HTML: serve /page.html when /page or /page/ is requested.
+# VitePress builds non-index pages as flat .html files (quick-start.html),
+# not directories (quick-start/index.html). This rule maps trailing-slash
+# URLs to their .html counterparts so the directive check can fetch them.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*?)/?$ /$1.html [L]
+
 # Serve .md files with the correct content type
 AddType text/markdown .md
 

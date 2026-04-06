@@ -4,6 +4,10 @@ export default defineConfig({
   title: 'AFDocs',
   description: 'Test your documentation site against the Agent-Friendly Documentation Spec',
 
+  sitemap: {
+    hostname: 'https://afdocs.dev',
+  },
+
   head: [
     ['link', { rel: 'icon', type: 'image/x-icon', href: '/favicons/favicon.ico' }],
     [

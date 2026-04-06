@@ -9,13 +9,7 @@ import LlmsDirective from "./components/LlmsDirective.vue";
     <template #home-hero-image>
       <HeroScorecard />
     </template>
-    <template #home-hero-before>
-      <LlmsDirective />
-    </template>
-    <template #doc-before>
-      <LlmsDirective />
-    </template>
-    <template #page-top>
+    <template #layout-top>
       <LlmsDirective />
     </template>
   </DefaultTheme.Layout>
