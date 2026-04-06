@@ -20,7 +20,7 @@ features:
   - title: 22 Checks, 7 Categories
     details: From content discoverability to markdown availability, AFDocs tests everything that affects how agents interact with your docs.
   - title: Actionable Fixes
-    details: Every failing check comes with a specific fix suggestion. Run with --fixes to see exactly what to change.
+    details: Every failing check comes with a specific fix suggestion, so you know exactly what to change.
   - title: CI-Ready
     details: Add agent-friendliness checks to your test suite with the built-in vitest helper. Catch regressions before they ship.
 ---
@@ -81,4 +81,4 @@ The good news: most fixes are configuration changes, not content rewrites. Addin
 npx afdocs check https://docs.example.com --format scorecard
 ```
 
-The scorecard shows category breakdowns, system-level diagnostics, and per-check results with fix suggestions. Run with `--verbose --fixes` for detail on which specific pages have issues.
+The scorecard shows category breakdowns, system-level diagnostics, and per-check results with fix suggestions.
