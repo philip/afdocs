@@ -1,7 +1,7 @@
 <script setup>
-import DefaultTheme from "vitepress/theme";
-import HeroScorecard from "./components/HeroScorecard.vue";
-import LlmsDirective from "./components/LlmsDirective.vue";
+import DefaultTheme from 'vitepress/theme';
+import HeroScorecard from './components/HeroScorecard.vue';
+import LlmsDirective from './components/LlmsDirective.vue';
 </script>
 
 <template>

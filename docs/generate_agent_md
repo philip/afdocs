@@ -53,12 +53,12 @@ function splitFrontmatter(content) {
 function homeYamlToMarkdown(yaml) {
   const out = [];
 
-  const name     = yaml.match(/^  name:\s*(.+)$/m)?.[1]?.trim();
-  const text     = yaml.match(/^  text:\s*(.+)$/m)?.[1]?.trim();
-  const tagline  = yaml.match(/^  tagline:\s*(.+)$/m)?.[1]?.trim();
+  const name = yaml.match(/^  name:\s*(.+)$/m)?.[1]?.trim();
+  const text = yaml.match(/^  text:\s*(.+)$/m)?.[1]?.trim();
+  const tagline = yaml.match(/^  tagline:\s*(.+)$/m)?.[1]?.trim();
 
-  if (name)    out.push(`# ${name}`, '');
-  if (text)    out.push(text, '');
+  if (name) out.push(`# ${name}`, '');
+  if (text) out.push(text, '');
   if (tagline) out.push(tagline, '');
 
   const actions = [...yaml.matchAll(/    - theme: \w+\n      text: (.+)\n      link: (.+)/g)];
@@ -88,12 +88,24 @@ function processBody(content) {
   let started = false;
 
   for (const line of lines) {
-    if (!inStyle && !inScript && /^<style/.test(line))  { inStyle = true;  continue; }
-    if (inStyle  && /^<\/style>/.test(line))            { inStyle = false; continue; }
-    if (inStyle)  continue;
+    if (!inStyle && !inScript && /^<style/.test(line)) {
+      inStyle = true;
+      continue;
+    }
+    if (inStyle && /^<\/style>/.test(line)) {
+      inStyle = false;
+      continue;
+    }
+    if (inStyle) continue;
 
-    if (!inStyle && !inScript && /^<script/.test(line)) { inScript = true;  continue; }
-    if (inScript && /^<\/script>/.test(line))           { inScript = false; continue; }
+    if (!inStyle && !inScript && /^<script/.test(line)) {
+      inScript = true;
+      continue;
+    }
+    if (inScript && /^<\/script>/.test(line)) {
+      inScript = false;
+      continue;
+    }
     if (inScript) continue;
 
     if (/^(`{3,}|~{3,})/.test(line)) inFence = !inFence;
@@ -106,12 +118,18 @@ function processBody(content) {
       // Otherwise angle brackets inside backtick spans (e.g. Record<string, T>)
       // get incorrectly stripped as HTML.
       const spans = [];
-      const placeholder = line.replace(/`[^`]+`/g, m => { spans.push(m); return `\x00${spans.length - 1}\x00`; });
+      const placeholder = line.replace(/`[^`]+`/g, (m) => {
+        spans.push(m);
+        return `\x00${spans.length - 1}\x00`;
+      });
       const htmlStripped = placeholder.replace(/<[^>]+>/g, '');
       stripped = htmlStripped.replace(/\x00(\d+)\x00/g, (_, i) => spans[+i]);
     }
     if (/^\s*$/.test(stripped)) {
-      if (!prevBlank && started) { out.push(''); prevBlank = true; }
+      if (!prevBlank && started) {
+        out.push('');
+        prevBlank = true;
+      }
     } else {
       out.push(stripped);
       prevBlank = false;
