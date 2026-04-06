@@ -495,6 +495,341 @@ describe('formatText', () => {
       expect(output).not.toContain('rendering-strategy detected SPA shells');
     });
 
+    it('shows SPA shell details for rendering-strategy', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'rendering-strategy',
+            category: 'page-size',
+            status: 'fail',
+            message: 'SPA shells detected',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/spa',
+                  status: 'fail',
+                  analysis: { spaMarker: '__NEXT_DATA__', visibleTextLength: 42 },
+                },
+                {
+                  url: 'https://example.com/ok',
+                  status: 'pass',
+                  analysis: { spaMarker: null, visibleTextLength: 5000 },
+                },
+                {
+                  url: 'https://example.com/sparse',
+                  status: 'warn',
+                  analysis: { spaMarker: null, visibleTextLength: 120 },
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/spa');
+      expect(output).toContain('SPA shell');
+      expect(output).toContain('__NEXT_DATA__');
+      expect(output).toContain('42 chars visible');
+      expect(output).toContain('https://example.com/sparse');
+      expect(output).toContain('sparse content');
+      expect(output).not.toContain('https://example.com/ok');
+    });
+
+    it('shows redirect details for redirect-behavior', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'redirect-behavior',
+            category: 'url-stability',
+            status: 'warn',
+            message: 'Cross-host redirects found',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/old',
+                  classification: 'cross-host',
+                  redirectTarget: 'https://docs.example.com/old',
+                },
+                {
+                  url: 'https://example.com/fine',
+                  classification: 'same-host',
+                  redirectTarget: 'https://example.com/new',
+                },
+                {
+                  url: 'https://example.com/js',
+                  classification: 'js-redirect',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/old');
+      expect(output).toContain('cross-host');
+      expect(output).toContain('https://docs.example.com/old');
+      expect(output).toContain('https://example.com/js');
+      expect(output).toContain('js-redirect');
+      expect(output).not.toContain('https://example.com/fine');
+    });
+
+    it('shows auth gating details for auth-gate-detection', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'auth-gate-detection',
+            category: 'authentication',
+            status: 'fail',
+            message: 'Auth gates detected',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/docs/private',
+                  classification: 'auth-required',
+                  status: 401,
+                },
+                {
+                  url: 'https://example.com/docs/sso',
+                  classification: 'auth-redirect',
+                  ssoDomain: 'login.okta.com',
+                },
+                {
+                  url: 'https://example.com/docs/login',
+                  classification: 'soft-auth-gate',
+                  hint: 'Contains password input field',
+                },
+                {
+                  url: 'https://example.com/docs/public',
+                  classification: 'accessible',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/docs/private');
+      expect(output).toContain('HTTP 401');
+      expect(output).toContain('https://example.com/docs/sso');
+      expect(output).toContain('login.okta.com');
+      expect(output).toContain('https://example.com/docs/login');
+      expect(output).toContain('Contains password input field');
+      expect(output).not.toContain('https://example.com/docs/public');
+    });
+
+    it('shows missing directives for llms-txt-directive', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'llms-txt-directive',
+            category: 'content-discoverability',
+            status: 'fail',
+            message: 'No directives found',
+            details: {
+              pageResults: [
+                { url: 'https://example.com/page1', found: false },
+                { url: 'https://example.com/page2', found: true, positionPercent: 2 },
+                { url: 'https://example.com/page3', found: true, positionPercent: 67 },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/page1');
+      expect(output).toContain('no directive found');
+      // page2 has directive near top (2%), should not appear
+      expect(output).not.toContain('https://example.com/page2');
+      // page3 has buried directive
+      expect(output).toContain('https://example.com/page3');
+      expect(output).toContain('directive at 67% of page');
+    });
+
+    it('shows tab serialization details for tabbed-content-serialization', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'tabbed-content-serialization',
+            category: 'content-structure',
+            status: 'warn',
+            message: 'Oversized tabs found',
+            details: {
+              tabbedPages: [
+                {
+                  url: 'https://example.com/tabs',
+                  status: 'warn',
+                  tabGroups: [{}, {}, {}],
+                  totalTabbedChars: 25000,
+                },
+                {
+                  url: 'https://example.com/small-tabs',
+                  status: 'pass',
+                  tabGroups: [{}],
+                  totalTabbedChars: 500,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/tabs');
+      expect(output).toContain('3 tab groups');
+      expect(output).toContain('25K chars');
+      expect(output).not.toContain('https://example.com/small-tabs');
+    });
+
+    it('shows content parity details for markdown-content-parity', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'markdown-content-parity',
+            category: 'observability',
+            status: 'warn',
+            message: 'Content drift detected',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/drift',
+                  status: 'warn',
+                  missingPercent: 23.4,
+                },
+                {
+                  url: 'https://example.com/ok',
+                  status: 'pass',
+                  missingPercent: 2,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/drift');
+      expect(output).toContain('23% missing');
+      expect(output).not.toContain('https://example.com/ok');
+    });
+
+    it('shows soft-404 details for http-status-codes', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'http-status-codes',
+            category: 'url-stability',
+            status: 'fail',
+            message: 'Soft 404s detected',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/page1',
+                  testUrl: 'https://example.com/page1/nonexistent-abc123',
+                  classification: 'soft-404',
+                  status: 200,
+                  bodyHint: 'Body contains "not found" text',
+                },
+                {
+                  url: 'https://example.com/page2',
+                  testUrl: 'https://example.com/page2/nonexistent-abc123',
+                  classification: 'correct-error',
+                  status: 404,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/page1/nonexistent-abc123');
+      expect(output).toContain('HTTP 200');
+      expect(output).not.toContain('https://example.com/page2');
+    });
+
+    it('shows cache header details for cache-header-hygiene', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'cache-header-hygiene',
+            category: 'observability',
+            status: 'warn',
+            message: 'Long cache times detected',
+            details: {
+              endpointResults: [
+                {
+                  url: 'https://example.com/llms.txt',
+                  status: 'warn',
+                  effectiveMaxAge: 604800,
+                  noStore: false,
+                },
+                {
+                  url: 'https://example.com/page.md',
+                  status: 'fail',
+                  effectiveMaxAge: null,
+                  noStore: false,
+                },
+                {
+                  url: 'https://example.com/ok.md',
+                  status: 'pass',
+                  effectiveMaxAge: 3600,
+                  noStore: false,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/llms.txt');
+      expect(output).toContain('max-age 7d');
+      expect(output).toContain('https://example.com/page.md');
+      expect(output).toContain('no cache headers');
+      expect(output).not.toContain('https://example.com/ok.md');
+    });
+
+    it('shows generic header details for section-header-quality', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'section-header-quality',
+            category: 'content-structure',
+            status: 'warn',
+            message: 'Generic headers found',
+            details: {
+              analyses: [
+                {
+                  url: 'https://example.com/tabs',
+                  framework: 'Docusaurus',
+                  genericHeaders: 8,
+                  totalHeaders: 10,
+                  hasGenericMajority: true,
+                },
+                {
+                  url: 'https://example.com/good',
+                  framework: 'Docusaurus',
+                  genericHeaders: 1,
+                  totalHeaders: 10,
+                  hasGenericMajority: false,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/tabs');
+      expect(output).toContain('8/10 generic');
+      expect(output).toContain('Docusaurus');
+      expect(output).not.toContain('https://example.com/good');
+    });
+
     it('does not show details without verbose flag', () => {
       const report = makeReport({
         results: [
