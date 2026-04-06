@@ -123,7 +123,8 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the MIT License.',
+      message:
+        'Released under the MIT License. By <a href="https://dacharycarey.com">Dachary Carey</a> · <a href="https://agentdocsspec.com">Agent-Friendly Documentation Spec</a>',
     },
   },
 });
