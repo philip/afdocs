@@ -3,4 +3,5 @@ dist/
 coverage/
 *.tsbuildinfo
 docs/.vitepress/cache/
+docs/deploy
 .DS_Store

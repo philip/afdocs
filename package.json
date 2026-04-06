@@ -70,7 +70,7 @@
   "bugs": {
     "url": "https://github.com/agent-ecosystem/afdocs/issues"
   },
-  "homepage": "https://github.com/agent-ecosystem/afdocs",
+  "homepage": "https://afdocs.dev",
   "license": "MIT",
   "engines": {
     "node": ">=22"
