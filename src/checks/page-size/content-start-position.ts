@@ -20,10 +20,16 @@ const INLINE_SCRIPT_TOKENS =
   /function\s*\(|=>\s*\{|document\.|window\.|localStorage|\.addEventListener|\.getElementById|\.querySelector|\.setAttribute|self\.\\/;
 const NAV_MAX_LENGTH = 40;
 
-/** Measure how much of a line is markdown link syntax: `[text](url)` or `[![img](src)](url)` */
+/** Measure how much of a line is markdown link syntax: `[text](url)` */
 function linkDensity(line: string): number {
-  // Match plain links [text](url) and image links [![alt](src)](url)
-  const links = line.match(/\[(?:[^[\]]*|!\[[^\]]*\]\([^)]*\))*\]\([^)]*\)/g);
+  // Simple [text](url) pattern without nested-group repetition.
+  // The previous regex (/\[(?:[^[\]]*|!\[...)*\]\(...)/) used a repeated
+  // alternation group to handle image links, which caused catastrophic
+  // backtracking on lines containing bracket characters from non-markdown
+  // content (JSON-LD, Next.js RSC payloads, etc.). The simple pattern
+  // is sufficient for density estimation since image-link syntax is rare
+  // in the nav/boilerplate lines this function is designed to classify.
+  const links = line.match(/\[[^\]]+\]\([^)]+\)/g);
   if (!links) return 0;
   return links.join('').length / line.length;
 }
