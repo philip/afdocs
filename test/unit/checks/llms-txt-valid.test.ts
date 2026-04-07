@@ -21,6 +21,27 @@ describe('extractMarkdownLinks', () => {
   it('returns empty array for no links', () => {
     expect(extractMarkdownLinks('Just some text')).toHaveLength(0);
   });
+
+  it('strips title attributes from single-line links', () => {
+    const content = '- [Cloud](/path/to/page/ "View the Cloud version")';
+    const links = extractMarkdownLinks(content);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toEqual({ name: 'Cloud', url: '/path/to/page/' });
+  });
+
+  it('strips title attributes from multi-line links', () => {
+    const content = '- [Cloud](/path/to/page/\n   "View the Cloud version")';
+    const links = extractMarkdownLinks(content);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toEqual({ name: 'Cloud', url: '/path/to/page/' });
+  });
+
+  it('strips single-quoted title attributes', () => {
+    const content = "- [Docs](/docs/ 'Documentation')";
+    const links = extractMarkdownLinks(content);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toEqual({ name: 'Docs', url: '/docs/' });
+  });
 });
 
 describe('llms-txt-valid', () => {

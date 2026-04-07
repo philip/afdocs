@@ -15,6 +15,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'coverage/', 'node_modules/', 'bin/'],
+    ignores: ['dist/', 'coverage/', 'node_modules/', 'bin/', 'docs/.vitepress/dist/'],
   },
 );
