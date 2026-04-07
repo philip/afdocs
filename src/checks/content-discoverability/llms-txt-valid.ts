@@ -12,7 +12,7 @@ interface ValidationResult {
 
 /** Extract markdown links from text: [name](url) */
 export function extractMarkdownLinks(content: string): Array<{ name: string; url: string }> {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const linkRegex = /\[([^\]]+)\]\(([^\s)]+)(?:\s+["'][^"']*["'])?\)/g;
   const links: Array<{ name: string; url: string }> = [];
   let match;
   while ((match = linkRegex.exec(content)) !== null) {
