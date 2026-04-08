@@ -79,6 +79,12 @@ url: https://docs.example.com
 # options:
 #   maxLinksToTest: 50
 #   samplingStrategy: deterministic
+
+# Optional: test specific pages (implies samplingStrategy: curated)
+# pages:
+#   - https://docs.example.com/quickstart
+#   - url: https://docs.example.com/api/auth
+#     tag: api-reference
 ```
 
 ### Config resolution

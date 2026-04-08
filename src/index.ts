@@ -11,6 +11,8 @@ export type {
   AgentDocsConfig,
   DiscoveredFile,
   SizeThresholds,
+  CuratedPageEntry,
+  PageConfigEntry,
 } from './types.js';
 
 export { DEFAULT_OPTIONS, DEFAULT_THRESHOLDS, CATEGORIES } from './constants.js';
@@ -24,6 +26,8 @@ export type {
   ScoreResult,
   CheckScore,
   CategoryScore,
+  TagScore,
+  TagCheckBreakdown,
   ScoreCap,
   Diagnostic,
   DiagnosticSeverity,

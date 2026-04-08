@@ -145,4 +145,53 @@ describe('findConfig', () => {
     const config = await findConfig(undefined, TMP_DIR);
     expect(config?.url).toBe('https://yml.example.com');
   });
+
+  it('loads pages as string array', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'with-pages.yml');
+    await writeFile(
+      configPath,
+      'url: https://example.com\npages:\n  - https://example.com/a\n  - https://example.com/b\n',
+    );
+
+    const config = await findConfig(configPath);
+    expect(config?.pages).toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  it('loads pages as mixed string and object array', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'mixed-pages.yml');
+    await writeFile(
+      configPath,
+      [
+        'url: https://example.com',
+        'pages:',
+        '  - https://example.com/a',
+        '  - url: https://example.com/b',
+        '    tag: api',
+        '',
+      ].join('\n'),
+    );
+
+    const config = await findConfig(configPath);
+    expect(config?.pages).toHaveLength(2);
+    expect(config?.pages?.[0]).toBe('https://example.com/a');
+    expect(config?.pages?.[1]).toEqual({ url: 'https://example.com/b', tag: 'api' });
+  });
+
+  it('throws on invalid URL in pages', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'bad-pages.yml');
+    await writeFile(configPath, 'url: https://example.com\npages:\n  - not-a-url\n');
+
+    await expect(findConfig(configPath)).rejects.toThrow('pages[0] is not a valid URL');
+  });
+
+  it('throws on invalid object entry in pages', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'bad-obj.yml');
+    await writeFile(configPath, 'url: https://example.com\npages:\n  - foo: bar\n');
+
+    await expect(findConfig(configPath)).rejects.toThrow('pages[0] must be a URL string or');
+  });
 });

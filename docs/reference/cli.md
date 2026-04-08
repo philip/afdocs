@@ -77,15 +77,17 @@ Some checks depend on others. If you include a check without its dependency, the
 
 ### Sampling
 
-| Flag                    | Default  | Description                                                 |
-| ----------------------- | -------- | ----------------------------------------------------------- |
-| `--sampling <strategy>` | `random` | URL sampling strategy: `random`, `deterministic`, or `none` |
-| `--max-links <n>`       | `50`     | Maximum number of pages to sample                           |
+| Flag                    | Default  | Description                                                                  |
+| ----------------------- | -------- | ---------------------------------------------------------------------------- |
+| `--sampling <strategy>` | `random` | URL sampling strategy: `random`, `deterministic`, `curated`, or `none`       |
+| `--max-links <n>`       | `50`     | Maximum number of pages to sample                                            |
+| `--urls <urls>`         |          | Comma-separated page URLs for curated scoring (implies `--sampling curated`) |
 
 **Sampling strategies:**
 
 - **`random`**: Shuffle discovered URLs and take the first N. Fast and broad, but results vary between runs. Useful for spot-checking pages across a large corpus.
 - **`deterministic`**: Sort discovered URLs alphabetically and pick an even spread. Produces the same sample on repeated runs as long as the URL set is stable. Useful for CI or when verifying a fix.
+- **`curated`**: Test a specific set of pages listed in the config file's `pages` field or passed via `--urls`. Skips discovery entirely. Useful for ongoing monitoring of representative pages or focused evaluation of specific sections.
 - **`none`**: Skip discovery entirely. Only check the URL you pass on the command line.
 
 ```bash
@@ -94,6 +96,9 @@ afdocs check https://docs.example.com --sampling deterministic
 
 # Check a single page
 afdocs check https://docs.example.com/api/auth --sampling none
+
+# Test specific pages without a config file
+afdocs check https://docs.example.com --urls https://docs.example.com/quickstart,https://docs.example.com/api/auth
 
 # Sample fewer pages for a quicker run
 afdocs check https://docs.example.com --max-links 10

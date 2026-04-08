@@ -48,9 +48,15 @@ export function describeAgentDocs(
       async () => {
         const config = await resolveConfig(configOrDir);
 
+        const inferredStrategy =
+          config.pages && config.pages.length > 0 && !config.options?.samplingStrategy
+            ? 'curated'
+            : undefined;
         const report = await runChecks(config.url, {
           checkIds: config.checks,
           ...config.options,
+          ...(inferredStrategy && { samplingStrategy: inferredStrategy as 'curated' }),
+          curatedPages: config.pages,
         });
         results = report.results;
       },
@@ -92,9 +98,15 @@ export function describeAgentDocsPerCheck(
     // Run all checks once upfront
     beforeAll(async () => {
       const config = await resolveConfig(configOrDir);
+      const inferredStrategy =
+        config.pages && config.pages.length > 0 && !config.options?.samplingStrategy
+          ? 'curated'
+          : undefined;
       report = await runChecks(config.url, {
         checkIds: config.checks,
         ...config.options,
+        ...(inferredStrategy && { samplingStrategy: inferredStrategy as 'curated' }),
+        curatedPages: config.pages,
       });
       resultsByCheck = new Map(report.results.map((r) => [r.id, r]));
     }, timeout);

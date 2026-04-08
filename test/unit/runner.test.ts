@@ -62,6 +62,17 @@ describe('createContext URL normalization', () => {
     const ctx = createContext('example.com/');
     expect(ctx.baseUrl).toBe('https://example.com');
   });
+
+  it('stores curatedPages on _curatedPages', () => {
+    const pages = ['https://example.com/a', { url: 'https://example.com/b', tag: 'api' }];
+    const ctx = createContext('https://example.com', { curatedPages: pages });
+    expect(ctx._curatedPages).toEqual(pages);
+  });
+
+  it('leaves _curatedPages undefined when not provided', () => {
+    const ctx = createContext('https://example.com');
+    expect(ctx._curatedPages).toBeUndefined();
+  });
 });
 
 describe('runner', () => {

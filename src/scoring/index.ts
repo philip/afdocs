@@ -5,11 +5,14 @@ export { evaluateDiagnostics } from './diagnostics.js';
 export { getResolution } from './resolutions.js';
 export { getCheckProportion } from './proportions.js';
 export { getCoefficient } from './coefficients.js';
+export { computeTagScores } from './tag-scores.js';
 
 export type {
   ScoreResult,
   CheckScore,
   CategoryScore,
+  TagScore,
+  TagCheckBreakdown,
   ScoreCap,
   Diagnostic,
   DiagnosticSeverity,

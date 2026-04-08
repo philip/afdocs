@@ -343,6 +343,8 @@ export interface SampledPages {
   totalPages: number;
   sampled: boolean;
   warnings: string[];
+  /** When curated pages have tags, maps page URL to tag label. */
+  urlTags?: Record<string, string>;
 }
 
 /**
@@ -363,6 +365,42 @@ export async function discoverAndSamplePages(ctx: CheckContext): Promise<Sampled
   if (ctx._sampledPages) return ctx._sampledPages;
 
   const strategy = ctx.options.samplingStrategy;
+
+  // "curated" uses explicitly listed pages from config or --urls.
+  if (strategy === 'curated') {
+    const entries = ctx._curatedPages;
+    if (!entries || entries.length === 0) {
+      ctx._sampledPages = {
+        urls: [ctx.baseUrl],
+        totalPages: 1,
+        sampled: false,
+        warnings: ['Curated strategy selected but no pages defined; falling back to base URL'],
+      };
+      return ctx._sampledPages;
+    }
+
+    const urls: string[] = [];
+    const urlTags: Record<string, string> = {};
+    for (const entry of entries) {
+      if (typeof entry === 'string') {
+        urls.push(entry);
+      } else {
+        urls.push(entry.url);
+        if (entry.tag) {
+          urlTags[entry.url] = entry.tag;
+        }
+      }
+    }
+
+    ctx._sampledPages = {
+      urls,
+      totalPages: urls.length,
+      sampled: false,
+      warnings: [],
+      urlTags: Object.keys(urlTags).length > 0 ? urlTags : undefined,
+    };
+    return ctx._sampledPages;
+  }
 
   // "none" skips discovery and uses only the URL the user provided.
   if (strategy === 'none') {

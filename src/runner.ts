@@ -57,6 +57,7 @@ export function createContext(baseUrl: string, options?: Partial<RunnerOptions>)
     options: merged,
     pageCache: new Map(),
     htmlCache: new Map(),
+    _curatedPages: options?.curatedPages,
   };
 }
 
@@ -123,11 +124,14 @@ export async function runChecks(
     error: results.filter((r) => r.status === 'error').length,
   };
 
+  const urlTags = ctx._sampledPages?.urlTags;
+
   return {
     url: baseUrl,
     timestamp: new Date().toISOString(),
     specUrl: SPEC_BASE_URL,
     results,
     summary,
+    ...(urlTags && { urlTags }),
   };
 }

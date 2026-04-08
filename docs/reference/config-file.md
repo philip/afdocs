@@ -28,6 +28,12 @@ options:
   thresholds:
     pass: 50000
     fail: 100000
+
+# Optional: test specific pages instead of discovering via llms.txt/sitemap
+# pages:
+#   - https://docs.example.com/quickstart
+#   - url: https://docs.example.com/api/auth
+#     tag: api-reference
 ```
 
 ## Fields
@@ -49,12 +55,39 @@ Override default runner options. All fields are optional:
 | Field              | Default  | Description                                          |
 | ------------------ | -------- | ---------------------------------------------------- |
 | `maxLinksToTest`   | `50`     | Maximum number of pages to sample                    |
-| `samplingStrategy` | `random` | `random`, `deterministic`, or `none`                 |
+| `samplingStrategy` | `random` | `random`, `deterministic`, `curated`, or `none`      |
 | `maxConcurrency`   | `3`      | Maximum concurrent HTTP requests                     |
 | `requestDelay`     | `200`    | Delay between requests in milliseconds               |
 | `requestTimeout`   | `30000`  | Timeout for individual HTTP requests in milliseconds |
 | `thresholds.pass`  | `50000`  | Page size pass threshold in characters               |
 | `thresholds.fail`  | `100000` | Page size fail threshold in characters               |
+
+### `pages` (optional)
+
+A list of specific page URLs to test. When `pages` is present and no `samplingStrategy` is explicitly set, the strategy defaults to `curated`, which skips discovery and tests exactly the listed pages.
+
+Each entry can be a plain URL string or an object with `url` and an optional `tag` for grouped scoring:
+
+```yaml
+url: https://docs.example.com
+
+pages:
+  # Plain URL strings
+  - https://docs.example.com/quickstart
+  - https://docs.example.com/install
+
+  # Objects with tags for grouped scoring
+  - url: https://docs.example.com/api/auth
+    tag: api-reference
+  - url: https://docs.example.com/api/users
+    tag: api-reference
+```
+
+When pages have tags, the scorecard and JSON output include per-tag aggregate scores, making it easy to compare agent-friendliness across sections of your documentation.
+
+Tags are optional and can be mixed with plain URL strings. Pages without tags are included in the overall score but don't appear in any tag group.
+
+Note that `maxLinksToTest` does not apply to curated pages; all listed pages are tested.
 
 ## Config resolution
 
