@@ -9,38 +9,32 @@ const CONFIG_FILENAMES = ['agent-docs.config.yml', 'agent-docs.config.yaml'];
  * Validate the `pages` field in a config file.
  * Each entry must be a valid URL string or an object with a valid `url` and optional `tag`.
  */
-function assertPagesArray(pages: unknown, filepath: string): asserts pages is unknown[] {
+function assertPagesArray(pages: unknown, source: string): asserts pages is unknown[] {
   if (!Array.isArray(pages)) {
-    throw new Error(
-      `Config file ${filepath}: "pages" must be an array of URLs or { url, tag? } objects`,
-    );
+    throw new Error(`${source}: "pages" must be an array of URLs or { url, tag? } objects`);
   }
 }
 
-export function validatePages(pages: unknown[], filepath: string): void {
+export function validatePages(pages: unknown[], source: string): void {
   for (let i = 0; i < pages.length; i++) {
     const entry = pages[i] as PageConfigEntry;
     if (typeof entry === 'string') {
       try {
         new URL(entry);
       } catch {
-        throw new Error(`Config file ${filepath}: pages[${i}] is not a valid URL: ${entry}`);
+        throw new Error(`${source}: pages[${i}] is not a valid URL: ${entry}`);
       }
     } else if (typeof entry === 'object' && entry !== null && typeof entry.url === 'string') {
       try {
         new URL(entry.url);
       } catch {
-        throw new Error(
-          `Config file ${filepath}: pages[${i}].url is not a valid URL: ${entry.url}`,
-        );
+        throw new Error(`${source}: pages[${i}].url is not a valid URL: ${entry.url}`);
       }
       if (entry.tag !== undefined && typeof entry.tag !== 'string') {
-        throw new Error(`Config file ${filepath}: pages[${i}].tag must be a string`);
+        throw new Error(`${source}: pages[${i}].tag must be a string`);
       }
     } else {
-      throw new Error(
-        `Config file ${filepath}: pages[${i}] must be a URL string or { url, tag? } object`,
-      );
+      throw new Error(`${source}: pages[${i}] must be a URL string or { url, tag? } object`);
     }
   }
 }

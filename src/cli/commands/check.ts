@@ -4,7 +4,7 @@ import { formatText } from '../formatters/text.js';
 import { formatJson } from '../formatters/json.js';
 import { formatScorecard } from '../formatters/scorecard.js';
 import type { PageConfigEntry, SamplingStrategy } from '../../types.js';
-import { findConfig } from '../../helpers/config.js';
+import { findConfig, validatePages } from '../../helpers/config.js';
 
 // Ensure all checks are registered
 import '../../checks/index.js';
@@ -77,10 +77,23 @@ export function registerCheckCommand(program: Command): void {
 
       if (opts.urls) {
         // --urls flag: parse comma-separated URLs, force curated strategy
-        curatedPages = (opts.urls as string)
+        const rawUrls = (opts.urls as string)
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean);
+        if (rawUrls.length === 0) {
+          process.stderr.write('Error: --urls requires at least one URL.\n');
+          process.exitCode = 1;
+          return;
+        }
+        try {
+          validatePages(rawUrls, '--urls');
+        } catch (err) {
+          process.stderr.write(`Error: ${(err as Error).message}\n`);
+          process.exitCode = 1;
+          return;
+        }
+        curatedPages = rawUrls;
         samplingRaw = 'curated';
       } else if (config?.pages && config.pages.length > 0) {
         // Config has pages: use them, default to curated unless explicitly overridden
