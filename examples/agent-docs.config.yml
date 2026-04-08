@@ -11,3 +11,13 @@ url: https://docs.example.com
 # options:
 #   maxLinksToTest: 50
 #   samplingStrategy: deterministic
+
+# Optional: test specific pages instead of discovering via llms.txt/sitemap.
+# When pages is present and no samplingStrategy is set, defaults to 'curated'.
+# pages:
+#   - https://docs.example.com/quickstart
+#   - https://docs.example.com/install
+#   - url: https://docs.example.com/api/auth
+#     tag: api-reference
+#   - url: https://docs.example.com/api/users
+#     tag: api-reference

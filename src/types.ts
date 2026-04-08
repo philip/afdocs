@@ -51,9 +51,19 @@ export interface CheckContext {
   htmlCache: Map<string, FetchedPage>;
   /** Cached sampled pages result, shared across checks within a single run. */
   _sampledPages?: SampledPages;
+  /** Curated page list from config or --urls, used by the curated sampling strategy. */
+  _curatedPages?: PageConfigEntry[];
 }
 
-export type SamplingStrategy = 'random' | 'deterministic' | 'none';
+export type SamplingStrategy = 'random' | 'deterministic' | 'curated' | 'none';
+
+export interface CuratedPageEntry {
+  url: string;
+  tag?: string;
+}
+
+/** A page in the config `pages` array: either a bare URL string or an object with url + tag. */
+export type PageConfigEntry = string | CuratedPageEntry;
 
 export interface CheckOptions {
   /** Maximum concurrent HTTP requests within a single check. */
@@ -121,6 +131,8 @@ export interface DiscoveredFile {
 export interface RunnerOptions extends CheckOptions {
   /** Only run checks matching these IDs. If empty, run all. */
   checkIds?: string[];
+  /** Curated page list from config or --urls. Used when samplingStrategy is 'curated'. */
+  curatedPages?: PageConfigEntry[];
 }
 
 export interface ReportResult {
@@ -136,10 +148,14 @@ export interface ReportResult {
     skip: number;
     error: number;
   };
+  /** When curated pages have tags, maps page URL to tag label. */
+  urlTags?: Record<string, string>;
 }
 
 export interface AgentDocsConfig {
   url: string;
   checks?: string[];
   options?: Partial<CheckOptions>;
+  /** Curated page URLs to test. Implies `samplingStrategy: 'curated'` when no strategy is set. */
+  pages?: PageConfigEntry[];
 }

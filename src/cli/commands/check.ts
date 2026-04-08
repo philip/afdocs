@@ -3,13 +3,13 @@ import { normalizeUrl, runChecks } from '../../runner.js';
 import { formatText } from '../formatters/text.js';
 import { formatJson } from '../formatters/json.js';
 import { formatScorecard } from '../formatters/scorecard.js';
-import type { SamplingStrategy } from '../../types.js';
-import { findConfig } from '../../helpers/config.js';
+import type { PageConfigEntry, SamplingStrategy } from '../../types.js';
+import { findConfig, validatePages } from '../../helpers/config.js';
 
 // Ensure all checks are registered
 import '../../checks/index.js';
 
-const SAMPLING_STRATEGIES = ['random', 'deterministic', 'none'] as const;
+const SAMPLING_STRATEGIES = ['random', 'deterministic', 'curated', 'none'] as const;
 const FORMAT_OPTIONS = ['text', 'json', 'scorecard'] as const;
 
 export function registerCheckCommand(program: Command): void {
@@ -22,7 +22,14 @@ export function registerCheckCommand(program: Command): void {
     .option('--max-concurrency <n>', 'Maximum concurrent requests')
     .option('--request-delay <ms>', 'Delay between requests in ms')
     .option('--max-links <n>', 'Maximum links to test')
-    .option('--sampling <strategy>', 'URL sampling strategy: random, deterministic, or none')
+    .option(
+      '--sampling <strategy>',
+      'URL sampling strategy: random, deterministic, curated, or none',
+    )
+    .option(
+      '--urls <urls>',
+      'Comma-separated page URLs for curated scoring (implies --sampling curated)',
+    )
     .option('--pass-threshold <n>', 'Pass threshold in characters')
     .option('--fail-threshold <n>', 'Fail threshold in characters')
     .option('-v, --verbose', 'Show per-page details for checks with issues')
@@ -39,8 +46,49 @@ export function registerCheckCommand(program: Command): void {
         return;
       }
 
-      // Resolve URL: CLI arg > config url > error
-      const resolvedUrl = rawUrl ?? config?.url;
+      // Determine curated pages and sampling strategy (before URL resolution,
+      // since curated pages can provide a fallback base URL)
+      let curatedPages: PageConfigEntry[] | undefined;
+      let samplingRaw: string;
+
+      if (opts.urls) {
+        // --urls flag: parse comma-separated URLs, force curated strategy
+        const rawUrls = (opts.urls as string)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (rawUrls.length === 0) {
+          process.stderr.write('Error: --urls requires at least one URL.\n');
+          process.exitCode = 1;
+          return;
+        }
+        try {
+          validatePages(rawUrls, '--urls');
+        } catch (err) {
+          process.stderr.write(`Error: ${(err as Error).message}\n`);
+          process.exitCode = 1;
+          return;
+        }
+        curatedPages = rawUrls;
+        samplingRaw = 'curated';
+      } else if (config?.pages && config.pages.length > 0) {
+        // Config has pages: use them, default to curated unless explicitly overridden
+        curatedPages = config.pages;
+        samplingRaw =
+          (opts.sampling as string | undefined) ?? config?.options?.samplingStrategy ?? 'curated';
+      } else {
+        // No curated pages: standard behavior
+        samplingRaw =
+          (opts.sampling as string | undefined) ?? config?.options?.samplingStrategy ?? 'random';
+      }
+
+      // Resolve URL: CLI arg > config url > first curated page origin > error
+      let resolvedUrl = rawUrl ?? config?.url;
+      if (!resolvedUrl && curatedPages && curatedPages.length > 0) {
+        const firstEntry = curatedPages[0];
+        const firstUrl = typeof firstEntry === 'string' ? firstEntry : firstEntry.url;
+        resolvedUrl = new URL(firstUrl).origin;
+      }
       if (!resolvedUrl) {
         process.stderr.write(
           'Error: No URL provided. Pass a URL as an argument or set "url" in agent-docs.config.yml\n',
@@ -64,12 +112,18 @@ export function registerCheckCommand(program: Command): void {
         return;
       }
 
-      const samplingRaw =
-        (opts.sampling as string | undefined) ?? config?.options?.samplingStrategy ?? 'random';
       const sampling = samplingRaw as SamplingStrategy;
       if (!SAMPLING_STRATEGIES.includes(sampling)) {
         process.stderr.write(
           `Error: Invalid sampling strategy "${sampling}". Must be one of: ${SAMPLING_STRATEGIES.join(', ')}\n`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      if (sampling === 'curated' && (!curatedPages || curatedPages.length === 0)) {
+        process.stderr.write(
+          'Error: Curated sampling requires pages. Use --urls or define "pages" in your config file.\n',
         );
         process.exitCode = 1;
         return;
@@ -115,6 +169,7 @@ export function registerCheckCommand(program: Command): void {
         requestDelay,
         maxLinksToTest,
         samplingStrategy: sampling,
+        curatedPages,
         thresholds: {
           pass: passThreshold,
           fail: failThreshold,

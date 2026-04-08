@@ -742,6 +742,66 @@ describe('discoverAndSamplePages', () => {
     expect(result.sampled).toBe(false);
   });
 
+  it('curated strategy returns configured URLs without discovery', async () => {
+    const ctx = createContext('http://curated.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+    });
+    ctx._curatedPages = ['http://curated.local/page-a', 'http://curated.local/page-b'];
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toEqual(['http://curated.local/page-a', 'http://curated.local/page-b']);
+    expect(result.totalPages).toBe(2);
+    expect(result.sampled).toBe(false);
+    expect(result.urlTags).toBeUndefined();
+  });
+
+  it('curated strategy with tagged objects populates urlTags', async () => {
+    const ctx = createContext('http://curated-tags.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+    });
+    ctx._curatedPages = [
+      'http://curated-tags.local/page-a',
+      { url: 'http://curated-tags.local/page-b', tag: 'api' },
+      { url: 'http://curated-tags.local/page-c', tag: 'guides' },
+    ];
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toHaveLength(3);
+    expect(result.urlTags).toEqual({
+      'http://curated-tags.local/page-b': 'api',
+      'http://curated-tags.local/page-c': 'guides',
+    });
+  });
+
+  it('curated strategy with empty pages falls back to baseUrl', async () => {
+    const ctx = createContext('http://curated-empty.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+    });
+    ctx._curatedPages = [];
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toEqual(['http://curated-empty.local']);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('no pages defined');
+  });
+
+  it('curated strategy does not apply maxLinksToTest', async () => {
+    const urls = Array.from({ length: 100 }, (_, i) => `http://curated-many.local/page-${i}`);
+    const ctx = createContext('http://curated-many.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+      maxLinksToTest: 5,
+    });
+    ctx._curatedPages = urls;
+
+    const result = await discoverAndSamplePages(ctx);
+    expect(result.urls).toHaveLength(100);
+    expect(result.sampled).toBe(false);
+  });
+
   it('passes through warnings from discovery', async () => {
     server.use(
       http.get(

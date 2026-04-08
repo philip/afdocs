@@ -104,6 +104,36 @@ export function formatScorecard(report: ReportResult, scoreResult?: ScoreResult)
   }
   lines.push('');
 
+  // Tag scores (when curated pages have tags)
+  if (score.tagScores) {
+    lines.push(`  ${chalk.bold('Tag Scores:')}`);
+    const sortedTags = Object.entries(score.tagScores).sort(([a], [b]) => a.localeCompare(b));
+    for (const [tag, tagScore] of sortedTags) {
+      lines.push(
+        formatCategoryLine(tag, tagScore.score, tagScore.grade) +
+          chalk.dim(` · ${tagScore.pageCount} page${tagScore.pageCount !== 1 ? 's' : ''}`),
+      );
+
+      // Show checks that aren't fully passing
+      const issues = tagScore.checks.filter((c) => c.proportion < 1);
+      for (const check of issues) {
+        const counts = { pass: 0, warn: 0, fail: 0 };
+        for (const p of check.pages) {
+          if (p.status in counts) counts[p.status as keyof typeof counts]++;
+        }
+        const parts: string[] = [];
+        if (counts.fail > 0) parts.push(chalk.red(`${counts.fail} fail`));
+        if (counts.warn > 0) parts.push(chalk.yellow(`${counts.warn} warn`));
+        if (counts.pass > 0) parts.push(chalk.green(`${counts.pass} pass`));
+        const worstStatus = counts.fail > 0 ? 'fail' : 'warn';
+        const label = STATUS_LABELS[worstStatus];
+        const color = STATUS_COLORS[worstStatus];
+        lines.push(`      ${color(label)}  ${check.checkId.padEnd(30)} ${parts.join(', ')}`);
+      }
+    }
+    lines.push('');
+  }
+
   // Interaction diagnostics
   if (score.diagnostics.length > 0) {
     lines.push(`  ${chalk.bold('Interaction Diagnostics:')}`);

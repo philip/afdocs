@@ -42,6 +42,15 @@ const report = await runChecks('https://docs.example.com', {
     fail: 100000,
   },
 });
+
+// Or test specific pages with curated sampling:
+const curatedReport = await runChecks('https://docs.example.com', {
+  samplingStrategy: 'curated',
+  curatedPages: [
+    'https://docs.example.com/quickstart',
+    { url: 'https://docs.example.com/api/auth', tag: 'api-reference' },
+  ],
+});
 ```
 
 All options are optional. The defaults match the CLI defaults.
@@ -90,6 +99,8 @@ import type {
   RunnerOptions,
   CheckOptions,
   AgentDocsConfig,
+  CuratedPageEntry,
+  PageConfigEntry,
 } from 'afdocs';
 ```
 

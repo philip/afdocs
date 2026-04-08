@@ -42,6 +42,43 @@ This is the same function; the subpath is provided for consumers who want a narr
 | `diagnostics`    | `Diagnostic[]`                  | Interaction diagnostics that fired                                        |
 | `caps`           | `ScoreCap[]`                    | Score caps that were applied                                              |
 | `resolutions`    | `Record<string, string>`        | Fix suggestions keyed by check ID                                         |
+| `tagScores`      | `Record<string, TagScore>`      | Per-tag aggregate scores (present when curated pages have tags)           |
+
+## TagScore
+
+When curated pages have tags, each `TagScore` contains the aggregate score plus a per-check breakdown showing exactly which checks contributed and how each page fared:
+
+| Field       | Type                  | Description                                                    |
+| ----------- | --------------------- | -------------------------------------------------------------- |
+| `score`     | `number`              | Aggregate score for this tag (0-100)                           |
+| `grade`     | `Grade`               | Letter grade                                                   |
+| `pageCount` | `number`              | Number of pages tagged with this tag                           |
+| `checks`    | `TagCheckBreakdown[]` | Per-check breakdown with weight, proportion, and page statuses |
+
+Each `TagCheckBreakdown` contains:
+
+| Field        | Type                                     | Description                                        |
+| ------------ | ---------------------------------------- | -------------------------------------------------- |
+| `checkId`    | `string`                                 | The check ID                                       |
+| `category`   | `string`                                 | The check's category                               |
+| `weight`     | `number`                                 | The check's effective weight in the scoring system |
+| `proportion` | `number`                                 | 0-1 proportion earned for this tag's pages         |
+| `pages`      | `Array<{ url: string; status: string }>` | Per-page status within this check                  |
+
+```ts
+const score = computeScore(report);
+if (score.tagScores) {
+  for (const [tag, tagScore] of Object.entries(score.tagScores)) {
+    console.log(`${tag}: ${tagScore.score}/100 (${tagScore.grade})`);
+    for (const check of tagScore.checks) {
+      if (check.proportion < 1) {
+        const failing = check.pages.filter((p) => p.status === 'fail');
+        console.log(`  ${check.checkId}: ${failing.length} failing pages`);
+      }
+    }
+  }
+}
+```
 
 ## Grade conversion
 
@@ -62,6 +99,8 @@ import type {
   ScoreResult,
   CheckScore,
   CategoryScore,
+  TagScore,
+  TagCheckBreakdown,
   ScoreCap,
   Diagnostic,
   DiagnosticSeverity, // 'info' | 'warning' | 'critical'

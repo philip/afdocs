@@ -22,6 +22,21 @@ export interface CategoryScore {
   grade: Grade;
 }
 
+export interface TagCheckBreakdown {
+  checkId: string;
+  category: string;
+  weight: number;
+  proportion: number;
+  pages: Array<{ url: string; status: string }>;
+}
+
+export interface TagScore {
+  score: number;
+  grade: Grade;
+  pageCount: number;
+  checks: TagCheckBreakdown[];
+}
+
 export interface ScoreCap {
   /** The cap value applied. */
   cap: number;
@@ -48,4 +63,6 @@ export interface ScoreResult {
   diagnostics: Diagnostic[];
   /** Per-check resolution text for warn/fail checks, keyed by check ID. */
   resolutions: Record<string, string>;
+  /** Per-tag aggregate scores when curated pages have tags. */
+  tagScores?: Record<string, TagScore>;
 }

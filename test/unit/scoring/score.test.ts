@@ -409,4 +409,43 @@ describe('computeScore', () => {
       expect(score.resolutions['markdown-url-support']).toBeDefined();
     });
   });
+
+  describe('tag scores integration', () => {
+    it('includes tagScores when report has urlTags', () => {
+      const results: CheckResult[] = [
+        makeResult('page-size-html', 'page-size', 'warn', {
+          passBucket: 1,
+          warnBucket: 1,
+          failBucket: 0,
+          pageResults: [
+            { url: 'https://example.com/a', status: 'pass' },
+            { url: 'https://example.com/b', status: 'warn' },
+          ],
+        }),
+      ];
+      const report = makeReport(results);
+      report.urlTags = {
+        'https://example.com/a': 'docs',
+        'https://example.com/b': 'api',
+      };
+
+      const score = computeScore(report);
+      expect(score.tagScores).toBeDefined();
+      expect(score.tagScores!['docs'].score).toBe(100);
+      expect(score.tagScores!['api'].score).toBe(50); // warn maps to 0.5
+    });
+
+    it('omits tagScores when report has no urlTags', () => {
+      const results: CheckResult[] = [
+        makeResult('page-size-html', 'page-size', 'pass', {
+          passBucket: 1,
+          warnBucket: 0,
+          failBucket: 0,
+          pageResults: [{ url: 'https://example.com/a', status: 'pass' }],
+        }),
+      ];
+      const score = computeScore(makeReport(results));
+      expect(score.tagScores).toBeUndefined();
+    });
+  });
 });

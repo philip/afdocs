@@ -6,6 +6,7 @@ import { getCheckProportion } from './proportions.js';
 import { getCoefficient } from './coefficients.js';
 import { evaluateDiagnostics } from './diagnostics.js';
 import { getResolution } from './resolutions.js';
+import { computeTagScores } from './tag-scores.js';
 
 /**
  * Compute a score from a report result.
@@ -106,6 +107,11 @@ export function computeScore(report: ReportResult): ScoreResult {
 
   if (cap && cap.cap < rawScore) {
     scoreResult.cap = cap;
+  }
+
+  const tagScores = computeTagScores(report, checkScores);
+  if (tagScores) {
+    scoreResult.tagScores = tagScores;
   }
 
   return scoreResult;

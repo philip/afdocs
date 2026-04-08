@@ -95,6 +95,36 @@ You can combine this with `--checks` to run a single check against a single page
 npx afdocs check https://docs.example.com/api/auth --sampling none --checks rendering-strategy
 ```
 
+## Check a specific set of pages
+
+If you want to check a handful of pages without running full discovery, pass them directly with `--urls`:
+
+```bash
+npx afdocs check https://docs.example.com --urls https://docs.example.com/quickstart,https://docs.example.com/api/auth
+```
+
+This skips page discovery and runs all checks against exactly those URLs. You can tag pages for grouped scoring by defining them in a config file:
+
+```yaml
+# agent-docs.config.yml
+url: https://docs.example.com
+pages:
+  - url: https://docs.example.com/quickstart
+    tag: getting-started
+  - url: https://docs.example.com/tutorials/first-app
+    tag: getting-started
+  - url: https://docs.example.com/api/auth
+    tag: api-reference
+  - url: https://docs.example.com/api/webhooks
+    tag: api-reference
+```
+
+```bash
+npx afdocs check --format scorecard
+```
+
+The scorecard will include a Tag Scores section showing how each group of pages scores, with a per-check breakdown of what's passing and failing within each tag. The JSON output (`--format json --score`) includes full per-page detail for each tag. See [Config File Reference](/reference/config-file) for the full `pages` schema.
+
 ## Get consistent results between runs
 
 By default, AFDocs randomly samples pages, so results can vary between runs. For reproducible results (useful when verifying a fix), use deterministic sampling:

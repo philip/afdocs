@@ -367,4 +367,49 @@ describe('formatScorecard', () => {
     expect(output).toContain('(D)');
     expect(output).toContain('(F)');
   });
+
+  it('shows tag scores when present', () => {
+    const score = makeScoreResult({
+      tagScores: {
+        'getting-started': { score: 90, grade: 'A', pageCount: 3, checks: [] },
+        'api-reference': {
+          score: 65,
+          grade: 'D',
+          pageCount: 5,
+          checks: [
+            {
+              checkId: 'page-size-html',
+              category: 'page-size',
+              weight: 7,
+              proportion: 0.6,
+              pages: [
+                { url: 'https://example.com/a', status: 'pass' },
+                { url: 'https://example.com/b', status: 'fail' },
+                { url: 'https://example.com/c', status: 'warn' },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('Tag Scores:');
+    expect(output).toContain('api-reference');
+    expect(output).toContain('65 / 100');
+    expect(output).toContain('getting-started');
+    expect(output).toContain('90 / 100');
+    // Shows page counts
+    expect(output).toContain('3 pages');
+    expect(output).toContain('5 pages');
+    // Shows check breakdown for non-passing checks
+    expect(output).toContain('page-size-html');
+    expect(output).toContain('1 fail');
+    expect(output).toContain('1 warn');
+    expect(output).toContain('1 pass');
+  });
+
+  it('omits tag scores section when not present', () => {
+    const output = formatScorecard(makeReport(), makeScoreResult());
+    expect(output).not.toContain('Tag Scores:');
+  });
 });
