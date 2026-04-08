@@ -182,7 +182,19 @@ describeAgentDocsPerCheck(__dirname);
 
 ## Timeouts
 
-The helpers set a 120-second timeout on the check run automatically. No vitest timeout configuration is needed.
+The helpers set a 120-second timeout on the check run by default. If your site has many pages or your CI runner is slow, you can increase it by passing a second argument (in milliseconds):
+
+```ts
+// 5-minute timeout
+describeAgentDocsPerCheck(__dirname, 300_000);
+```
+
+This works with both helpers:
+
+```ts
+describeAgentDocs(undefined, 300_000);
+describeAgentDocsPerCheck(undefined, 300_000);
+```
 
 ## Ready-to-copy example
 

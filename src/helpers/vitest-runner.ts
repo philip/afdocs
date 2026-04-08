@@ -7,6 +7,8 @@ import type { AgentDocsConfig, CheckResult, ReportResult } from '../types.js';
 // Ensure all checks are registered
 import '../checks/index.js';
 
+const DEFAULT_TEST_TIMEOUT = 120_000;
+
 const STATUS_ICON: Record<string, string> = {
   pass: '\u2713',
   warn: '\u26A0',
@@ -32,19 +34,28 @@ function resolveConfig(
  * describeAgentDocs();
  * ```
  */
-export function describeAgentDocs(configOrDir?: AgentDocsConfig | string): void {
+export function describeAgentDocs(
+  configOrDir?: AgentDocsConfig | string,
+  testTimeout?: number,
+): void {
+  const timeout = testTimeout ?? DEFAULT_TEST_TIMEOUT;
+
   describe('Agent-Friendly Documentation', () => {
     let results: CheckResult[];
 
-    it('should run checks', async () => {
-      const config = await resolveConfig(configOrDir);
+    it(
+      'should run checks',
+      async () => {
+        const config = await resolveConfig(configOrDir);
 
-      const report = await runChecks(config.url, {
-        checkIds: config.checks,
-        ...config.options,
-      });
-      results = report.results;
-    }, 120_000);
+        const report = await runChecks(config.url, {
+          checkIds: config.checks,
+          ...config.options,
+        });
+        results = report.results;
+      },
+      timeout,
+    );
 
     it('should have no failing checks', () => {
       expect(results).toBeDefined();
@@ -68,7 +79,12 @@ export function describeAgentDocs(configOrDir?: AgentDocsConfig | string): void 
  * describeAgentDocsPerCheck();
  * ```
  */
-export function describeAgentDocsPerCheck(configOrDir?: AgentDocsConfig | string): void {
+export function describeAgentDocsPerCheck(
+  configOrDir?: AgentDocsConfig | string,
+  testTimeout?: number,
+): void {
+  const timeout = testTimeout ?? DEFAULT_TEST_TIMEOUT;
+
   describe('Agent-Friendly Documentation', () => {
     let report: ReportResult;
     let resultsByCheck: Map<string, CheckResult>;
@@ -81,7 +97,7 @@ export function describeAgentDocsPerCheck(configOrDir?: AgentDocsConfig | string
         ...config.options,
       });
       resultsByCheck = new Map(report.results.map((r) => [r.id, r]));
-    }, 120_000);
+    }, timeout);
 
     // Register a test per known check. Checks not included in the run
     // (filtered via config.checks) are reported as skipped rather than

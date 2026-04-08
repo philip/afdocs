@@ -11,6 +11,8 @@
 
 Test your documentation site against the [Agent-Friendly Documentation Spec](https://agentdocsspec.com). AFDocs runs 22 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
 
+Powering [Agent Score](https://buildwithfern.com/agent-score) by Fern.
+
 > **Status: Early development (0.x)**
 > Check IDs, CLI flags, and output formats may change between minor versions.
 > Implements [spec v0.3.0](https://agentdocsspec.com/spec) (2026-03-31).
