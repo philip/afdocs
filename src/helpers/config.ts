@@ -9,6 +9,14 @@ const CONFIG_FILENAMES = ['agent-docs.config.yml', 'agent-docs.config.yaml'];
  * Validate the `pages` field in a config file.
  * Each entry must be a valid URL string or an object with a valid `url` and optional `tag`.
  */
+function assertPagesArray(pages: unknown, filepath: string): asserts pages is unknown[] {
+  if (!Array.isArray(pages)) {
+    throw new Error(
+      `Config file ${filepath}: "pages" must be an array of URLs or { url, tag? } objects`,
+    );
+  }
+}
+
 export function validatePages(pages: unknown[], filepath: string): void {
   for (let i = 0; i < pages.length; i++) {
     const entry = pages[i] as PageConfigEntry;
@@ -54,7 +62,8 @@ export async function loadConfig(dir?: string): Promise<AgentDocsConfig> {
         if (!parsed.url) {
           throw new Error(`Config file ${filepath} is missing required "url" field`);
         }
-        if (parsed.pages && Array.isArray(parsed.pages)) {
+        if (parsed.pages) {
+          assertPagesArray(parsed.pages, filepath);
           validatePages(parsed.pages, filepath);
         }
         return parsed;
@@ -89,7 +98,8 @@ export async function findConfig(
     const filepath = resolve(process.cwd(), explicitPath);
     const content = await readFile(filepath, 'utf-8');
     const parsed = parseYaml(content) as AgentDocsConfig;
-    if (parsed.pages && Array.isArray(parsed.pages)) {
+    if (parsed.pages) {
+      assertPagesArray(parsed.pages, filepath);
       validatePages(parsed.pages, filepath);
     }
     return parsed;
@@ -102,7 +112,8 @@ export async function findConfig(
       try {
         const content = await readFile(filepath, 'utf-8');
         const parsed = parseYaml(content) as AgentDocsConfig;
-        if (parsed.pages && Array.isArray(parsed.pages)) {
+        if (parsed.pages) {
+          assertPagesArray(parsed.pages, filepath);
           validatePages(parsed.pages, filepath);
         }
         return parsed;

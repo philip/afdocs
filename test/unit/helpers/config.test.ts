@@ -194,4 +194,12 @@ describe('findConfig', () => {
 
     await expect(findConfig(configPath)).rejects.toThrow('pages[0] must be a URL string or');
   });
+
+  it('throws when pages is a scalar instead of an array', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'scalar-pages.yml');
+    await writeFile(configPath, 'url: https://example.com\npages: https://example.com/a\n');
+
+    await expect(findConfig(configPath)).rejects.toThrow('"pages" must be an array');
+  });
 });
