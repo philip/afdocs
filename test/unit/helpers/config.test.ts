@@ -65,6 +65,37 @@ describe('loadConfig', () => {
     expect(config.url).toBe('https://parent.example.com');
   });
 
+  it('validates pages when present', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      'url: https://example.com\npages:\n  - https://example.com/a\n  - https://example.com/b\n',
+    );
+
+    const config = await loadConfig(TMP_DIR);
+    expect(config.pages).toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  it('throws on invalid pages in loadConfig', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      'url: https://example.com\npages:\n  - not-a-url\n',
+    );
+
+    await expect(loadConfig(TMP_DIR)).rejects.toThrow('pages[0] is not a valid URL');
+  });
+
+  it('throws on scalar pages in loadConfig', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      'url: https://example.com\npages: https://example.com/a\n',
+    );
+
+    await expect(loadConfig(TMP_DIR)).rejects.toThrow('"pages" must be an array');
+  });
+
   it('finds config in immediate dir before walking up', async () => {
     const parentDir = TMP_DIR;
     const childDir = resolve(TMP_DIR, 'sub');
@@ -144,6 +175,27 @@ describe('findConfig', () => {
 
     const config = await findConfig(undefined, TMP_DIR);
     expect(config?.url).toBe('https://yml.example.com');
+  });
+
+  it('auto-discovers config with pages and validates them', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      'url: https://example.com\npages:\n  - https://example.com/a\n',
+    );
+
+    const config = await findConfig(undefined, TMP_DIR);
+    expect(config?.pages).toEqual(['https://example.com/a']);
+  });
+
+  it('auto-discover throws on invalid pages', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      'url: https://example.com\npages:\n  - not-a-url\n',
+    );
+
+    await expect(findConfig(undefined, TMP_DIR)).rejects.toThrow('pages[0] is not a valid URL');
   });
 
   it('loads pages as string array', async () => {

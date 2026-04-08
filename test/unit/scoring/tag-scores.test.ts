@@ -303,4 +303,198 @@ describe('computeTagScores', () => {
     expect(result!['test-tag'].checks[1].proportion).toBe(0.75);
     expect(result!['test-tag'].score).toBe(68);
   });
+
+  it('maps status correctly for all custom status mappers', () => {
+    const report = makeReport(
+      [
+        // markdown-url-support: supported -> pass, !supported -> fail, skipped -> skip
+        makeResult('markdown-url-support', 'markdown-availability', 'pass', {
+          pageResults: [
+            { url: 'https://example.com/a', supported: true },
+            { url: 'https://example.com/b', supported: false },
+            { url: 'https://example.com/c', skipped: true },
+          ],
+        }),
+        // http-status-codes: correct-error -> pass, soft-404 -> fail
+        makeResult('http-status-codes', 'url-stability', 'fail', {
+          pageResults: [
+            { url: 'https://example.com/a', classification: 'correct-error' },
+            { url: 'https://example.com/b', classification: 'soft-404' },
+          ],
+        }),
+        // llms-txt-directive: found near top -> pass, found deep -> warn, not found -> fail
+        makeResult('llms-txt-directive', 'content-discoverability', 'warn', {
+          pageResults: [
+            { url: 'https://example.com/a', found: true, positionPercent: 5 },
+            { url: 'https://example.com/b', found: true, positionPercent: 80 },
+            { url: 'https://example.com/c', found: false },
+          ],
+        }),
+        // cache-header-hygiene: uses endpointResults field
+        makeResult('cache-header-hygiene', 'observability', 'pass', {
+          endpointResults: [
+            { url: 'https://example.com/a', status: 'pass' },
+            { url: 'https://example.com/b', status: 'fail' },
+          ],
+        }),
+      ],
+      {
+        'https://example.com/a': 'all',
+        'https://example.com/b': 'all',
+        'https://example.com/c': 'all',
+      },
+    );
+
+    const checkScores: Record<string, CheckScore> = {
+      'markdown-url-support': makeCheckScore(7),
+      'http-status-codes': makeCheckScore(7),
+      'llms-txt-directive': makeCheckScore(7),
+      'cache-header-hygiene': makeCheckScore(2),
+    };
+
+    const result = computeTagScores(report, checkScores);
+    expect(result).toBeDefined();
+
+    const checks = result!['all'].checks;
+    // markdown-url-support: 1 pass, 1 fail (skipped excluded) -> 0.5
+    const mdUrl = checks.find((c) => c.checkId === 'markdown-url-support')!;
+    expect(mdUrl.proportion).toBe(0.5);
+    expect(mdUrl.pages).toHaveLength(3);
+    expect(mdUrl.pages[2].status).toBe('skip');
+
+    // http-status-codes: 1 pass, 1 fail -> 0.5
+    const httpStatus = checks.find((c) => c.checkId === 'http-status-codes')!;
+    expect(httpStatus.proportion).toBe(0.5);
+
+    // llms-txt-directive: 1 pass, 1 warn, 1 fail -> (1 + 0.6*1) / 3
+    const directive = checks.find((c) => c.checkId === 'llms-txt-directive')!;
+    expect(directive.pages[0].status).toBe('pass');
+    expect(directive.pages[1].status).toBe('warn');
+    expect(directive.pages[2].status).toBe('fail');
+
+    // cache-header-hygiene: uses endpointResults, 1 pass + 1 fail -> 0.5
+    const cache = checks.find((c) => c.checkId === 'cache-header-hygiene')!;
+    expect(cache.proportion).toBe(0.5);
+  });
+
+  it('covers remaining status mapper branches', () => {
+    const report = makeReport(
+      [
+        // content-negotiation: pass, fail, and default/skip branches
+        makeResult('content-negotiation', 'markdown-availability', 'pass', {
+          pageResults: [
+            { url: 'https://example.com/a', classification: 'markdown-with-correct-type' },
+            { url: 'https://example.com/b', classification: 'html' },
+            { url: 'https://example.com/c', classification: 'unknown-value' },
+          ],
+        }),
+        // redirect-behavior: pass (no-redirect), fail (js-redirect), and default
+        makeResult('redirect-behavior', 'url-stability', 'warn', {
+          pageResults: [
+            { url: 'https://example.com/a', classification: 'no-redirect' },
+            { url: 'https://example.com/b', classification: 'js-redirect' },
+            { url: 'https://example.com/c', classification: 'unknown-value' },
+          ],
+        }),
+        // auth-gate-detection: soft-auth-gate (warn) and default (skip)
+        makeResult('auth-gate-detection', 'authentication', 'warn', {
+          pageResults: [
+            { url: 'https://example.com/a', classification: 'soft-auth-gate' },
+            { url: 'https://example.com/b', classification: 'unknown-value' },
+          ],
+        }),
+        // http-status-codes: default/skip branch
+        makeResult('http-status-codes', 'url-stability', 'pass', {
+          pageResults: [{ url: 'https://example.com/a', classification: 'unknown-value' }],
+        }),
+        // llms-txt-directive: error -> skip
+        makeResult('llms-txt-directive', 'content-discoverability', 'pass', {
+          pageResults: [{ url: 'https://example.com/a', error: 'fetch failed' }],
+        }),
+        // section-header-quality: hasCrossGroupGeneric -> warn
+        makeResult('section-header-quality', 'content-structure', 'warn', {
+          analyses: [
+            { url: 'https://example.com/a', hasGenericMajority: false, hasCrossGroupGeneric: true },
+          ],
+        }),
+      ],
+      {
+        'https://example.com/a': 'tag',
+        'https://example.com/b': 'tag',
+        'https://example.com/c': 'tag',
+      },
+    );
+
+    const checkScores: Record<string, CheckScore> = {
+      'content-negotiation': makeCheckScore(4),
+      'redirect-behavior': makeCheckScore(4),
+      'auth-gate-detection': makeCheckScore(10),
+      'http-status-codes': makeCheckScore(7),
+      'llms-txt-directive': makeCheckScore(7),
+      'section-header-quality': makeCheckScore(2),
+    };
+
+    const result = computeTagScores(report, checkScores);
+    expect(result).toBeDefined();
+    const checks = result!['tag'].checks;
+
+    // content-negotiation: pass + fail (skip excluded) -> 0.5
+    const cn = checks.find((c) => c.checkId === 'content-negotiation')!;
+    expect(cn.pages[0].status).toBe('pass');
+    expect(cn.pages[1].status).toBe('fail');
+    expect(cn.pages[2].status).toBe('skip');
+    expect(cn.proportion).toBe(0.5);
+
+    // redirect-behavior: pass + fail (skip excluded) -> 0.5
+    const rb = checks.find((c) => c.checkId === 'redirect-behavior')!;
+    expect(rb.pages[0].status).toBe('pass');
+    expect(rb.pages[1].status).toBe('fail');
+    expect(rb.pages[2].status).toBe('skip');
+
+    // auth-gate-detection: 1 warn (skip excluded) -> warnCoeff 0.5
+    const ag = checks.find((c) => c.checkId === 'auth-gate-detection')!;
+    expect(ag.pages[0].status).toBe('warn');
+    expect(ag.pages[1].status).toBe('skip');
+
+    // section-header-quality: hasCrossGroupGeneric -> warn
+    const shq = checks.find((c) => c.checkId === 'section-header-quality')!;
+    expect(shq.pages[0].status).toBe('warn');
+  });
+
+  it('skips results with no details, no checkScore, empty pageResults, or all-skip items', () => {
+    const report = makeReport(
+      [
+        // No details
+        makeResult('rendering-strategy', 'page-size', 'pass'),
+        // Has details but no matching checkScore
+        makeResult('page-size-html', 'page-size', 'pass', {
+          pageResults: [{ url: 'https://example.com/a', status: 'pass' }],
+        }),
+        // Has details but empty pageResults array
+        makeResult('content-start-position', 'page-size', 'pass', {
+          pageResults: [],
+        }),
+        // Has details but items have no string status (defaultStatusMapper -> skip)
+        makeResult('markdown-content-parity', 'observability', 'pass', {
+          pageResults: [{ url: 'https://example.com/a', result: { missing: 0 } }],
+        }),
+      ],
+      { 'https://example.com/a': 'tag' },
+    );
+
+    // Only provide checkScore for some checks — page-size-html intentionally omitted
+    const checkScores: Record<string, CheckScore> = {
+      'rendering-strategy': makeCheckScore(10),
+      'content-start-position': makeCheckScore(4),
+      'markdown-content-parity': makeCheckScore(4),
+    };
+
+    // No checks produce scoreable data for the tag:
+    // - rendering-strategy: no details
+    // - page-size-html: no checkScore
+    // - content-start-position: empty pageResults
+    // - markdown-content-parity: all items map to 'skip', total=0
+    const result = computeTagScores(report, checkScores);
+    expect(result).toBeUndefined();
+  });
 });

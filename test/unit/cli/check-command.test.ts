@@ -430,4 +430,148 @@ describe('check command config integration', () => {
 
     writeSpy.mockRestore();
   });
+
+  it('infers base URL from --urls when no URL argument given', async () => {
+    server.use(
+      http.get('http://infer-url.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://infer-url.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      '--urls',
+      'http://infer-url.local/a',
+      '--checks',
+      'llms-txt-exists',
+      '--format',
+      'json',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.url).toBe('http://infer-url.local');
+
+    writeSpy.mockRestore();
+  });
+
+  it('errors when --urls value is empty', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://example.local',
+      '--urls',
+      ' , , ',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('--urls requires at least one URL');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('rejects invalid sampling strategy', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://example.local',
+      '--sampling',
+      'invalid-strategy',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Invalid sampling strategy');
+    expect(output).toContain('invalid-strategy');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('rejects invalid URLs in --urls', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://example.local',
+      '--urls',
+      'not-a-url',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('not a valid URL');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('infers base URL from config pages when url field is omitted', async () => {
+    server.use(
+      http.get('http://cfg-infer.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cfg-infer.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const configPath = resolve(CONFIG_TMP, 'agent-docs.config.yml');
+    await writeFile(
+      configPath,
+      'pages:\n  - http://cfg-infer.local/a\nchecks:\n  - llms-txt-exists\n',
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      '--config',
+      configPath,
+      '--format',
+      'json',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.url).toBe('http://cfg-infer.local');
+
+    writeSpy.mockRestore();
+  });
 });
