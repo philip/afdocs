@@ -46,32 +46,8 @@ export function registerCheckCommand(program: Command): void {
         return;
       }
 
-      // Resolve URL: CLI arg > config url > error
-      const resolvedUrl = rawUrl ?? config?.url;
-      if (!resolvedUrl) {
-        process.stderr.write(
-          'Error: No URL provided. Pass a URL as an argument or set "url" in agent-docs.config.yml\n',
-        );
-        process.exitCode = 1;
-        return;
-      }
-      const url = normalizeUrl(resolvedUrl);
-
-      // Resolve options: CLI flags > config > hardcoded defaults
-      const checkIds = opts.checks
-        ? (opts.checks as string).split(',').map((s) => s.trim())
-        : config?.checks;
-
-      const format = opts.format as string;
-      if (!FORMAT_OPTIONS.includes(format as (typeof FORMAT_OPTIONS)[number])) {
-        process.stderr.write(
-          `Error: Invalid format "${format}". Must be one of: ${FORMAT_OPTIONS.join(', ')}\n`,
-        );
-        process.exitCode = 1;
-        return;
-      }
-
-      // Determine curated pages and sampling strategy
+      // Determine curated pages and sampling strategy (before URL resolution,
+      // since curated pages can provide a fallback base URL)
       let curatedPages: PageConfigEntry[] | undefined;
       let samplingRaw: string;
 
@@ -104,6 +80,36 @@ export function registerCheckCommand(program: Command): void {
         // No curated pages: standard behavior
         samplingRaw =
           (opts.sampling as string | undefined) ?? config?.options?.samplingStrategy ?? 'random';
+      }
+
+      // Resolve URL: CLI arg > config url > first curated page origin > error
+      let resolvedUrl = rawUrl ?? config?.url;
+      if (!resolvedUrl && curatedPages && curatedPages.length > 0) {
+        const firstEntry = curatedPages[0];
+        const firstUrl = typeof firstEntry === 'string' ? firstEntry : firstEntry.url;
+        resolvedUrl = new URL(firstUrl).origin;
+      }
+      if (!resolvedUrl) {
+        process.stderr.write(
+          'Error: No URL provided. Pass a URL as an argument or set "url" in agent-docs.config.yml\n',
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const url = normalizeUrl(resolvedUrl);
+
+      // Resolve options: CLI flags > config > hardcoded defaults
+      const checkIds = opts.checks
+        ? (opts.checks as string).split(',').map((s) => s.trim())
+        : config?.checks;
+
+      const format = opts.format as string;
+      if (!FORMAT_OPTIONS.includes(format as (typeof FORMAT_OPTIONS)[number])) {
+        process.stderr.write(
+          `Error: Invalid format "${format}". Must be one of: ${FORMAT_OPTIONS.join(', ')}\n`,
+        );
+        process.exitCode = 1;
+        return;
       }
 
       const sampling = samplingRaw as SamplingStrategy;
