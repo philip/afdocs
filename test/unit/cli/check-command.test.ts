@@ -366,6 +366,30 @@ describe('check command config integration', () => {
     writeSpy.mockRestore();
   });
 
+  it('errors when --sampling curated is used without pages', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://no-pages.local',
+      '--sampling',
+      'curated',
+      '--request-delay',
+      '0',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Curated sampling requires pages');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
   it('--checks flag overrides config checks', async () => {
     server.use(
       http.get('http://cfg-checks-override.local/llms.txt', () =>

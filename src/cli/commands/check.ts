@@ -102,6 +102,14 @@ export function registerCheckCommand(program: Command): void {
         return;
       }
 
+      if (sampling === 'curated' && (!curatedPages || curatedPages.length === 0)) {
+        process.stderr.write(
+          'Error: Curated sampling requires pages. Use --urls or define "pages" in your config file.\n',
+        );
+        process.exitCode = 1;
+        return;
+      }
+
       const maxConcurrency = parseInt(
         String((opts.maxConcurrency as string | undefined) ?? config?.options?.maxConcurrency ?? 3),
         10,
