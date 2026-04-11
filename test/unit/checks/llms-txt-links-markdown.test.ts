@@ -263,6 +263,50 @@ Just text, no links here.
     expect(result.status).toBe('fail');
   });
 
+  // ── Path-prefix scoping ──
+
+  it('scopes links to baseUrl path prefix', async () => {
+    // llms.txt has both docs and non-docs links; only docs links should be tested
+    const content = `# Site\n- [Intro](http://scope-md.local/docs/intro.md): Intro\n- [Blog](http://scope-md.local/blog/post.md): Blog\n- [Careers](http://scope-md.local/careers): Careers\n`;
+    const ctx = createContext('http://scope-md.local/docs', { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: 'http://scope-md.local/llms.txt', content, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    // Only the /docs/intro.md link should be tested (markdownRate 100%)
+    expect(result.details?.testedLinks).toBe(1);
+    expect(result.details?.markdownRate).toBe(100);
+  });
+
+  it('skips with descriptive message when all links are outside the baseUrl path prefix', async () => {
+    const content = `# Site\n- [Blog](http://scope-md2.local/blog/post): Blog\n`;
+    const ctx = createContext('http://scope-md2.local/docs', { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: 'http://scope-md2.local/llms.txt', content, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('1 link');
+    expect(result.message).toContain('none are under /docs');
+  });
+
   it('uses toMdUrls to find .md variants (handles trailing slash and .html)', async () => {
     server.use(
       http.head(

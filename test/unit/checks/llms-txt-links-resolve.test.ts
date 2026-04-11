@@ -194,6 +194,53 @@ Just text, no links.
     expect(result.message).toContain('rate-limited (HTTP 429)');
   });
 
+  // ── Path-prefix scoping ──
+
+  it('scopes links to baseUrl path prefix', async () => {
+    server.use(
+      http.head('http://scope-res.local/docs/page1', () => new HttpResponse(null, { status: 200 })),
+    );
+
+    // llms.txt has both docs and non-docs links; only docs links should be tested
+    const content = `# Site\n- [Page](http://scope-res.local/docs/page1): Page\n- [Blog](http://scope-res.local/blog/post): Blog\n`;
+    const ctx = createContext('http://scope-res.local/docs', { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: 'http://scope-res.local/llms.txt', content, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    // Only the /docs/page1 link should be tested
+    expect(result.details?.sameOrigin).toMatchObject({ tested: 1, resolved: 1 });
+  });
+
+  it('skips with descriptive message when all links are outside the baseUrl path prefix', async () => {
+    const content = `# Site\n- [Blog](http://scope-res2.local/blog/post): Blog\n`;
+    const ctx = createContext('http://scope-res2.local/docs', { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: 'http://scope-res2.local/llms.txt', content, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('skip');
+    expect(result.message).toContain('1 link');
+    expect(result.message).toContain('none are under /docs');
+  });
+
   it('includes "sampled" in message when results are sampled', async () => {
     const links = Array.from(
       { length: 5 },
