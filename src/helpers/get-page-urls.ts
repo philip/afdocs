@@ -310,29 +310,74 @@ export async function getUrlsFromSitemap(
 }
 
 /**
+ * Get the base URL for path-prefix filtering, accounting for cross-host redirects.
+ *
+ * When a cross-host redirect is in play (e.g. example.com/docs → docs.example.com),
+ * the original baseUrl path doesn't apply to the redirected host, so we return the
+ * effectiveOrigin (a root URL) which makes path filtering a no-op.
+ */
+export function getPathFilterBase(ctx: CheckContext): string {
+  return ctx.effectiveOrigin && ctx.effectiveOrigin !== ctx.origin
+    ? ctx.effectiveOrigin
+    : ctx.baseUrl;
+}
+
+/**
+ * Filter URLs to those under the baseUrl's path prefix.
+ *
+ * When the input URL has a non-root path (e.g. `https://plaid.com/docs`),
+ * only URLs whose pathname starts with that prefix are kept. This prevents
+ * blog posts, marketing pages, and other non-docs content from polluting
+ * the URL pool when llms.txt or sitemaps cover the entire domain.
+ *
+ * Root URLs (path is `/`) pass all same-origin URLs through unfiltered.
+ */
+export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
+  const baseUrlPath = new URL(baseUrl).pathname.replace(/\/$/, '');
+  if (!baseUrlPath || baseUrlPath === '') return urls;
+
+  return urls.filter((url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.pathname === baseUrlPath || parsed.pathname.startsWith(baseUrlPath + '/');
+    } catch {
+      return true; // keep malformed URLs rather than silently dropping them
+    }
+  });
+}
+
+/**
  * Discover page URLs from llms.txt links, sitemap, or fall back to baseUrl.
  *
  * Priority:
  * 1. llms.txt links (from previous check results)
  * 2. Sitemap URLs (robots.txt Sitemap directives, then /sitemap.xml fallback)
  * 3. baseUrl fallback
+ *
+ * All discovered URLs are filtered to the baseUrl's path prefix so that
+ * docs at a subpath (e.g. `/docs`) don't include unrelated site content.
  */
 export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
+  const filterBase = getPathFilterBase(ctx);
+
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
   const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
-  if (cachedUrls.length > 0) return { urls: cachedUrls, warnings };
+  const scopedCachedUrls = filterByPathPrefix(cachedUrls, filterBase);
+  if (scopedCachedUrls.length > 0) return { urls: scopedCachedUrls, warnings };
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
   if (!ctx.previousResults.has('llms-txt-exists')) {
     const fetchedUrls = await fetchLlmsTxtUrls(ctx);
-    if (fetchedUrls.length > 0) return { urls: fetchedUrls, warnings };
+    const scopedFetchedUrls = filterByPathPrefix(fetchedUrls, filterBase);
+    if (scopedFetchedUrls.length > 0) return { urls: scopedFetchedUrls, warnings };
   }
 
   // 3. Try sitemap
   const sitemapUrls = await getUrlsFromSitemap(ctx, warnings);
-  if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
+  const scopedSitemapUrls = filterByPathPrefix(sitemapUrls, filterBase);
+  if (scopedSitemapUrls.length > 0) return { urls: scopedSitemapUrls, warnings };
 
   // 4. Fallback
   return { urls: [ctx.baseUrl], warnings };

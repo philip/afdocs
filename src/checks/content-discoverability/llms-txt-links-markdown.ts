@@ -1,5 +1,6 @@
 import { registerCheck } from '../registry.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
+import { filterByPathPrefix, getPathFilterBase } from '../../helpers/get-page-urls.js';
 import { toMdUrls } from '../../helpers/to-md-urls.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
@@ -36,35 +37,45 @@ async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult
     };
   }
 
-  // Collect unique links and partition by origin
-  const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
-  const sameOriginLinks: string[] = [];
-  const crossOriginLinks: string[] = [];
+  // Collect unique links, scope to baseUrl path prefix, and partition by origin
+  const allExtractedUrls = new Set<string>();
   for (const file of discovered) {
     const links = extractMarkdownLinks(file.content);
     for (const link of links) {
       if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-        try {
-          const linkOrigin = new URL(link.url).origin;
-          if (linkOrigin === siteOrigin) {
-            if (!sameOriginLinks.includes(link.url)) sameOriginLinks.push(link.url);
-          } else {
-            if (!crossOriginLinks.includes(link.url)) crossOriginLinks.push(link.url);
-          }
-        } catch {
-          if (!sameOriginLinks.includes(link.url)) sameOriginLinks.push(link.url);
-        }
+        allExtractedUrls.add(link.url);
       }
+    }
+  }
+  const scopedUrls = filterByPathPrefix(Array.from(allExtractedUrls), getPathFilterBase(ctx));
+
+  const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
+  const sameOriginLinks: string[] = [];
+  const crossOriginLinks: string[] = [];
+  for (const url of scopedUrls) {
+    try {
+      const linkOrigin = new URL(url).origin;
+      if (linkOrigin === siteOrigin) {
+        sameOriginLinks.push(url);
+      } else {
+        crossOriginLinks.push(url);
+      }
+    } catch {
+      sameOriginLinks.push(url);
     }
   }
 
   const totalLinks = sameOriginLinks.length + crossOriginLinks.length;
   if (totalLinks === 0) {
+    const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
+    const filteredOut = allExtractedUrls.size > 0 && baseUrlPath && baseUrlPath !== '/';
     return {
       id: 'llms-txt-links-markdown',
       category: 'content-discoverability',
       status: 'skip',
-      message: 'No HTTP(S) links found in llms.txt',
+      message: filteredOut
+        ? `llms.txt contains ${allExtractedUrls.size} link${allExtractedUrls.size === 1 ? '' : 's'}, but none are under ${baseUrlPath}`
+        : 'No HTTP(S) links found in llms.txt',
     };
   }
 

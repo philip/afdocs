@@ -6,6 +6,7 @@ import {
   discoverAndSamplePages,
   parseSitemapUrls,
   parseSitemapDirectives,
+  filterByPathPrefix,
 } from '../../../src/helpers/get-page-urls.js';
 import { MAX_SITEMAP_URLS } from '../../../src/constants.js';
 import { createContext } from '../../../src/runner.js';
@@ -86,6 +87,64 @@ Sitemap: https://example.com/sitemap-blog.xml
 
   it('handles empty input', () => {
     expect(parseSitemapDirectives('')).toEqual([]);
+  });
+});
+
+describe('filterByPathPrefix', () => {
+  it('filters URLs to those under the path prefix', () => {
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/blog/post1',
+      'https://example.com/careers',
+    ];
+    const result = filterByPathPrefix(urls, 'https://example.com/docs');
+    expect(result).toEqual(['https://example.com/docs/intro', 'https://example.com/docs/guide']);
+  });
+
+  it('includes the exact baseUrl path itself', () => {
+    const urls = ['https://example.com/docs', 'https://example.com/docs/page'];
+    const result = filterByPathPrefix(urls, 'https://example.com/docs');
+    expect(result).toEqual(['https://example.com/docs', 'https://example.com/docs/page']);
+  });
+
+  it('passes all URLs through when baseUrl is at the root', () => {
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/blog/post1',
+      'https://example.com/careers',
+    ];
+    const result = filterByPathPrefix(urls, 'https://example.com');
+    expect(result).toEqual(urls);
+  });
+
+  it('passes all URLs through when baseUrl has a trailing slash root', () => {
+    const urls = ['https://example.com/a', 'https://example.com/b'];
+    const result = filterByPathPrefix(urls, 'https://example.com/');
+    expect(result).toEqual(urls);
+  });
+
+  it('does not match partial path segments', () => {
+    // /docs-extra should NOT match /docs prefix
+    const urls = ['https://example.com/docs/page', 'https://example.com/docs-extra/page'];
+    const result = filterByPathPrefix(urls, 'https://example.com/docs');
+    expect(result).toEqual(['https://example.com/docs/page']);
+  });
+
+  it('handles deeper path prefixes', () => {
+    const urls = [
+      'https://example.com/api/v2/docs/page',
+      'https://example.com/api/v2/other',
+      'https://example.com/api/v1/docs/page',
+    ];
+    const result = filterByPathPrefix(urls, 'https://example.com/api/v2/docs');
+    expect(result).toEqual(['https://example.com/api/v2/docs/page']);
+  });
+
+  it('keeps malformed URLs rather than dropping them', () => {
+    const urls = ['not-a-url', 'https://example.com/docs/page'];
+    const result = filterByPathPrefix(urls, 'https://example.com/docs');
+    expect(result).toEqual(['not-a-url', 'https://example.com/docs/page']);
   });
 });
 
@@ -620,6 +679,90 @@ describe('getPageUrls', () => {
   });
 
   // ── Existing sitemap tests ──
+
+  // ── Path-prefix scoping ──
+
+  it('scopes llms.txt URLs to the baseUrl path prefix', async () => {
+    const content = `# Docs\n> Summary\n## Links\n- [Intro](http://scope-test.local/docs/intro): Intro\n- [Guide](http://scope-test.local/docs/guide): Guide\n- [Blog](http://scope-test.local/blog/post1): A blog post\n- [Careers](http://scope-test.local/careers): Careers page\n`;
+    const ctx = makeCtx('http://scope-test.local/docs', content);
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://scope-test.local/docs/intro',
+      'http://scope-test.local/docs/guide',
+    ]);
+  });
+
+  it('does not filter when baseUrl is at the root', async () => {
+    const content = `# Docs\n- [A](http://root-scope.local/docs/a): A\n- [B](http://root-scope.local/blog/b): B\n`;
+    const ctx = makeCtx('http://root-scope.local', content);
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://root-scope.local/docs/a',
+      'http://root-scope.local/blog/b',
+    ]);
+  });
+
+  it('scopes sitemap URLs to the baseUrl path prefix', async () => {
+    server.use(
+      http.get(
+        'http://sitemap-scope.local/robots.txt',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://sitemap-scope.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://sitemap-scope.local/docs/intro</loc></url>
+  <url><loc>http://sitemap-scope.local/docs/guide</loc></url>
+  <url><loc>http://sitemap-scope.local/blog/post1</loc></url>
+  <url><loc>http://sitemap-scope.local/careers</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = makeCtx('http://sitemap-scope.local/docs');
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://sitemap-scope.local/docs/intro',
+      'http://sitemap-scope.local/docs/guide',
+    ]);
+  });
+
+  it('skips path filtering when effectiveOrigin differs from origin (cross-host redirect)', async () => {
+    // Simulate: user provides example.com/docs, which redirects to docs.example.com
+    // llms.txt on docs.example.com has links at root paths, not under /docs
+    const content = `# Docs\n- [Intro](http://xhost.local/intro): Intro\n- [Guide](http://xhost.local/guide): Guide\n`;
+    const ctx = makeCtx('http://original.local/docs', content);
+    // Simulate cross-host redirect detection
+    ctx.effectiveOrigin = 'http://xhost.local';
+
+    const result = await getPageUrls(ctx);
+    // Without the cross-host bypass, these would be filtered out (not under /docs)
+    expect(result.urls).toContain('http://xhost.local/intro');
+    expect(result.urls).toContain('http://xhost.local/guide');
+    expect(result.urls).toHaveLength(2);
+  });
+
+  it('falls back to baseUrl when path scoping filters out all discovered URLs', async () => {
+    // llms.txt has only non-docs URLs
+    const content = `# Site\n- [Blog](http://filter-all.local/blog/post): Post\n- [About](http://filter-all.local/about): About\n`;
+
+    server.use(
+      http.get('http://filter-all.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://filter-all.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+    );
+
+    const ctx = makeCtx('http://filter-all.local/docs', content);
+    const result = await getPageUrls(ctx);
+    // Path filtering removed all llms.txt URLs, no sitemap available → fallback
+    expect(result.urls).toEqual(['http://filter-all.local/docs']);
+  });
 
   it('processes non-gzipped sitemaps alongside gzipped ones from robots.txt', async () => {
     server.use(

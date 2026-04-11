@@ -1,6 +1,7 @@
 import { registerCheck } from '../registry.js';
 import { LINK_RESOLVE_THRESHOLD } from '../../constants.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
+import { filterByPathPrefix, getPathFilterBase } from '../../helpers/get-page-urls.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
 
 interface LinkCheckResult {
@@ -35,12 +36,20 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
     }
   }
 
-  if (allLinks.size === 0) {
+  // Scope links to the baseUrl path prefix so that docs at a subpath
+  // (e.g. /docs) don't include unrelated site content from root llms.txt.
+  const scopedUrls = filterByPathPrefix(Array.from(allLinks.keys()), getPathFilterBase(ctx));
+
+  if (scopedUrls.length === 0) {
+    const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
+    const filteredOut = allLinks.size > 0 && baseUrlPath && baseUrlPath !== '/';
     return {
       id: 'llms-txt-links-resolve',
       category: 'content-discoverability',
       status: 'skip',
-      message: 'No HTTP(S) links found in llms.txt',
+      message: filteredOut
+        ? `llms.txt contains ${allLinks.size} link${allLinks.size === 1 ? '' : 's'}, but none are under ${baseUrlPath}`
+        : 'No HTTP(S) links found in llms.txt',
     };
   }
 
@@ -48,7 +57,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
   const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
   const sameOriginLinks: string[] = [];
   const crossOriginLinks: string[] = [];
-  for (const url of allLinks.keys()) {
+  for (const url of scopedUrls) {
     try {
       const linkOrigin = new URL(url).origin;
       if (linkOrigin === siteOrigin) {
