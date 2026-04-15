@@ -261,6 +261,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     sitemapWarnings,
     MAX_FRESHNESS_SITEMAP_URLS,
     effectiveOrigin,
+    undefined,
+    true, // skip locale/version refinement — freshness does its own locale filtering
   );
   let sitemapSource = 'robots.txt/sitemap.xml';
   const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');

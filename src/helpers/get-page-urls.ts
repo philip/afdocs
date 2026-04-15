@@ -563,6 +563,8 @@ export async function getUrlsFromSitemap(
   maxUrls: number = MAX_SITEMAP_URLS,
   originOverride?: string,
   pathFilterBase?: string,
+  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. freshness coverage). */
+  skipRefinement?: boolean,
 ): Promise<string[]> {
   const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
@@ -616,6 +618,8 @@ export async function getUrlsFromSitemap(
       }
     }
   }
+
+  if (skipRefinement) return urls;
 
   const localeFiltered = filterLocalizedUrls(
     urls,
