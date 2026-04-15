@@ -78,6 +78,10 @@ export interface CheckOptions {
   samplingStrategy: SamplingStrategy;
   /** Size thresholds. */
   thresholds: SizeThresholds;
+  /** Preferred locale for URL discovery (e.g. 'en', 'fr', 'ja'). Overrides auto-detection from baseUrl. */
+  preferredLocale?: string;
+  /** Preferred version for URL discovery (e.g. 'v3', '2.x', 'latest'). Overrides auto-detection from baseUrl. */
+  preferredVersion?: string;
 }
 
 export interface SizeThresholds {

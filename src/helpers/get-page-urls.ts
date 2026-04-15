@@ -223,8 +223,19 @@ async function discoverSitemapUrls(ctx: CheckContext, originOverride?: string): 
     }
   }
 
-  // Default to /sitemap.xml (prefer effective origin if available)
-  return [`${originOverride ?? ctx.origin}/sitemap.xml`];
+  // Build fallback candidates: origin-level sitemap first, then subpath sitemaps
+  // when the base URL has a non-root path (e.g. swagger.io/docs/).
+  const fallbackOrigin = originOverride ?? ctx.origin;
+  const candidates = [`${fallbackOrigin}/sitemap.xml`];
+
+  const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
+  if (baseUrlPath && baseUrlPath !== '') {
+    const subpathBase = `${fallbackOrigin}${baseUrlPath}`;
+    candidates.push(`${subpathBase}/sitemap.xml`);
+    candidates.push(`${subpathBase}/sitemap-index.xml`);
+  }
+
+  return candidates;
 }
 
 export interface PageUrlResult {
@@ -234,6 +245,307 @@ export interface PageUrlResult {
 
 function isGzipped(url: string): boolean {
   return /\.gz($|\?)/i.test(url);
+}
+
+/**
+ * Extract a locale-like segment from a URL path, if present.
+ * Matches 2-letter codes and xx-yy region subtags (e.g. `en`, `fr`, `pt-br`).
+ * Returns the locale string or null.
+ *
+ * Only returns a match when the segment is clearly positional (early in the path,
+ * before content segments), to avoid false positives on short path segments.
+ */
+export function extractLocaleFromUrl(url: string): string | null {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    // Only check the first 3 segments to avoid matching content paths
+    for (let i = 0; i < Math.min(segments.length, 3); i++) {
+      if (/^[a-z]{2}(-[a-z]{2})?$/i.test(segments[i])) {
+        return segments[i].toLowerCase();
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Detect whether sub-sitemap URLs follow a locale naming convention and, if so,
+ * filter to the preferred locale. Defaults to 'en' when no preference is given.
+ *
+ * Common patterns:
+ * - `sitemap-en.xml`, `sitemap-fr.xml`, `sitemap-el.xml`
+ * - `/en/sitemap.xml`, `/fr/sitemap.xml`
+ *
+ * Returns the original array unchanged if no locale pattern is detected.
+ */
+export function filterLocaleSitemaps(
+  subSitemapUrls: string[],
+  preferredLocale?: string | null,
+): string[] {
+  if (subSitemapUrls.length < 2) return subSitemapUrls;
+
+  // Pattern 1: locale code in filename (sitemap-{locale}.xml)
+  const filenameLocalePattern = /\/sitemap-([a-z]{2}(?:-[a-z]{2})?)\.xml$/i;
+  // Pattern 2: locale code in path segment (/{locale}/sitemap.xml)
+  const pathLocalePattern = /\/([a-z]{2}(?:-[a-z]{2})?)\/sitemap[^/]*\.xml$/i;
+
+  const locales = new Map<string, string[]>();
+  const nonLocale: string[] = [];
+
+  for (const url of subSitemapUrls) {
+    const filenameMatch = filenameLocalePattern.exec(url);
+    const pathMatch = pathLocalePattern.exec(url);
+    const match = filenameMatch ?? pathMatch;
+
+    if (match) {
+      const locale = match[1].toLowerCase();
+      if (!locales.has(locale)) locales.set(locale, []);
+      locales.get(locale)!.push(url);
+    } else {
+      nonLocale.push(url);
+    }
+  }
+
+  // Need at least 2 distinct locale codes to consider this a locale-organized index
+  if (locales.size < 2) return subSitemapUrls;
+
+  // Prefer the user's locale, then 'en', then any non-locale sitemaps
+  const locale = preferredLocale?.toLowerCase();
+  const preferred = (locale && locales.get(locale)) ?? locales.get('en') ?? [];
+  return [...preferred, ...nonLocale].length > 0 ? [...preferred, ...nonLocale] : subSitemapUrls;
+}
+
+/**
+ * Filter page URLs to a single locale when the URL set contains locale-organized paths.
+ *
+ * Detection: for each path segment position, count how many distinct 2-letter
+ * (or xx-yy) codes appear. If a position has ≥2 distinct codes covering >50%
+ * of URLs, it's a locale segment.
+ *
+ * When detected, keeps only URLs matching the preferred locale (from the base
+ * URL), or 'en' as default. Returns the original array if no locale pattern
+ * is detected.
+ */
+export function filterLocalizedUrls(urls: string[], preferredLocale?: string | null): string[] {
+  if (urls.length < 2) return urls;
+
+  // For each path segment position, collect locale-like codes
+  const positionCounts = new Map<number, Map<string, number>>();
+  const positionTotals = new Map<number, number>();
+
+  for (const url of urls) {
+    try {
+      const segments = new URL(url).pathname.split('/').filter(Boolean);
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i].toLowerCase();
+        if (/^[a-z]{2}(-[a-z]{2})?$/.test(seg)) {
+          if (!positionCounts.has(i)) positionCounts.set(i, new Map());
+          const counts = positionCounts.get(i)!;
+          counts.set(seg, (counts.get(seg) ?? 0) + 1);
+          positionTotals.set(i, (positionTotals.get(i) ?? 0) + 1);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Find the position that looks like a locale segment
+  let localePosition: number | null = null;
+  for (const [pos, counts] of positionCounts) {
+    if (counts.size < 2) continue;
+    const total = positionTotals.get(pos) ?? 0;
+    if (total > urls.length * 0.5) {
+      localePosition = pos;
+      break;
+    }
+  }
+
+  if (localePosition === null) return urls;
+
+  const targetLocale = preferredLocale?.toLowerCase() ?? 'en';
+
+  const filtered = urls.filter((url) => {
+    try {
+      const segments = new URL(url).pathname.split('/').filter(Boolean);
+      if (segments.length <= localePosition!) return true; // keep URLs without enough segments
+      return segments[localePosition!].toLowerCase() === targetLocale;
+    } catch {
+      return true;
+    }
+  });
+
+  // If filtering removed everything (target locale not present), return original
+  return filtered.length > 0 ? filtered : urls;
+}
+
+/**
+ * Version segment pattern: matches common versioning conventions in URL paths.
+ *
+ * Matches segments like: v2, v3.1, 2.x, 3.0.1, 1.8, latest, stable, current, dev, next.
+ * Pre-release channels (dev, next, nightly, canary) are recognized for grouping but
+ * ranked below stable versions during deduplication.
+ * Does NOT match bare integers (e.g. `42`) since those are often page numbers or IDs.
+ * Bare integers require a `v` prefix (e.g. `v2`) to be recognized as versions.
+ */
+const VERSION_SEGMENT =
+  /^(v\d+(\.\d+)*(\.[x*])?|\d+\.\d+(\.\d+)*(\.[x*])?|\d+\.[x*]|latest|stable|current|dev|next|nightly|canary)$/i;
+
+/**
+ * Extract a version-like segment from a URL path, if present.
+ * Returns the version string (e.g. `6.0`, `v2`, `latest`) or null.
+ */
+export function extractVersionFromUrl(url: string): string | null {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    for (const seg of segments) {
+      if (VERSION_SEGMENT.test(seg)) return seg;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Detect versioned URL duplicates and deduplicate to the "current" version.
+ *
+ * When a sitemap contains the same page under multiple version prefixes
+ * (e.g., `/docs/2.x/foo`, `/docs/3.1.1/foo`, `/docs/foo`), this function
+ * groups them by their non-version path and keeps only one variant per page.
+ *
+ * Priority when `preferredVersion` is set: that version wins.
+ * Default priority: unversioned > `latest`/`stable`/`current` > highest semver.
+ *
+ * Returns the original array if no version duplication is detected (i.e.,
+ * fewer than 20% of URLs share a path suffix with another URL under a
+ * different version prefix).
+ */
+export function deduplicateVersionedUrls(
+  urls: string[],
+  preferredVersion?: string | null,
+): string[] {
+  if (urls.length < 2) return urls;
+
+  // For each URL, try to split it into (prefix, version, suffix).
+  // If no version segment is found, it's unversioned.
+  interface ParsedUrl {
+    url: string;
+    prefix: string; // path segments before the version
+    version: string | null; // the version segment, or null if unversioned
+    suffix: string; // path segments after the version
+    key: string; // prefix + suffix, used for grouping
+  }
+
+  const parsed: ParsedUrl[] = [];
+  for (const url of urls) {
+    try {
+      const u = new URL(url);
+      const segments = u.pathname.split('/').filter(Boolean);
+      let versionIdx = -1;
+      for (let i = 0; i < segments.length; i++) {
+        if (VERSION_SEGMENT.test(segments[i])) {
+          versionIdx = i;
+          break;
+        }
+      }
+
+      if (versionIdx >= 0) {
+        const prefix = segments.slice(0, versionIdx).join('/');
+        const suffix = segments.slice(versionIdx + 1).join('/');
+        parsed.push({
+          url,
+          prefix,
+          version: segments[versionIdx],
+          suffix,
+          key: [prefix, suffix].filter(Boolean).join('/'),
+        });
+      } else {
+        // Unversioned: key is the full path so it can group with versioned
+        // variants that have the same prefix + suffix.
+        parsed.push({
+          url,
+          prefix: segments.join('/'),
+          version: null,
+          suffix: '',
+          key: segments.join('/'),
+        });
+      }
+    } catch {
+      parsed.push({ url, prefix: '', version: null, suffix: '', key: url });
+    }
+  }
+
+  // Group by key to find duplicates
+  const groups = new Map<string, ParsedUrl[]>();
+  for (const p of parsed) {
+    if (!groups.has(p.key)) groups.set(p.key, []);
+    groups.get(p.key)!.push(p);
+  }
+
+  // Count how many URLs are in groups with multiple versions
+  const duplicatedCount = Array.from(groups.values())
+    .filter((g) => g.length > 1)
+    .reduce((sum, g) => sum + g.length, 0);
+
+  // Only deduplicate if a significant portion (>=20%) of URLs have version duplicates
+  if (duplicatedCount < urls.length * 0.2) return urls;
+
+  // For each group, pick the best variant
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const p of parsed) {
+    if (seen.has(p.key)) continue;
+    seen.add(p.key);
+
+    const group = groups.get(p.key)!;
+    if (group.length === 1) {
+      result.push(group[0].url);
+      continue;
+    }
+
+    // If the user's base URL contains a specific version, prefer that
+    if (preferredVersion) {
+      const match = group.find((g) => g.version?.toLowerCase() === preferredVersion.toLowerCase());
+      if (match) {
+        result.push(match.url);
+        continue;
+      }
+    }
+
+    // Default priority: unversioned > latest/stable/current > highest version
+    const unversioned = group.find((g) => g.version === null);
+    if (unversioned) {
+      result.push(unversioned.url);
+      continue;
+    }
+
+    const latestStable = group.find((g) => /^(latest|stable|current)$/i.test(g.version ?? ''));
+    if (latestStable) {
+      result.push(latestStable.url);
+      continue;
+    }
+
+    // Pick the highest version by string sort, excluding pre-release channels
+    // (dev, next, nightly, canary) which should only win as a last resort.
+    const isPreRelease = (v: string | null) => /^(dev|next|nightly|canary)$/i.test(v ?? '');
+    const stable = group.filter((g) => !isPreRelease(g.version));
+
+    if (stable.length > 0) {
+      const sorted = [...stable].sort((a, b) =>
+        (b.version ?? '').localeCompare(a.version ?? '', undefined, { numeric: true }),
+      );
+      result.push(sorted[0].url);
+    } else {
+      // All variants are pre-release — pick the first one
+      result.push(group[0].url);
+    }
+  }
+
+  return result;
 }
 
 async function fetchSitemap(
@@ -256,57 +568,89 @@ async function fetchSitemap(
   }
 }
 
+export interface SitemapOptions {
+  maxUrls?: number;
+  originOverride?: string;
+  pathFilterBase?: string;
+  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. freshness coverage). */
+  skipRefinement?: boolean;
+}
+
 export async function getUrlsFromSitemap(
   ctx: CheckContext,
   warnings: string[],
-  maxUrls: number = MAX_SITEMAP_URLS,
-  originOverride?: string,
+  opts: SitemapOptions = {},
 ): Promise<string[]> {
+  const { maxUrls = MAX_SITEMAP_URLS, originOverride, pathFilterBase, skipRefinement } = opts;
   const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
   const matchOrigin = originOverride ?? ctx.origin;
 
+  // Pre-compute the path prefix so we can filter before counting against the cap.
+  // When pathFilterBase is provided, only URLs under that prefix consume cap slots.
+  const prefixPath = pathFilterBase ? new URL(pathFilterBase).pathname.replace(/\/$/, '') : '';
+
+  function shouldInclude(url: string): boolean {
+    try {
+      const u = new URL(url);
+      if (u.origin !== matchOrigin) return false;
+      if (prefixPath) return matchesPathPrefix(url, prefixPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Collect up to collectLimit URLs before refinement. The cap is applied
+  // *after* locale/version filtering so that deduplication can see the full
+  // version spectrum rather than an arbitrary prefix of the sitemap.
+  const collectLimit = skipRefinement ? maxUrls : maxUrls * 20;
+
   for (const sitemapUrl of sitemapUrls) {
-    if (urls.length >= maxUrls) break;
+    if (urls.length >= collectLimit) break;
 
     const parsed = await fetchSitemap(ctx, sitemapUrl, warnings);
 
-    // Add direct URLs (filtered to same origin)
+    // Add direct URLs (filtered to same origin and path prefix)
     for (const url of parsed.urls) {
-      if (urls.length >= maxUrls) break;
-      try {
-        const u = new URL(url);
-        if (u.origin === matchOrigin) {
-          urls.push(url);
-        }
-      } catch {
-        // Skip malformed URLs
+      if (urls.length >= collectLimit) break;
+      if (shouldInclude(url)) {
+        urls.push(url);
       }
     }
 
-    // Follow one level of sitemap index
-    if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
-      for (const subSitemapUrl of parsed.sitemapIndexUrls) {
-        if (urls.length >= maxUrls) break;
+    // Follow one level of sitemap index, filtering to default locale if detected
+    if (parsed.sitemapIndexUrls.length > 0 && urls.length < collectLimit) {
+      const filteredSubSitemaps = filterLocaleSitemaps(
+        parsed.sitemapIndexUrls,
+        ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
+      );
+      for (const subSitemapUrl of filteredSubSitemaps) {
+        if (urls.length >= collectLimit) break;
 
         const subParsed = await fetchSitemap(ctx, subSitemapUrl, warnings);
 
         for (const url of subParsed.urls) {
-          if (urls.length >= maxUrls) break;
-          try {
-            const u = new URL(url);
-            if (u.origin === matchOrigin) {
-              urls.push(url);
-            }
-          } catch {
-            // Skip malformed URLs
+          if (urls.length >= collectLimit) break;
+          if (shouldInclude(url)) {
+            urls.push(url);
           }
         }
       }
     }
   }
 
-  return urls;
+  if (skipRefinement) return urls;
+
+  const localeFiltered = filterLocalizedUrls(
+    urls,
+    ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
+  );
+  const deduplicated = deduplicateVersionedUrls(
+    localeFiltered,
+    ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl),
+  );
+  return deduplicated.slice(0, maxUrls);
 }
 
 /**
@@ -323,6 +667,65 @@ export function getPathFilterBase(ctx: CheckContext): string {
 }
 
 /**
+ * Rewrite the filter base URL when explicit locale/version preferences
+ * override values detected in the base URL path.
+ *
+ * For example, base URL `example.com/en/docs` with `--locale de` rewrites
+ * to `example.com/de/docs` so that path prefix filtering matches the
+ * preferred locale's URL space.
+ */
+function rewriteFilterBase(
+  filterBase: string,
+  preferredLocale?: string,
+  preferredVersion?: string,
+): string {
+  if (!preferredLocale && !preferredVersion) return filterBase;
+
+  try {
+    const url = new URL(filterBase);
+    const segments = url.pathname.split('/').filter(Boolean);
+
+    if (preferredLocale) {
+      const detected = extractLocaleFromUrl(filterBase);
+      if (detected && detected !== preferredLocale.toLowerCase()) {
+        const idx = segments.findIndex((s) => s.toLowerCase() === detected);
+        if (idx >= 0) segments[idx] = preferredLocale.toLowerCase();
+      }
+    }
+
+    if (preferredVersion) {
+      const detected = extractVersionFromUrl(filterBase);
+      if (detected && detected.toLowerCase() !== preferredVersion.toLowerCase()) {
+        const idx = segments.findIndex((s) => s === detected);
+        if (idx >= 0) segments[idx] = preferredVersion;
+      }
+    }
+
+    url.pathname = '/' + segments.join('/');
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return filterBase;
+  }
+}
+
+/**
+ * Check whether a single URL falls under the given path prefix.
+ *
+ * Returns true when the baseUrl is at the root (no filtering needed),
+ * when the URL matches the prefix, or when the URL is malformed
+ * (kept rather than silently dropped).
+ */
+export function matchesPathPrefix(url: string, baseUrlPath: string): boolean {
+  if (!baseUrlPath || baseUrlPath === '') return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname === baseUrlPath || parsed.pathname.startsWith(baseUrlPath + '/');
+  } catch {
+    return true; // keep malformed URLs rather than silently dropping them
+  }
+}
+
+/**
  * Filter URLs to those under the baseUrl's path prefix.
  *
  * When the input URL has a non-root path (e.g. `https://plaid.com/docs`),
@@ -334,16 +737,7 @@ export function getPathFilterBase(ctx: CheckContext): string {
  */
 export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
   const baseUrlPath = new URL(baseUrl).pathname.replace(/\/$/, '');
-  if (!baseUrlPath || baseUrlPath === '') return urls;
-
-  return urls.filter((url) => {
-    try {
-      const parsed = new URL(url);
-      return parsed.pathname === baseUrlPath || parsed.pathname.startsWith(baseUrlPath + '/');
-    } catch {
-      return true; // keep malformed URLs rather than silently dropping them
-    }
-  });
+  return urls.filter((url) => matchesPathPrefix(url, baseUrlPath));
 }
 
 /**
@@ -360,24 +754,35 @@ export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
 export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
-  const filterBase = getPathFilterBase(ctx);
+  const locale = ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl);
+  const version = ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl);
+  const filterBase = rewriteFilterBase(
+    getPathFilterBase(ctx),
+    ctx.options.preferredLocale,
+    ctx.options.preferredVersion,
+  );
+
+  /** Apply locale and version filtering to a discovered URL set. */
+  function refineUrls(urls: string[]): string[] {
+    const localeFiltered = filterLocalizedUrls(urls, locale);
+    return deduplicateVersionedUrls(localeFiltered, version);
+  }
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
   const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
-  const scopedCachedUrls = filterByPathPrefix(cachedUrls, filterBase);
+  const scopedCachedUrls = refineUrls(filterByPathPrefix(cachedUrls, filterBase));
   if (scopedCachedUrls.length > 0) return { urls: scopedCachedUrls, warnings };
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
   if (!ctx.previousResults.has('llms-txt-exists')) {
     const fetchedUrls = await fetchLlmsTxtUrls(ctx);
-    const scopedFetchedUrls = filterByPathPrefix(fetchedUrls, filterBase);
+    const scopedFetchedUrls = refineUrls(filterByPathPrefix(fetchedUrls, filterBase));
     if (scopedFetchedUrls.length > 0) return { urls: scopedFetchedUrls, warnings };
   }
 
-  // 3. Try sitemap
-  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings);
-  const scopedSitemapUrls = filterByPathPrefix(sitemapUrls, filterBase);
-  if (scopedSitemapUrls.length > 0) return { urls: scopedSitemapUrls, warnings };
+  // 3. Try sitemap (path, locale, and version filtering applied inside)
+  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, { pathFilterBase: filterBase });
+  if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
 
   // 4. Fallback
   return { urls: [ctx.baseUrl], warnings };

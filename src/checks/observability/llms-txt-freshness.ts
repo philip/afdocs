@@ -256,12 +256,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   //    sitemap URLs at the redirected host are accepted rather than filtered out.
   const effectiveOrigin = ctx.effectiveOrigin ?? ctx.origin;
   const sitemapWarnings: string[] = [];
-  let sitemapUrls = await getUrlsFromSitemap(
-    ctx,
-    sitemapWarnings,
-    MAX_FRESHNESS_SITEMAP_URLS,
-    effectiveOrigin,
-  );
+  let sitemapUrls = await getUrlsFromSitemap(ctx, sitemapWarnings, {
+    maxUrls: MAX_FRESHNESS_SITEMAP_URLS,
+    originOverride: effectiveOrigin,
+    skipRefinement: true,
+  });
   let sitemapSource = 'robots.txt/sitemap.xml';
   const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
 

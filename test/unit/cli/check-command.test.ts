@@ -242,6 +242,45 @@ describe('check command', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('accepts --locale and --version flags without error', async () => {
+    server.use(
+      http.get('http://cmd-opts.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-opts.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-opts.local',
+      '--checks',
+      'llms-txt-exists',
+      '--request-delay',
+      '0',
+      '--doc-locale',
+      'fr',
+      '--doc-version',
+      'v3',
+      '--format',
+      'json',
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.results[0].id).toBe('llms-txt-exists');
+    expect(parsed.results[0].status).toBe('pass');
+
+    writeSpy.mockRestore();
+  });
+
   it('does not set exit code 1 when all pass', async () => {
     server.use(
       http.get('http://cmd-pass.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
