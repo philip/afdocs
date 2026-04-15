@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import {
   getPageUrls,
+  getUrlsFromSitemap,
   discoverAndSamplePages,
   parseSitemapUrls,
   parseSitemapDirectives,
@@ -335,6 +336,23 @@ describe('filterLocalizedUrls', () => {
     // ja not present → returns all
     expect(result).toEqual(urls);
   });
+
+  it('keeps URLs with fewer segments than the locale position', () => {
+    // Locale at position 1 (docs/{locale}/...), so a URL with only 1 segment
+    // doesn't reach the locale position and should be kept, not dropped.
+    const urls = [
+      'https://example.com/docs/en/intro',
+      'https://example.com/docs/fr/intro',
+      'https://example.com/docs/en/guide',
+      'https://example.com/docs/fr/guide',
+      'https://example.com/docs', // only 1 segment, can't have locale at position 1
+    ];
+    const result = filterLocalizedUrls(urls);
+    expect(result).toContain('https://example.com/docs/en/intro');
+    expect(result).toContain('https://example.com/docs/en/guide');
+    expect(result).toContain('https://example.com/docs'); // kept, not dropped
+    expect(result).not.toContain('https://example.com/docs/fr/intro');
+  });
 });
 
 describe('deduplicateVersionedUrls', () => {
@@ -452,6 +470,23 @@ describe('deduplicateVersionedUrls', () => {
       'https://example.com/docs/v2/intro',
       'https://example.com/docs/v2/guide',
     ]);
+  });
+
+  it('passes through singleton groups alongside deduplicated groups', () => {
+    const urls = [
+      'https://example.com/docs/v1/intro',
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/v3/intro',
+      'https://example.com/docs/v1/guide',
+      'https://example.com/docs/v2/guide',
+      'https://example.com/docs/v3/guide',
+      'https://example.com/docs/unique-page', // no version duplicates
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toContain('https://example.com/docs/v3/intro');
+    expect(result).toContain('https://example.com/docs/v3/guide');
+    expect(result).toContain('https://example.com/docs/unique-page');
+    expect(result).toHaveLength(3);
   });
 
   it('falls back to default priority when preferredVersion has no match', () => {
@@ -1065,6 +1100,42 @@ describe('getPageUrls', () => {
     expect(result.urls).toEqual(['http://walk-err.local']);
   });
 
+  it('skips aggregate .txt files with non-text content-type', async () => {
+    const rootContent = `# Docs\n- [Data](http://walk-ct.local/data.txt)\n- [Page](http://walk-ct.local/docs/page): Page\n`;
+    server.use(
+      http.get(
+        'http://walk-ct.local/data.txt',
+        () =>
+          new HttpResponse('{"key": "value"}', {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx('http://walk-ct.local', rootContent);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://walk-ct.local/docs/page']);
+  });
+
+  it('skips aggregate .txt files with empty content', async () => {
+    const rootContent = `# Docs\n- [Empty](http://walk-empty.local/empty.txt)\n- [Page](http://walk-empty.local/docs/page): Page\n`;
+    server.use(
+      http.get(
+        'http://walk-empty.local/empty.txt',
+        () =>
+          new HttpResponse('   ', {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx('http://walk-empty.local', rootContent);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://walk-empty.local/docs/page']);
+  });
+
   // ── Direct llms.txt fetch (standalone mode) ──
 
   it('fetches llms.txt directly when llms-txt-exists has not run', async () => {
@@ -1378,6 +1449,186 @@ describe('getPageUrls', () => {
     expect(result.urls).toEqual(['http://gz-mixed.local/page']);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain('sitemap.xml.gz');
+  });
+
+  it('explicit preferredLocale overrides locale detected from base URL', async () => {
+    const content = `# Docs\n## Links\n- [EN](http://opt-locale.local/en/docs/intro): Intro\n- [FR](http://opt-locale.local/fr/docs/intro): Intro\n- [DE](http://opt-locale.local/de/docs/intro): Intro\n`;
+    // Base URL has /en/ but explicit option says 'de' — path prefix
+    // should be rewritten from /en to /de so the right URLs pass through
+    const ctx = makeCtx('http://opt-locale.local/en', content);
+    ctx.options.preferredLocale = 'de';
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://opt-locale.local/de/docs/intro']);
+  });
+
+  it('explicit preferredVersion overrides version detected from base URL', async () => {
+    const content = `# Docs\n## Links\n- [v1](http://opt-ver.local/docs/v1/intro): v1\n- [v2](http://opt-ver.local/docs/v2/intro): v2\n- [v3](http://opt-ver.local/docs/v3/intro): v3\n- [v1 Guide](http://opt-ver.local/docs/v1/guide): v1\n- [v2 Guide](http://opt-ver.local/docs/v2/guide): v2\n- [v3 Guide](http://opt-ver.local/docs/v3/guide): v3\n`;
+    // Base URL has /v3/ but explicit option says 'v1' — path prefix
+    // should be rewritten from /docs/v3 to /docs/v1
+    const ctx = makeCtx('http://opt-ver.local/docs/v3', content);
+    ctx.options.preferredVersion = 'v1';
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://opt-ver.local/docs/v1/intro',
+      'http://opt-ver.local/docs/v1/guide',
+    ]);
+  });
+
+  it('explicit preferredLocale applies to sitemap index filtering', async () => {
+    server.use(
+      http.get(
+        'http://opt-sitemap-locale.local/robots.txt',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://opt-sitemap-locale.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>http://opt-sitemap-locale.local/sitemap-en.xml</loc></sitemap>
+  <sitemap><loc>http://opt-sitemap-locale.local/sitemap-ja.xml</loc></sitemap>
+  <sitemap><loc>http://opt-sitemap-locale.local/sitemap-fr.xml</loc></sitemap>
+</sitemapindex>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://opt-sitemap-locale.local/sitemap-ja.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://opt-sitemap-locale.local/ja/intro</loc></url>
+  <url><loc>http://opt-sitemap-locale.local/ja/guide</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = makeCtx('http://opt-sitemap-locale.local');
+    ctx.options.preferredLocale = 'ja';
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://opt-sitemap-locale.local/ja/intro',
+      'http://opt-sitemap-locale.local/ja/guide',
+    ]);
+  });
+
+  it('skipRefinement returns unfiltered sitemap URLs', async () => {
+    server.use(
+      http.get('http://skip-refine.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://skip-refine.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://skip-refine.local/en/intro</loc></url>
+  <url><loc>http://skip-refine.local/fr/intro</loc></url>
+  <url><loc>http://skip-refine.local/de/intro</loc></url>
+  <url><loc>http://skip-refine.local/en/guide</loc></url>
+  <url><loc>http://skip-refine.local/fr/guide</loc></url>
+  <url><loc>http://skip-refine.local/de/guide</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = createContext('http://skip-refine.local', { requestDelay: 0 });
+    const warnings: string[] = [];
+
+    // Without skipRefinement: should filter to 'en' (2 URLs)
+    const refined = await getUrlsFromSitemap(ctx, warnings);
+    expect(refined).toHaveLength(2);
+    expect(refined.every((u) => u.includes('/en/'))).toBe(true);
+
+    // With skipRefinement: should return all 6 URLs
+    const raw = await getUrlsFromSitemap(ctx, warnings, { skipRefinement: true });
+    expect(raw).toHaveLength(6);
+  });
+
+  it('preferredLocale works when base URL has no locale segment', async () => {
+    const content = `# Docs\n## Links\n- [EN](http://no-locale-base.local/en/intro): EN\n- [FR](http://no-locale-base.local/fr/intro): FR\n- [DE](http://no-locale-base.local/de/intro): DE\n`;
+    // Base URL has no locale — without the flag, would default to 'en'
+    const ctx = makeCtx('http://no-locale-base.local', content);
+    ctx.options.preferredLocale = 'fr';
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://no-locale-base.local/fr/intro']);
+  });
+
+  it('preferredVersion is a no-op when it matches version in base URL', async () => {
+    const content = `# Docs\n## Links\n- [v1](http://ver-match.local/docs/v1/intro): v1\n- [v2](http://ver-match.local/docs/v2/intro): v2\n- [v3](http://ver-match.local/docs/v3/intro): v3\n- [v1 Guide](http://ver-match.local/docs/v1/guide): v1\n- [v2 Guide](http://ver-match.local/docs/v2/guide): v2\n- [v3 Guide](http://ver-match.local/docs/v3/guide): v3\n`;
+    // preferredVersion matches what's in the base URL — same result either way
+    const ctx = makeCtx('http://ver-match.local/docs/v2', content);
+    ctx.options.preferredVersion = 'v2';
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://ver-match.local/docs/v2/intro',
+      'http://ver-match.local/docs/v2/guide',
+    ]);
+  });
+
+  it('respects maxUrls cap when following sitemap index sub-sitemaps', async () => {
+    server.use(
+      http.get('http://cap-index.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://cap-index.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>http://cap-index.local/sitemap-1.xml</loc></sitemap>
+  <sitemap><loc>http://cap-index.local/sitemap-2.xml</loc></sitemap>
+</sitemapindex>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://cap-index.local/sitemap-1.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://cap-index.local/page-1</loc></url>
+  <url><loc>http://cap-index.local/page-2</loc></url>
+  <url><loc>http://cap-index.local/page-3</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://cap-index.local/sitemap-2.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://cap-index.local/page-4</loc></url>
+  <url><loc>http://cap-index.local/page-5</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = createContext('http://cap-index.local', { requestDelay: 0 });
+    const warnings: string[] = [];
+    const result = await getUrlsFromSitemap(ctx, warnings, { maxUrls: 4 });
+    expect(result).toHaveLength(4);
+    // First 3 from sitemap-1, then 1 from sitemap-2 before cap
+    expect(result).toEqual([
+      'http://cap-index.local/page-1',
+      'http://cap-index.local/page-2',
+      'http://cap-index.local/page-3',
+      'http://cap-index.local/page-4',
+    ]);
   });
 });
 

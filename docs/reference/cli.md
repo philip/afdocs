@@ -109,16 +109,16 @@ afdocs check https://docs.example.com --max-links 100
 
 ### URL discovery
 
-| Flag                  | Default     | Description                                                      |
-| --------------------- | ----------- | ---------------------------------------------------------------- |
-| `--locale <code>`     | auto-detect | Preferred locale for URL discovery (e.g. `en`, `fr`, `ja`)       |
-| `--version <version>` | auto-detect | Preferred version for URL discovery (e.g. `v3`, `2.x`, `latest`) |
+| Flag                      | Default     | Description                                                      |
+| ------------------------- | ----------- | ---------------------------------------------------------------- |
+| `--doc-locale <code>`     | auto-detect | Preferred locale for URL discovery (e.g. `en`, `fr`, `ja`)       |
+| `--doc-version <version>` | auto-detect | Preferred version for URL discovery (e.g. `v3`, `2.x`, `latest`) |
 
 When `afdocs` discovers pages from a sitemap or `llms.txt`, it automatically filters out duplicate locale and version variants so you get a representative sample of unique content.
 
 The resolution order for both flags is:
 
-1. **Explicit flag** (`--locale`, `--version`) if provided
+1. **Explicit flag** (`--doc-locale`, `--doc-version`) if provided
 2. **Auto-detect** from the base URL path (e.g. `https://docs.example.com/fr/v3` detects `fr` and `v3`)
 3. **Built-in fallback** when neither of the above yields a value: locale falls back to `en`; version prefers unversioned URLs, then `latest`/`stable`/`current`, then the highest semver
 
@@ -126,13 +126,13 @@ Use the flags when the base URL doesn't contain locale or version segments but t
 
 ```bash
 # Prefer French locale during discovery
-afdocs check https://docs.example.com --locale fr
+afdocs check https://docs.example.com --doc-locale fr
 
 # Prefer a specific version
-afdocs check https://docs.example.com --version v3
+afdocs check https://docs.example.com --doc-version v3
 
 # Both together
-afdocs check https://docs.example.com --locale ja --version 2.x
+afdocs check https://docs.example.com --doc-locale ja --doc-version 2.x
 ```
 
 ### Request behavior

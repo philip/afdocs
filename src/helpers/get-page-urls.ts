@@ -650,6 +650,48 @@ export function getPathFilterBase(ctx: CheckContext): string {
 }
 
 /**
+ * Rewrite the filter base URL when explicit locale/version preferences
+ * override values detected in the base URL path.
+ *
+ * For example, base URL `example.com/en/docs` with `--locale de` rewrites
+ * to `example.com/de/docs` so that path prefix filtering matches the
+ * preferred locale's URL space.
+ */
+function rewriteFilterBase(
+  filterBase: string,
+  preferredLocale?: string,
+  preferredVersion?: string,
+): string {
+  if (!preferredLocale && !preferredVersion) return filterBase;
+
+  try {
+    const url = new URL(filterBase);
+    const segments = url.pathname.split('/').filter(Boolean);
+
+    if (preferredLocale) {
+      const detected = extractLocaleFromUrl(filterBase);
+      if (detected && detected !== preferredLocale.toLowerCase()) {
+        const idx = segments.findIndex((s) => s.toLowerCase() === detected);
+        if (idx >= 0) segments[idx] = preferredLocale.toLowerCase();
+      }
+    }
+
+    if (preferredVersion) {
+      const detected = extractVersionFromUrl(filterBase);
+      if (detected && detected.toLowerCase() !== preferredVersion.toLowerCase()) {
+        const idx = segments.findIndex((s) => s === detected);
+        if (idx >= 0) segments[idx] = preferredVersion;
+      }
+    }
+
+    url.pathname = '/' + segments.join('/');
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return filterBase;
+  }
+}
+
+/**
  * Check whether a single URL falls under the given path prefix.
  *
  * Returns true when the baseUrl is at the root (no filtering needed),
@@ -695,9 +737,13 @@ export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
 export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
-  const filterBase = getPathFilterBase(ctx);
   const locale = ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl);
   const version = ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl);
+  const filterBase = rewriteFilterBase(
+    getPathFilterBase(ctx),
+    ctx.options.preferredLocale,
+    ctx.options.preferredVersion,
+  );
 
   /** Apply locale and version filtering to a discovered URL set. */
   function refineUrls(urls: string[]): string[] {
