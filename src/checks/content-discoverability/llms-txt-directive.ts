@@ -1,5 +1,6 @@
 import { registerCheck } from '../registry.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
+import { toHtmlUrl } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 interface DirectiveResult {
@@ -50,27 +51,6 @@ function extractBody(html: string): { body: string; offset: number } {
   const bodyEnd = closeMatch ? bodyStart + closeMatch.index : html.length;
 
   return { body: html.slice(bodyStart, bodyEnd), offset: bodyStart };
-}
-
-/**
- * Convert a markdown URL back to its HTML equivalent.
- * Strips trailing `.md` extension or `/index.md` suffix.
- */
-function toHtmlUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.pathname.endsWith('.md')) {
-      u.pathname = u.pathname.replace(/(?:\/index)?\.md$/, '') || '/';
-      // Ensure trailing slash for directory-style URLs
-      if (u.pathname !== '/' && !u.pathname.includes('.')) {
-        u.pathname = u.pathname.replace(/\/?$/, '/');
-      }
-      return u.toString();
-    }
-  } catch {
-    // Fall through to return original
-  }
-  return url;
 }
 
 function searchContent(

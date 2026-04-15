@@ -1,5 +1,6 @@
 import { registerCheck } from '../registry.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
+import { SOFT_404_PATTERNS } from '../../helpers/detect-soft-404.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 interface StatusCodeResult {
@@ -20,8 +21,6 @@ function makeBadUrl(pageUrl: string): string {
   u.pathname = u.pathname.replace(/\/?$/, '-afdocs-nonexistent-8f3a');
   return u.toString();
 }
-
-const SOFT_404_PATTERNS = /not\s*found|page\s*not\s*found|404|does\s*not\s*exist/i;
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'http-status-codes';

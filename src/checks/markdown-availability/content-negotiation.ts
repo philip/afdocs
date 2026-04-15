@@ -1,15 +1,19 @@
 import { registerCheck } from '../registry.js';
 import { looksLikeMarkdown, looksLikeHtml } from '../../helpers/detect-markdown.js';
+import { isSoft404Body } from '../../helpers/detect-soft-404.js';
 import { discoverAndSamplePages } from '../../helpers/get-page-urls.js';
-import { isNonPageUrl } from '../../helpers/to-md-urls.js';
+import { isNonPageUrl, isMdUrl, toHtmlUrl } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 type Classification = 'markdown-with-correct-type' | 'markdown-with-wrong-type' | 'html';
 
 interface PageResult {
   url: string;
+  /** The URL actually fetched (may differ from url if .md was normalized). */
+  testedUrl?: string;
   classification: Classification;
   skipped?: boolean;
+  softError?: boolean;
   contentType: string;
   status: number;
   error?: string;
@@ -37,12 +41,34 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
         if (isNonPageUrl(url)) {
           return { url, classification: 'html', skipped: true, contentType: '', status: 0 };
         }
+
+        // Pre-request: normalize .md/.mdx URLs to their canonical HTML form (#33).
+        // Testing content negotiation against a .md URL is meaningless because the
+        // server already serves markdown at that path by definition.
+        const fetchUrl = isMdUrl(url) ? toHtmlUrl(url) : url;
+        const testedUrl = fetchUrl !== url ? fetchUrl : undefined;
+
         try {
-          const response = await ctx.http.fetch(url, {
+          const response = await ctx.http.fetch(fetchUrl, {
             headers: { Accept: 'text/markdown' },
           });
           const body = await response.text();
           const contentType = response.headers.get('content-type') ?? '';
+
+          // Post-response: reject soft-404 error pages (#29).
+          // Some servers return 200 with text/markdown for error pages
+          // (e.g. "# Page Not Found"), which would inflate scores.
+          if (isSoft404Body(body)) {
+            return {
+              url,
+              testedUrl,
+              classification: 'html',
+              softError: true,
+              contentType,
+              status: response.status,
+            };
+          }
+
           const isMarkdownType = contentType.includes('text/markdown');
           const isMarkdownBody = looksLikeMarkdown(body);
 
@@ -68,10 +94,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
             classification = 'html';
           }
 
-          return { url, classification, contentType, status: response.status };
+          return { url, testedUrl, classification, contentType, status: response.status };
         } catch (err) {
           return {
             url,
+            testedUrl,
             classification: 'html',
             contentType: '',
             status: 0,
@@ -85,6 +112,8 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
   const testedResults = results.filter((r) => !r.skipped);
   const skippedCount = results.length - testedResults.length;
+  const normalizedCount = testedResults.filter((r) => r.testedUrl).length;
+  const softErrorCount = testedResults.filter((r) => r.softError).length;
   const markdownWithCorrectType = testedResults.filter(
     (r) => r.classification === 'markdown-with-correct-type',
   ).length;
@@ -102,12 +131,16 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const pageLabel = wasSampled ? 'sampled pages' : 'pages';
   const suffix =
     (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
-    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
+    (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '') +
+    (softErrorCount > 0 ? `; ${softErrorCount} returned error pages` : '') +
+    (normalizedCount > 0 ? `; ${normalizedCount} .md URLs normalized` : '');
 
   const details: Record<string, unknown> = {
     totalPages,
     testedPages: testedResults.length,
     skippedPages: skippedCount,
+    normalizedMdUrls: normalizedCount,
+    softErrorPages: softErrorCount,
     sampled: wasSampled,
     markdownWithCorrectType,
     markdownWithWrongType,

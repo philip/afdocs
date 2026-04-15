@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { isCrossHostRedirect, toMdUrls } from '../../../src/helpers/to-md-urls.js';
+import {
+  isCrossHostRedirect,
+  isMdUrl,
+  toHtmlUrl,
+  toMdUrls,
+} from '../../../src/helpers/to-md-urls.js';
 
 describe('toMdUrls', () => {
   it('returns URL as-is when it already ends in .md', () => {
@@ -62,6 +67,58 @@ describe('toMdUrls', () => {
 
   it('returns empty array for .xml files', () => {
     expect(toMdUrls('https://example.com/sitemap.xml')).toEqual([]);
+  });
+});
+
+describe('toHtmlUrl', () => {
+  it('strips .md extension', () => {
+    expect(toHtmlUrl('https://example.com/docs/guide.md')).toBe('https://example.com/docs/guide');
+  });
+
+  it('converts index.md to trailing slash', () => {
+    expect(toHtmlUrl('https://example.com/docs/guide/index.md')).toBe(
+      'https://example.com/docs/guide/',
+    );
+  });
+
+  it('strips .mdx extension', () => {
+    expect(toHtmlUrl('https://example.com/docs/guide.mdx')).toBe('https://example.com/docs/guide');
+  });
+
+  it('converts index.mdx to trailing slash', () => {
+    expect(toHtmlUrl('https://example.com/docs/guide/index.mdx')).toBe(
+      'https://example.com/docs/guide/',
+    );
+  });
+
+  it('returns non-.md URLs unchanged', () => {
+    expect(toHtmlUrl('https://example.com/docs/guide')).toBe('https://example.com/docs/guide');
+  });
+
+  it('returns malformed URLs unchanged', () => {
+    expect(toHtmlUrl('not-a-url')).toBe('not-a-url');
+  });
+});
+
+describe('isMdUrl', () => {
+  it('returns true for .md URLs', () => {
+    expect(isMdUrl('https://example.com/docs/guide.md')).toBe(true);
+  });
+
+  it('returns true for .mdx URLs', () => {
+    expect(isMdUrl('https://example.com/docs/guide.mdx')).toBe(true);
+  });
+
+  it('returns false for non-.md URLs', () => {
+    expect(isMdUrl('https://example.com/docs/guide')).toBe(false);
+  });
+
+  it('returns false for .md in path but not as extension', () => {
+    expect(isMdUrl('https://example.com/docs/markdown/guide')).toBe(false);
+  });
+
+  it('returns false for malformed URLs', () => {
+    expect(isMdUrl('not-a-url')).toBe(false);
   });
 });
 
