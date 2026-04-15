@@ -120,7 +120,7 @@ The resolution order for both flags is:
 
 1. **Explicit flag** (`--doc-locale`, `--doc-version`) if provided
 2. **Auto-detect** from the base URL path (e.g. `https://docs.example.com/fr/v3` detects `fr` and `v3`)
-3. **Built-in fallback** when neither of the above yields a value: locale falls back to `en`; version prefers unversioned URLs, then `latest`/`stable`/`current`, then the highest semver
+3. **Built-in fallback** when neither of the above yields a value: locale falls back to `en`; version prefers unversioned URLs, then `latest`/`stable`/`current`, then the highest semver. Pre-release channels (`dev`, `next`, `nightly`, `canary`) are ranked below stable versions
 
 Use the flags when the base URL doesn't contain locale or version segments but the site organizes content by locale or version.
 
