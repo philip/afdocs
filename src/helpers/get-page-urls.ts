@@ -248,8 +248,31 @@ function isGzipped(url: string): boolean {
 }
 
 /**
+ * Extract a locale-like segment from a URL path, if present.
+ * Matches 2-letter codes and xx-yy region subtags (e.g. `en`, `fr`, `pt-br`).
+ * Returns the locale string or null.
+ *
+ * Only returns a match when the segment is clearly positional (early in the path,
+ * before content segments), to avoid false positives on short path segments.
+ */
+export function extractLocaleFromUrl(url: string): string | null {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    // Only check the first 3 segments to avoid matching content paths
+    for (let i = 0; i < Math.min(segments.length, 3); i++) {
+      if (/^[a-z]{2}(-[a-z]{2})?$/i.test(segments[i])) {
+        return segments[i].toLowerCase();
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
  * Detect whether sub-sitemap URLs follow a locale naming convention and, if so,
- * filter to the default locale (preferring 'en').
+ * filter to the preferred locale. Defaults to 'en' when no preference is given.
  *
  * Common patterns:
  * - `sitemap-en.xml`, `sitemap-fr.xml`, `sitemap-el.xml`
@@ -257,7 +280,10 @@ function isGzipped(url: string): boolean {
  *
  * Returns the original array unchanged if no locale pattern is detected.
  */
-export function filterLocaleSitemaps(subSitemapUrls: string[]): string[] {
+export function filterLocaleSitemaps(
+  subSitemapUrls: string[],
+  preferredLocale?: string | null,
+): string[] {
   if (subSitemapUrls.length < 2) return subSitemapUrls;
 
   // Pattern 1: locale code in filename (sitemap-{locale}.xml)
@@ -285,8 +311,9 @@ export function filterLocaleSitemaps(subSitemapUrls: string[]): string[] {
   // Need at least 2 distinct locale codes to consider this a locale-organized index
   if (locales.size < 2) return subSitemapUrls;
 
-  // Prefer 'en', then any non-locale sitemaps
-  const preferred = locales.get('en') ?? [];
+  // Prefer the user's locale, then 'en', then any non-locale sitemaps
+  const locale = preferredLocale?.toLowerCase();
+  const preferred = (locale && locales.get(locale)) ?? locales.get('en') ?? [];
   return [...preferred, ...nonLocale].length > 0 ? [...preferred, ...nonLocale] : subSitemapUrls;
 }
 
@@ -507,7 +534,10 @@ export async function getUrlsFromSitemap(
 
     // Follow one level of sitemap index, filtering to default locale if detected
     if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
-      const filteredSubSitemaps = filterLocaleSitemaps(parsed.sitemapIndexUrls);
+      const filteredSubSitemaps = filterLocaleSitemaps(
+        parsed.sitemapIndexUrls,
+        extractLocaleFromUrl(ctx.baseUrl),
+      );
       for (const subSitemapUrl of filteredSubSitemaps) {
         if (urls.length >= maxUrls) break;
 

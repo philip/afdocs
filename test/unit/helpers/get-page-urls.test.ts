@@ -10,6 +10,7 @@ import {
   filterLocaleSitemaps,
   deduplicateVersionedUrls,
   extractVersionFromUrl,
+  extractLocaleFromUrl,
 } from '../../../src/helpers/get-page-urls.js';
 import { MAX_SITEMAP_URLS } from '../../../src/constants.js';
 import { createContext } from '../../../src/runner.js';
@@ -215,6 +216,66 @@ describe('filterLocaleSitemaps', () => {
     const result = filterLocaleSitemaps(urls);
     // No 'en' match, no non-locale sitemaps → falls back to all
     expect(result).toEqual(urls);
+  });
+
+  it('prefers the locale from the base URL when preferredLocale is set', () => {
+    const urls = [
+      'https://example.com/sitemap-el.xml',
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-fr.xml',
+    ];
+    const result = filterLocaleSitemaps(urls, 'fr');
+    expect(result).toEqual(['https://example.com/sitemap-fr.xml']);
+  });
+
+  it('falls back to en when preferredLocale has no match', () => {
+    const urls = [
+      'https://example.com/sitemap-el.xml',
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-fr.xml',
+    ];
+    const result = filterLocaleSitemaps(urls, 'ja');
+    expect(result).toEqual(['https://example.com/sitemap-en.xml']);
+  });
+
+  it('preserves non-locale sitemaps alongside the preferred locale', () => {
+    const urls = [
+      'https://example.com/sitemap-pages.xml',
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-fr.xml',
+      'https://example.com/sitemap-de.xml',
+    ];
+    const result = filterLocaleSitemaps(urls, 'de');
+    expect(result).toEqual([
+      'https://example.com/sitemap-de.xml',
+      'https://example.com/sitemap-pages.xml',
+    ]);
+  });
+});
+
+describe('extractLocaleFromUrl', () => {
+  it('detects 2-letter locale in URL path', () => {
+    expect(extractLocaleFromUrl('https://example.com/fr/docs/intro')).toBe('fr');
+  });
+
+  it('detects locale with region subtag', () => {
+    expect(extractLocaleFromUrl('https://example.com/pt-br/docs/intro')).toBe('pt-br');
+  });
+
+  it('detects locale after a non-locale segment', () => {
+    expect(extractLocaleFromUrl('https://example.com/docs/en/intro')).toBe('en');
+  });
+
+  it('returns null when no locale segment is found', () => {
+    expect(extractLocaleFromUrl('https://example.com/docs/intro')).toBeNull();
+  });
+
+  it('does not match segments beyond the first 3 path positions', () => {
+    expect(extractLocaleFromUrl('https://example.com/a/b/c/fr/page')).toBeNull();
+  });
+
+  it('returns the first locale segment found', () => {
+    expect(extractLocaleFromUrl('https://example.com/en/fr/intro')).toBe('en');
   });
 });
 
