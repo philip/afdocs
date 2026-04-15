@@ -384,7 +384,9 @@ export function filterLocalizedUrls(urls: string[], preferredLocale?: string | n
 /**
  * Version segment pattern: matches common versioning conventions in URL paths.
  *
- * Matches segments like: v2, v3.1, 2.x, 3.0.1, 1.8, latest, stable, current, dev, next
+ * Matches segments like: v2, v3.1, 2.x, 3.0.1, 1.8, latest, stable, current, dev, next.
+ * Pre-release channels (dev, next, nightly, canary) are recognized for grouping but
+ * ranked below stable versions during deduplication.
  * Does NOT match bare integers (e.g. `42`) since those are often page numbers or IDs.
  * Bare integers require a `v` prefix (e.g. `v2`) to be recognized as versions.
  */
@@ -527,11 +529,20 @@ export function deduplicateVersionedUrls(
       continue;
     }
 
-    // Pick the highest version by string sort (good enough for semver-ish)
-    const sorted = [...group].sort((a, b) =>
-      (b.version ?? '').localeCompare(a.version ?? '', undefined, { numeric: true }),
-    );
-    result.push(sorted[0].url);
+    // Pick the highest version by string sort, excluding pre-release channels
+    // (dev, next, nightly, canary) which should only win as a last resort.
+    const isPreRelease = (v: string | null) => /^(dev|next|nightly|canary)$/i.test(v ?? '');
+    const stable = group.filter((g) => !isPreRelease(g.version));
+
+    if (stable.length > 0) {
+      const sorted = [...stable].sort((a, b) =>
+        (b.version ?? '').localeCompare(a.version ?? '', undefined, { numeric: true }),
+      );
+      result.push(sorted[0].url);
+    } else {
+      // All variants are pre-release — pick the first one
+      result.push(group[0].url);
+    }
   }
 
   return result;
@@ -590,32 +601,37 @@ export async function getUrlsFromSitemap(
     }
   }
 
+  // Collect up to collectLimit URLs before refinement. The cap is applied
+  // *after* locale/version filtering so that deduplication can see the full
+  // version spectrum rather than an arbitrary prefix of the sitemap.
+  const collectLimit = skipRefinement ? maxUrls : maxUrls * 20;
+
   for (const sitemapUrl of sitemapUrls) {
-    if (urls.length >= maxUrls) break;
+    if (urls.length >= collectLimit) break;
 
     const parsed = await fetchSitemap(ctx, sitemapUrl, warnings);
 
     // Add direct URLs (filtered to same origin and path prefix)
     for (const url of parsed.urls) {
-      if (urls.length >= maxUrls) break;
+      if (urls.length >= collectLimit) break;
       if (shouldInclude(url)) {
         urls.push(url);
       }
     }
 
     // Follow one level of sitemap index, filtering to default locale if detected
-    if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
+    if (parsed.sitemapIndexUrls.length > 0 && urls.length < collectLimit) {
       const filteredSubSitemaps = filterLocaleSitemaps(
         parsed.sitemapIndexUrls,
         ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
       );
       for (const subSitemapUrl of filteredSubSitemaps) {
-        if (urls.length >= maxUrls) break;
+        if (urls.length >= collectLimit) break;
 
         const subParsed = await fetchSitemap(ctx, subSitemapUrl, warnings);
 
         for (const url of subParsed.urls) {
-          if (urls.length >= maxUrls) break;
+          if (urls.length >= collectLimit) break;
           if (shouldInclude(url)) {
             urls.push(url);
           }
@@ -630,10 +646,11 @@ export async function getUrlsFromSitemap(
     urls,
     ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
   );
-  return deduplicateVersionedUrls(
+  const deduplicated = deduplicateVersionedUrls(
     localeFiltered,
     ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl),
   );
+  return deduplicated.slice(0, maxUrls);
 }
 
 /**

@@ -472,6 +472,36 @@ describe('deduplicateVersionedUrls', () => {
     ]);
   });
 
+  it('ranks pre-release channels (dev, next, nightly, canary) below stable versions', () => {
+    const urls = [
+      'https://example.com/en/dev/intro',
+      'https://example.com/en/6.0/intro',
+      'https://example.com/en/5.2/intro',
+      'https://example.com/en/dev/guide',
+      'https://example.com/en/6.0/guide',
+      'https://example.com/en/5.2/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/en/6.0/intro',
+      'https://example.com/en/6.0/guide',
+    ]);
+  });
+
+  it('uses pre-release when no stable versions exist', () => {
+    const urls = [
+      'https://example.com/en/dev/intro',
+      'https://example.com/en/nightly/intro',
+      'https://example.com/en/dev/guide',
+      'https://example.com/en/nightly/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/en/dev/intro',
+      'https://example.com/en/dev/guide',
+    ]);
+  });
+
   it('passes through singleton groups alongside deduplicated groups', () => {
     const urls = [
       'https://example.com/docs/v1/intro',
