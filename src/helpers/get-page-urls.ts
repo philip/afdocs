@@ -247,6 +247,49 @@ function isGzipped(url: string): boolean {
   return /\.gz($|\?)/i.test(url);
 }
 
+/**
+ * Detect whether sub-sitemap URLs follow a locale naming convention and, if so,
+ * filter to the default locale (preferring 'en').
+ *
+ * Common patterns:
+ * - `sitemap-en.xml`, `sitemap-fr.xml`, `sitemap-el.xml`
+ * - `/en/sitemap.xml`, `/fr/sitemap.xml`
+ *
+ * Returns the original array unchanged if no locale pattern is detected.
+ */
+export function filterLocaleSitemaps(subSitemapUrls: string[]): string[] {
+  if (subSitemapUrls.length < 2) return subSitemapUrls;
+
+  // Pattern 1: locale code in filename (sitemap-{locale}.xml)
+  const filenameLocalePattern = /\/sitemap-([a-z]{2}(?:-[a-z]{2})?)\.xml$/i;
+  // Pattern 2: locale code in path segment (/{locale}/sitemap.xml)
+  const pathLocalePattern = /\/([a-z]{2}(?:-[a-z]{2})?)\/sitemap[^/]*\.xml$/i;
+
+  const locales = new Map<string, string[]>();
+  const nonLocale: string[] = [];
+
+  for (const url of subSitemapUrls) {
+    const filenameMatch = filenameLocalePattern.exec(url);
+    const pathMatch = pathLocalePattern.exec(url);
+    const match = filenameMatch ?? pathMatch;
+
+    if (match) {
+      const locale = match[1].toLowerCase();
+      if (!locales.has(locale)) locales.set(locale, []);
+      locales.get(locale)!.push(url);
+    } else {
+      nonLocale.push(url);
+    }
+  }
+
+  // Need at least 2 distinct locale codes to consider this a locale-organized index
+  if (locales.size < 2) return subSitemapUrls;
+
+  // Prefer 'en', then any non-locale sitemaps
+  const preferred = locales.get('en') ?? [];
+  return [...preferred, ...nonLocale].length > 0 ? [...preferred, ...nonLocale] : subSitemapUrls;
+}
+
 async function fetchSitemap(
   ctx: CheckContext,
   sitemapUrl: string,
@@ -306,9 +349,10 @@ export async function getUrlsFromSitemap(
       }
     }
 
-    // Follow one level of sitemap index
+    // Follow one level of sitemap index, filtering to default locale if detected
     if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
-      for (const subSitemapUrl of parsed.sitemapIndexUrls) {
+      const filteredSubSitemaps = filterLocaleSitemaps(parsed.sitemapIndexUrls);
+      for (const subSitemapUrl of filteredSubSitemaps) {
         if (urls.length >= maxUrls) break;
 
         const subParsed = await fetchSitemap(ctx, subSitemapUrl, warnings);

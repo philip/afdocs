@@ -7,6 +7,7 @@ import {
   parseSitemapUrls,
   parseSitemapDirectives,
   filterByPathPrefix,
+  filterLocaleSitemaps,
 } from '../../../src/helpers/get-page-urls.js';
 import { MAX_SITEMAP_URLS } from '../../../src/constants.js';
 import { createContext } from '../../../src/runner.js';
@@ -145,6 +146,73 @@ describe('filterByPathPrefix', () => {
     const urls = ['not-a-url', 'https://example.com/docs/page'];
     const result = filterByPathPrefix(urls, 'https://example.com/docs');
     expect(result).toEqual(['not-a-url', 'https://example.com/docs/page']);
+  });
+});
+
+describe('filterLocaleSitemaps', () => {
+  it('filters to English sub-sitemaps when locale pattern detected in filenames', () => {
+    const urls = [
+      'https://example.com/sitemap-el.xml',
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-es.xml',
+      'https://example.com/sitemap-fr.xml',
+    ];
+    const result = filterLocaleSitemaps(urls);
+    expect(result).toEqual(['https://example.com/sitemap-en.xml']);
+  });
+
+  it('filters to English sub-sitemaps when locale pattern detected in paths', () => {
+    const urls = [
+      'https://example.com/el/sitemap.xml',
+      'https://example.com/en/sitemap.xml',
+      'https://example.com/fr/sitemap.xml',
+    ];
+    const result = filterLocaleSitemaps(urls);
+    expect(result).toEqual(['https://example.com/en/sitemap.xml']);
+  });
+
+  it('preserves non-locale sitemaps alongside the default locale', () => {
+    const urls = [
+      'https://example.com/sitemap-pages.xml',
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-fr.xml',
+      'https://example.com/sitemap-el.xml',
+    ];
+    const result = filterLocaleSitemaps(urls);
+    expect(result).toEqual([
+      'https://example.com/sitemap-en.xml',
+      'https://example.com/sitemap-pages.xml',
+    ]);
+  });
+
+  it('returns all URLs when no locale pattern is detected', () => {
+    const urls = ['https://example.com/sitemap-docs.xml', 'https://example.com/sitemap-blog.xml'];
+    const result = filterLocaleSitemaps(urls);
+    expect(result).toEqual(urls);
+  });
+
+  it('returns all URLs when only one locale is present', () => {
+    const urls = ['https://example.com/sitemap-en.xml', 'https://example.com/sitemap-pages.xml'];
+    const result = filterLocaleSitemaps(urls);
+    expect(result).toEqual(urls);
+  });
+
+  it('returns single URL unchanged', () => {
+    const urls = ['https://example.com/sitemap.xml'];
+    expect(filterLocaleSitemaps(urls)).toEqual(urls);
+  });
+
+  it('handles locale codes with region subtags', () => {
+    const urls = [
+      'https://example.com/sitemap-en-us.xml',
+      'https://example.com/sitemap-fr-fr.xml',
+      'https://example.com/sitemap-de-de.xml',
+    ];
+    // No plain 'en', so all region-tagged locales returned (no preferred match)
+    // Actually, these are distinct locales with region tags; en is not present
+    const result = filterLocaleSitemaps(urls);
+    // No 'en' match, no non-locale sitemaps → falls back to all
+    expect(result).toEqual(urls);
   });
 });
 
@@ -393,6 +461,47 @@ describe('getPageUrls', () => {
     // don't consume cap slots. All 50 English URLs should be found.
     expect(result.urls.length).toBe(50);
     expect(result.urls.every((u) => u.includes('/en/6.0/'))).toBe(true);
+  });
+
+  it('filters sitemap index to default locale, skipping non-English sub-sitemaps (#30)', async () => {
+    // Django-like sitemap index: 12 locale sitemaps, only en should be fetched
+    server.use(
+      http.get('http://locale-idx.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://locale-idx.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>http://locale-idx.local/sitemap-el.xml</loc></sitemap>
+  <sitemap><loc>http://locale-idx.local/sitemap-en.xml</loc></sitemap>
+  <sitemap><loc>http://locale-idx.local/sitemap-es.xml</loc></sitemap>
+  <sitemap><loc>http://locale-idx.local/sitemap-fr.xml</loc></sitemap>
+</sitemapindex>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://locale-idx.local/sitemap-en.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://locale-idx.local/en/docs/intro</loc></url>
+  <url><loc>http://locale-idx.local/en/docs/guide</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      // el, es, fr sitemaps should NOT be fetched — no mocks needed
+      // (if they were fetched, the test would timeout)
+    );
+
+    const ctx = makeCtx('http://locale-idx.local');
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://locale-idx.local/en/docs/intro',
+      'http://locale-idx.local/en/docs/guide',
+    ]);
   });
 
   it('handles sitemap fetch network errors gracefully', async () => {
