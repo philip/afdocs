@@ -8,6 +8,8 @@ import {
   parseSitemapDirectives,
   filterByPathPrefix,
   filterLocaleSitemaps,
+  deduplicateVersionedUrls,
+  extractVersionFromUrl,
 } from '../../../src/helpers/get-page-urls.js';
 import { MAX_SITEMAP_URLS } from '../../../src/constants.js';
 import { createContext } from '../../../src/runner.js';
@@ -213,6 +215,171 @@ describe('filterLocaleSitemaps', () => {
     const result = filterLocaleSitemaps(urls);
     // No 'en' match, no non-locale sitemaps → falls back to all
     expect(result).toEqual(urls);
+  });
+});
+
+describe('deduplicateVersionedUrls', () => {
+  it('deduplicates Docusaurus-style versioned URLs, keeping unversioned', () => {
+    const urls = [
+      'https://example.com/docs/2.x/intro',
+      'https://example.com/docs/3.0.1/intro',
+      'https://example.com/docs/3.1.1/intro',
+      'https://example.com/docs/intro',
+      'https://example.com/docs/2.x/guide',
+      'https://example.com/docs/3.0.1/guide',
+      'https://example.com/docs/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual(['https://example.com/docs/intro', 'https://example.com/docs/guide']);
+  });
+
+  it('prefers latest/stable when no unversioned variant exists', () => {
+    const urls = [
+      'https://example.com/en/v1/intro',
+      'https://example.com/en/v2/intro',
+      'https://example.com/en/latest/intro',
+      'https://example.com/en/v1/guide',
+      'https://example.com/en/v2/guide',
+      'https://example.com/en/latest/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/en/latest/intro',
+      'https://example.com/en/latest/guide',
+    ]);
+  });
+
+  it('picks the highest version when no unversioned or latest exists', () => {
+    const urls = [
+      'https://example.com/docs/1.8/intro',
+      'https://example.com/docs/3.0/intro',
+      'https://example.com/docs/2.0/intro',
+      'https://example.com/docs/1.8/guide',
+      'https://example.com/docs/3.0/guide',
+      'https://example.com/docs/2.0/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/docs/3.0/intro',
+      'https://example.com/docs/3.0/guide',
+    ]);
+  });
+
+  it('returns urls unchanged when less than 20% are version-duplicated', () => {
+    // 10 unique pages + 2 version duplicates = 12 total, 2/12 < 20%
+    const urls = [
+      ...Array.from({ length: 10 }, (_, i) => `https://example.com/docs/page-${i}`),
+      'https://example.com/docs/v1/intro',
+      'https://example.com/docs/v2/intro',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual(urls);
+  });
+
+  it('handles single URL', () => {
+    const urls = ['https://example.com/docs/v1/intro'];
+    expect(deduplicateVersionedUrls(urls)).toEqual(urls);
+  });
+
+  it('handles empty array', () => {
+    expect(deduplicateVersionedUrls([])).toEqual([]);
+  });
+
+  it('handles Read the Docs style versioning', () => {
+    const urls = [
+      'https://example.com/en/stable/tutorial',
+      'https://example.com/en/latest/tutorial',
+      'https://example.com/en/v2/tutorial',
+      'https://example.com/en/stable/api',
+      'https://example.com/en/latest/api',
+      'https://example.com/en/v2/api',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    // stable is preferred over latest (both are special, but stable sorts after latest)
+    expect(result).toEqual([
+      'https://example.com/en/stable/tutorial',
+      'https://example.com/en/stable/api',
+    ]);
+  });
+
+  it('prefers current as equivalent to latest/stable', () => {
+    const urls = [
+      'https://example.com/docs/v1/intro',
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/current/intro',
+      'https://example.com/docs/v1/guide',
+      'https://example.com/docs/v2/guide',
+      'https://example.com/docs/current/guide',
+    ];
+    const result = deduplicateVersionedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/docs/current/intro',
+      'https://example.com/docs/current/guide',
+    ]);
+  });
+
+  it('prefers the version from the base URL when preferredVersion is set', () => {
+    const urls = [
+      'https://example.com/docs/v1/intro',
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/v3/intro',
+      'https://example.com/docs/v1/guide',
+      'https://example.com/docs/v2/guide',
+      'https://example.com/docs/v3/guide',
+    ];
+    // User passed a URL with v2 in it
+    const result = deduplicateVersionedUrls(urls, 'v2');
+    expect(result).toEqual([
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/v2/guide',
+    ]);
+  });
+
+  it('falls back to default priority when preferredVersion has no match', () => {
+    const urls = [
+      'https://example.com/docs/v1/intro',
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/v1/guide',
+      'https://example.com/docs/v2/guide',
+    ];
+    // User passed a URL with v5 but no v5 exists in the sitemap
+    const result = deduplicateVersionedUrls(urls, 'v5');
+    expect(result).toEqual([
+      'https://example.com/docs/v2/intro',
+      'https://example.com/docs/v2/guide',
+    ]);
+  });
+});
+
+describe('extractVersionFromUrl', () => {
+  it('detects semver-style versions', () => {
+    expect(extractVersionFromUrl('https://example.com/docs/3.0.1/intro')).toBe('3.0.1');
+  });
+
+  it('detects v-prefixed versions', () => {
+    expect(extractVersionFromUrl('https://example.com/en/v2/guide')).toBe('v2');
+  });
+
+  it('detects wildcard versions', () => {
+    expect(extractVersionFromUrl('https://example.com/docs/2.x/intro')).toBe('2.x');
+  });
+
+  it('detects keyword versions', () => {
+    expect(extractVersionFromUrl('https://example.com/en/latest/intro')).toBe('latest');
+    expect(extractVersionFromUrl('https://example.com/en/stable/intro')).toBe('stable');
+    expect(extractVersionFromUrl('https://example.com/en/current/intro')).toBe('current');
+  });
+
+  it('returns null when no version segment is found', () => {
+    expect(extractVersionFromUrl('https://example.com/docs/intro')).toBeNull();
+  });
+
+  it('returns null for bare integers', () => {
+    expect(extractVersionFromUrl('https://example.com/page/42')).toBeNull();
+  });
+
+  it('returns the first version segment found', () => {
+    expect(extractVersionFromUrl('https://example.com/v2/docs/3.0/intro')).toBe('v2');
   });
 });
 
@@ -461,6 +628,42 @@ describe('getPageUrls', () => {
     // don't consume cap slots. All 50 English URLs should be found.
     expect(result.urls.length).toBe(50);
     expect(result.urls.every((u) => u.includes('/en/6.0/'))).toBe(true);
+  });
+
+  it('deduplicates versioned URLs from sitemap to current version (#22)', async () => {
+    // Docusaurus-style: same pages under multiple version prefixes
+    const versionedLocs = [
+      'http://ver-dedup.local/docs/2.x/intro',
+      'http://ver-dedup.local/docs/2.x/guide',
+      'http://ver-dedup.local/docs/3.0.1/intro',
+      'http://ver-dedup.local/docs/3.0.1/guide',
+      'http://ver-dedup.local/docs/3.1.1/intro',
+      'http://ver-dedup.local/docs/3.1.1/guide',
+      'http://ver-dedup.local/docs/intro',
+      'http://ver-dedup.local/docs/guide',
+    ]
+      .map((u) => `  <url><loc>${u}</loc></url>`)
+      .join('\n');
+
+    server.use(
+      http.get('http://ver-dedup.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://ver-dedup.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${versionedLocs}\n</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = makeCtx('http://ver-dedup.local');
+    const result = await getPageUrls(ctx);
+    // Should keep only the unversioned (current) variants
+    expect(result.urls).toEqual([
+      'http://ver-dedup.local/docs/intro',
+      'http://ver-dedup.local/docs/guide',
+    ]);
   });
 
   it('filters sitemap index to default locale, skipping non-English sub-sitemaps (#30)', async () => {

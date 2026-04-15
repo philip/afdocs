@@ -290,6 +290,162 @@ export function filterLocaleSitemaps(subSitemapUrls: string[]): string[] {
   return [...preferred, ...nonLocale].length > 0 ? [...preferred, ...nonLocale] : subSitemapUrls;
 }
 
+/**
+ * Version segment pattern: matches common versioning conventions in URL paths.
+ *
+ * Matches segments like: v2, v3.1, 2.x, 3.0.1, 1.8, latest, stable, current, dev, next
+ * Does NOT match bare integers (e.g. `42`) since those are often page numbers or IDs.
+ * Bare integers require a `v` prefix (e.g. `v2`) to be recognized as versions.
+ */
+const VERSION_SEGMENT =
+  /^(v\d+(\.\d+)*(\.[x*])?|\d+\.\d+(\.\d+)*(\.[x*])?|\d+\.[x*]|latest|stable|current|dev|next|nightly|canary)$/i;
+
+/**
+ * Extract a version-like segment from a URL path, if present.
+ * Returns the version string (e.g. `6.0`, `v2`, `latest`) or null.
+ */
+export function extractVersionFromUrl(url: string): string | null {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    for (const seg of segments) {
+      if (VERSION_SEGMENT.test(seg)) return seg;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Detect versioned URL duplicates and deduplicate to the "current" version.
+ *
+ * When a sitemap contains the same page under multiple version prefixes
+ * (e.g., `/docs/2.x/foo`, `/docs/3.1.1/foo`, `/docs/foo`), this function
+ * groups them by their non-version path and keeps only one variant per page.
+ *
+ * Priority when `preferredVersion` is set: that version wins.
+ * Default priority: unversioned > `latest`/`stable`/`current` > highest semver.
+ *
+ * Returns the original array if no version duplication is detected (i.e.,
+ * fewer than 20% of URLs share a path suffix with another URL under a
+ * different version prefix).
+ */
+export function deduplicateVersionedUrls(
+  urls: string[],
+  preferredVersion?: string | null,
+): string[] {
+  if (urls.length < 2) return urls;
+
+  // For each URL, try to split it into (prefix, version, suffix).
+  // If no version segment is found, it's unversioned.
+  interface ParsedUrl {
+    url: string;
+    prefix: string; // path segments before the version
+    version: string | null; // the version segment, or null if unversioned
+    suffix: string; // path segments after the version
+    key: string; // prefix + suffix, used for grouping
+  }
+
+  const parsed: ParsedUrl[] = [];
+  for (const url of urls) {
+    try {
+      const u = new URL(url);
+      const segments = u.pathname.split('/').filter(Boolean);
+      let versionIdx = -1;
+      for (let i = 0; i < segments.length; i++) {
+        if (VERSION_SEGMENT.test(segments[i])) {
+          versionIdx = i;
+          break;
+        }
+      }
+
+      if (versionIdx >= 0) {
+        const prefix = segments.slice(0, versionIdx).join('/');
+        const suffix = segments.slice(versionIdx + 1).join('/');
+        parsed.push({
+          url,
+          prefix,
+          version: segments[versionIdx],
+          suffix,
+          key: [prefix, suffix].filter(Boolean).join('/'),
+        });
+      } else {
+        // Unversioned: key is the full path so it can group with versioned
+        // variants that have the same prefix + suffix.
+        parsed.push({
+          url,
+          prefix: segments.join('/'),
+          version: null,
+          suffix: '',
+          key: segments.join('/'),
+        });
+      }
+    } catch {
+      parsed.push({ url, prefix: '', version: null, suffix: '', key: url });
+    }
+  }
+
+  // Group by key to find duplicates
+  const groups = new Map<string, ParsedUrl[]>();
+  for (const p of parsed) {
+    if (!groups.has(p.key)) groups.set(p.key, []);
+    groups.get(p.key)!.push(p);
+  }
+
+  // Count how many URLs are in groups with multiple versions
+  const duplicatedCount = Array.from(groups.values())
+    .filter((g) => g.length > 1)
+    .reduce((sum, g) => sum + g.length, 0);
+
+  // Only deduplicate if a significant portion (>=20%) of URLs have version duplicates
+  if (duplicatedCount < urls.length * 0.2) return urls;
+
+  // For each group, pick the best variant
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const p of parsed) {
+    if (seen.has(p.key)) continue;
+    seen.add(p.key);
+
+    const group = groups.get(p.key)!;
+    if (group.length === 1) {
+      result.push(group[0].url);
+      continue;
+    }
+
+    // If the user's base URL contains a specific version, prefer that
+    if (preferredVersion) {
+      const match = group.find((g) => g.version?.toLowerCase() === preferredVersion.toLowerCase());
+      if (match) {
+        result.push(match.url);
+        continue;
+      }
+    }
+
+    // Default priority: unversioned > latest/stable/current > highest version
+    const unversioned = group.find((g) => g.version === null);
+    if (unversioned) {
+      result.push(unversioned.url);
+      continue;
+    }
+
+    const latestStable = group.find((g) => /^(latest|stable|current)$/i.test(g.version ?? ''));
+    if (latestStable) {
+      result.push(latestStable.url);
+      continue;
+    }
+
+    // Pick the highest version by string sort (good enough for semver-ish)
+    const sorted = [...group].sort((a, b) =>
+      (b.version ?? '').localeCompare(a.version ?? '', undefined, { numeric: true }),
+    );
+    result.push(sorted[0].url);
+  }
+
+  return result;
+}
+
 async function fetchSitemap(
   ctx: CheckContext,
   sitemapUrl: string,
@@ -367,7 +523,7 @@ export async function getUrlsFromSitemap(
     }
   }
 
-  return urls;
+  return deduplicateVersionedUrls(urls, extractVersionFromUrl(ctx.baseUrl));
 }
 
 /**
