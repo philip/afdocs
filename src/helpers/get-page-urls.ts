@@ -600,7 +600,7 @@ export async function getUrlsFromSitemap(
     if (parsed.sitemapIndexUrls.length > 0 && urls.length < maxUrls) {
       const filteredSubSitemaps = filterLocaleSitemaps(
         parsed.sitemapIndexUrls,
-        extractLocaleFromUrl(ctx.baseUrl),
+        ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
       );
       for (const subSitemapUrl of filteredSubSitemaps) {
         if (urls.length >= maxUrls) break;
@@ -617,8 +617,14 @@ export async function getUrlsFromSitemap(
     }
   }
 
-  const localeFiltered = filterLocalizedUrls(urls, extractLocaleFromUrl(ctx.baseUrl));
-  return deduplicateVersionedUrls(localeFiltered, extractVersionFromUrl(ctx.baseUrl));
+  const localeFiltered = filterLocalizedUrls(
+    urls,
+    ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl),
+  );
+  return deduplicateVersionedUrls(
+    localeFiltered,
+    ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl),
+  );
 }
 
 /**
@@ -681,13 +687,13 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
   const filterBase = getPathFilterBase(ctx);
-  const baseLocale = extractLocaleFromUrl(ctx.baseUrl);
-  const baseVersion = extractVersionFromUrl(ctx.baseUrl);
+  const locale = ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl);
+  const version = ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl);
 
   /** Apply locale and version filtering to a discovered URL set. */
   function refineUrls(urls: string[]): string[] {
-    const localeFiltered = filterLocalizedUrls(urls, baseLocale);
-    return deduplicateVersionedUrls(localeFiltered, baseVersion);
+    const localeFiltered = filterLocalizedUrls(urls, locale);
+    return deduplicateVersionedUrls(localeFiltered, version);
   }
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)

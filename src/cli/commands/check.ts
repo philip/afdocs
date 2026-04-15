@@ -30,6 +30,8 @@ export function registerCheckCommand(program: Command): void {
       '--urls <urls>',
       'Comma-separated page URLs for curated scoring (implies --sampling curated)',
     )
+    .option('--locale <code>', 'Preferred locale for URL discovery (e.g. en, fr, ja)')
+    .option('--version <version>', 'Preferred version for URL discovery (e.g. v3, 2.x, latest)')
     .option('--pass-threshold <n>', 'Pass threshold in characters')
     .option('--fail-threshold <n>', 'Fail threshold in characters')
     .option('-v, --verbose', 'Show per-page details for checks with issues')
@@ -163,6 +165,11 @@ export function registerCheckCommand(program: Command): void {
         process.stderr.write(`Running checks on ${target}...\n`);
       }
 
+      const preferredLocale =
+        (opts.locale as string | undefined) ?? config?.options?.preferredLocale;
+      const preferredVersion =
+        (opts.version as string | undefined) ?? config?.options?.preferredVersion;
+
       const report = await runChecks(url, {
         checkIds,
         maxConcurrency,
@@ -174,6 +181,8 @@ export function registerCheckCommand(program: Command): void {
           pass: passThreshold,
           fail: failThreshold,
         },
+        ...(preferredLocale && { preferredLocale }),
+        ...(preferredVersion && { preferredVersion }),
       });
 
       let output: string;
