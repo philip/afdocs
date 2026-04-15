@@ -375,6 +375,14 @@ describe('getPageUrls', () => {
             { status: 200, headers: { 'Content-Type': 'application/xml' } },
           ),
       ),
+      http.get(
+        'http://cap-prefix.local/en/6.0/sitemap.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://cap-prefix.local/en/6.0/sitemap-index.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
     );
 
     // User wants to test /en/6.0/ docs specifically
@@ -779,6 +787,14 @@ describe('getPageUrls', () => {
             { status: 200, headers: { 'Content-Type': 'application/xml' } },
           ),
       ),
+      http.get(
+        'http://sitemap-scope.local/docs/sitemap.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://sitemap-scope.local/docs/sitemap-index.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
     );
 
     const ctx = makeCtx('http://sitemap-scope.local/docs');
@@ -786,6 +802,50 @@ describe('getPageUrls', () => {
     expect(result.urls).toEqual([
       'http://sitemap-scope.local/docs/intro',
       'http://sitemap-scope.local/docs/guide',
+    ]);
+  });
+
+  it('discovers sitemap at docs subpath when origin-level sitemap is empty (#32)', async () => {
+    // Simulate Swagger UI: robots.txt 404, /sitemap.xml 404, but /docs/sitemap-index.xml exists
+    server.use(
+      http.get('http://subpath-sm.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://subpath-sm.local/sitemap.xml',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+      http.get(
+        'http://subpath-sm.local/docs/sitemap.xml',
+        () => new HttpResponse('Not Found', { status: 404 }),
+      ),
+      http.get(
+        'http://subpath-sm.local/docs/sitemap-index.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>http://subpath-sm.local/docs/sitemap-0.xml</loc></sitemap>
+</sitemapindex>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://subpath-sm.local/docs/sitemap-0.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://subpath-sm.local/docs/getting-started</loc></url>
+  <url><loc>http://subpath-sm.local/docs/configuration</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const ctx = makeCtx('http://subpath-sm.local/docs');
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://subpath-sm.local/docs/getting-started',
+      'http://subpath-sm.local/docs/configuration',
     ]);
   });
 
@@ -811,6 +871,14 @@ describe('getPageUrls', () => {
     server.use(
       http.get('http://filter-all.local/robots.txt', () => new HttpResponse('', { status: 404 })),
       http.get('http://filter-all.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://filter-all.local/docs/sitemap.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://filter-all.local/docs/sitemap-index.xml',
+        () => new HttpResponse('', { status: 404 }),
+      ),
     );
 
     const ctx = makeCtx('http://filter-all.local/docs', content);

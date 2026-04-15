@@ -223,8 +223,19 @@ async function discoverSitemapUrls(ctx: CheckContext, originOverride?: string): 
     }
   }
 
-  // Default to /sitemap.xml (prefer effective origin if available)
-  return [`${originOverride ?? ctx.origin}/sitemap.xml`];
+  // Build fallback candidates: origin-level sitemap first, then subpath sitemaps
+  // when the base URL has a non-root path (e.g. swagger.io/docs/).
+  const fallbackOrigin = originOverride ?? ctx.origin;
+  const candidates = [`${fallbackOrigin}/sitemap.xml`];
+
+  const baseUrlPath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
+  if (baseUrlPath && baseUrlPath !== '') {
+    const subpathBase = `${fallbackOrigin}${baseUrlPath}`;
+    candidates.push(`${subpathBase}/sitemap.xml`);
+    candidates.push(`${subpathBase}/sitemap-index.xml`);
+  }
+
+  return candidates;
 }
 
 export interface PageUrlResult {

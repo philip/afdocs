@@ -289,6 +289,10 @@ describe('llms-txt-freshness', () => {
       http.get(`http://${host}/robots.txt`, () => new HttpResponse('', { status: 404 })),
       http.get(`http://${host}/sitemap.xml`, () => new HttpResponse('', { status: 404 })),
       http.get(`http://${host}/docs/sitemap.xml`, () => new HttpResponse('', { status: 404 })),
+      http.get(
+        `http://${host}/docs/sitemap-index.xml`,
+        () => new HttpResponse('', { status: 404 }),
+      ),
     );
 
     const result = await check.run(ctx);
@@ -542,12 +546,18 @@ describe('llms-txt-freshness', () => {
             headers: { 'content-type': 'application/xml' },
           }),
       ),
+      http.get(
+        `http://${host}/docs/sitemap-index.xml`,
+        () => new HttpResponse('', { status: 404 }),
+      ),
     );
 
     const result = await check.run(ctx);
     expect(result.status).toBe('pass');
     expect(result.details?.sitemapDocPages).toBe(3);
-    expect(result.details?.sitemapSource).toBe('/docs/sitemap.xml');
+    // getUrlsFromSitemap now discovers the docs sitemap via subpath fallback,
+    // so the freshness check's own fetchDocsSitemap fallback doesn't fire.
+    expect(result.details?.sitemapSource).toBe('robots.txt/sitemap.xml');
   });
 
   test('filters sitemap to matching locale when locale pattern detected', async () => {
