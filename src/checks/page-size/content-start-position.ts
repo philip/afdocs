@@ -74,6 +74,12 @@ function headingFollowedByContent(lines: string[], headingIdx: number): boolean 
     const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
     if (/^[=-]+$/.test(nextLine) && nextLine.length >= 2) return false;
 
+    // Markdown table row (e.g. "| Col A | Col B |")
+    if (/^\|.+\|/.test(t)) return true;
+
+    // HTML table tags inside .md files (not converted by htmlToMarkdown)
+    if (/^<table[\s>]/i.test(t) || /^<tr[\s>]/i.test(t)) return true;
+
     // A line > NAV_MAX_LENGTH that isn't a link is likely real prose
     if (t.length > NAV_MAX_LENGTH && linkDensity(t) < 0.5) return true;
 

@@ -507,6 +507,54 @@ describe('content-start-position', () => {
     expect(result.status).toBe('pass');
   });
 
+  // ── Table content after headings (issue #20) ──
+
+  it('detects markdown table as content after heading', async () => {
+    const html = `<html><body>
+      <h1>Limits for Scheduled Triggers</h1>
+      <table><tr><th>Trigger interval</th><th>Max executions</th></tr>
+      <tr><td>Every 5 minutes</td><td>50 per hour</td></tr></table>
+    </body></html>`;
+
+    server.use(
+      http.get(
+        'http://test.local/docs/table-after-heading',
+        () => new HttpResponse(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+      ),
+    );
+
+    const result = await check.run(singlePageCtx('/docs/table-after-heading'));
+    expect(result.status).toBe('pass');
+  });
+
+  it('detects markdown table in .md content as content after heading', async () => {
+    const md = `# Limits\n\n| Trigger interval | Max executions |\n|-----------------|----------------|\n| Every 5 minutes | 50 per hour    |\n`;
+
+    server.use(
+      http.get(
+        'http://test.local/docs/table-md',
+        () => new HttpResponse(md, { status: 200, headers: { 'Content-Type': 'text/markdown' } }),
+      ),
+    );
+
+    const result = await check.run(singlePageCtx('/docs/table-md'));
+    expect(result.status).toBe('pass');
+  });
+
+  it('detects HTML table in .md content as content after heading', async () => {
+    const md = `# Limits\n\n<table>\n  <tr><th>Col A</th><th>Col B</th></tr>\n  <tr><td>val</td><td>val</td></tr>\n</table>\n`;
+
+    server.use(
+      http.get(
+        'http://test.local/docs/table-html-in-md',
+        () => new HttpResponse(md, { status: 200, headers: { 'Content-Type': 'text/markdown' } }),
+      ),
+    );
+
+    const result = await check.run(singlePageCtx('/docs/table-html-in-md'));
+    expect(result.status).toBe('pass');
+  });
+
   // ── Lines that don't match any skip pattern and aren't prose ──
 
   it('skips short multi-word non-prose lines (breadcrumbs)', async () => {
