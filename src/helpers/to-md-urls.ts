@@ -39,6 +39,43 @@ export function isNonPageUrl(url: string): boolean {
 }
 
 /**
+ * Convert a .md or .mdx URL back to its canonical HTML equivalent.
+ * Inverts the transforms from toMdUrls():
+ *   /docs/guide.md       -> /docs/guide
+ *   /docs/guide/index.md -> /docs/guide/
+ *   /docs/guide.mdx      -> /docs/guide
+ * If the URL doesn't end in .md/.mdx, return it unchanged.
+ */
+export function toHtmlUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/index.md') || parsed.pathname.endsWith('/index.mdx')) {
+      parsed.pathname = parsed.pathname.replace(/\/index\.mdx?$/, '/');
+      return parsed.toString();
+    }
+    if (/\.mdx?$/i.test(parsed.pathname)) {
+      parsed.pathname = parsed.pathname.replace(/\.mdx?$/i, '');
+      return parsed.toString();
+    }
+  } catch {
+    // Fall through to return original
+  }
+  return url;
+}
+
+/**
+ * Returns true if the URL points to a .md or .mdx file.
+ */
+export function isMdUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /\.mdx?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generate candidate .md URLs for a page URL.
  * If the URL already ends in .md, return it as-is.
  * Otherwise try both `/docs/guide.md` and `/docs/guide/index.md`.

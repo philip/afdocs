@@ -292,6 +292,176 @@ describe('content-negotiation', () => {
     expect(cached?.markdown?.content).toBe('# From md-url');
   });
 
+  it('rejects markdown-formatted error pages as soft-404 (#29)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '# Page Not Found\n\nThe URL `/docs/page1` does not exist.\n\n## How to find the correct page\n',
+            {
+              status: 200,
+              headers: { 'Content-Type': 'text/markdown' },
+            },
+          ),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    const result = await check.run(ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.details?.softErrorPages).toBe(1);
+    expect(result.details?.markdownWithCorrectType).toBe(0);
+
+    // Soft-404 content must not poison the page cache
+    expect(ctx.pageCache.has('http://test.local/docs/page1')).toBe(false);
+  });
+
+  it('rejects error pages even with 200 status and correct content type (#29)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('# Page 1\n\nReal content here.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page2',
+        () =>
+          new HttpResponse('# 404\n\nThis page could not be found.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n- [Page 2](http://test.local/docs/page2): Second\n`;
+    const result = await check.run(makeCtx(content));
+
+    expect(result.status).toBe('warn');
+    expect(result.details?.markdownWithCorrectType).toBe(1);
+    expect(result.details?.softErrorPages).toBe(1);
+    expect(result.message).toContain('returned error pages');
+  });
+
+  it('normalizes .md URLs to canonical form before testing (#33)', async () => {
+    // The handler is on the canonical (non-.md) URL because the check
+    // should strip the extension before fetching.
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('<!DOCTYPE html><html><body>HTML</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1.md): First\n`;
+    const result = await check.run(makeCtx(content));
+
+    expect(result.status).toBe('fail');
+    expect(result.details?.normalizedMdUrls).toBe(1);
+    expect(result.message).toContain('.md URLs normalized');
+    // The canonical URL got HTML back, so no content negotiation support
+    expect(result.details?.markdownWithCorrectType).toBe(0);
+  });
+
+  it('reports testedUrl when .md URL is normalized (#33)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('# Page 1\n\nContent.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1.md): First\n`;
+    const result = await check.run(makeCtx(content));
+
+    const pageResults = result.details?.pageResults as Array<{
+      url: string;
+      testedUrl?: string;
+    }>;
+    expect(pageResults[0].url).toBe('http://test.local/docs/page1.md');
+    expect(pageResults[0].testedUrl).toBe('http://test.local/docs/page1');
+  });
+
+  it('classifies as correct type when content-type is text/markdown and body is plain text', async () => {
+    // Body is not markdown-like and not HTML → still classified as correct type
+    // because the server declared text/markdown and the body isn't HTML
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('Just some plain text content without any markdown formatting.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    expect(result.details?.markdownWithCorrectType).toBe(1);
+  });
+
+  it('handles missing content-type header', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () => new HttpResponse('# Some markdown', { status: 200 }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const result = await check.run(makeCtx(content));
+    // No content-type → not text/markdown → classified as wrong-type (body looks like markdown)
+    expect(result.details?.markdownWithWrongType).toBe(1);
+  });
+
+  it('does not overwrite pageCache for markdown-with-wrong-type', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page',
+        () =>
+          new HttpResponse('# Page\n\nMarkdown content [link](http://example.com)', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/page): A page\n`;
+    const ctx = makeCtx(content);
+    ctx.pageCache.set('http://test.local/docs/page', {
+      url: 'http://test.local/docs/page',
+      markdown: { content: '# From md-url', source: 'md-url' },
+    });
+
+    await check.run(ctx);
+    const cached = ctx.pageCache.get('http://test.local/docs/page');
+    expect(cached?.markdown?.source).toBe('md-url');
+  });
+
+  it('skips non-page file types (e.g. .json, .xml)', async () => {
+    const content = `# Docs\n> Summary\n## Links\n- [Schema](http://test.local/api/schema.json): API schema\n`;
+    const result = await check.run(makeCtx(content));
+
+    expect(result.details?.skippedPages).toBe(1);
+    expect(result.details?.testedPages).toBe(0);
+    const pageResults = result.details?.pageResults as Array<{ skipped?: boolean }>;
+    expect(pageResults[0].skipped).toBe(true);
+  });
+
   it('falls back to baseUrl when no llms.txt', async () => {
     server.use(
       http.get('http://test.local/robots.txt', () => new HttpResponse('', { status: 404 })),

@@ -1,6 +1,7 @@
 import { parse } from 'node-html-parser';
 import { registerCheck } from '../registry.js';
 import { fetchPage } from '../../helpers/fetch-page.js';
+import { toHtmlUrl } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
 
 /** Thresholds for the percentage of HTML segments not found in markdown. */
@@ -580,27 +581,6 @@ function computeParity(
     missingSegments: missingCount,
     sampleDiffs,
   };
-}
-
-/**
- * Derive the HTML page URL from a cached page URL.
- * Inverts the transforms from toMdUrls():
- *   /docs/guide.md      → /docs/guide
- *   /docs/guide/index.md → /docs/guide/
- *   /docs/guide.mdx      → /docs/guide
- * If the URL doesn't end in .md/.mdx, return it unchanged.
- */
-function toHtmlUrl(url: string): string {
-  const parsed = new URL(url);
-  if (parsed.pathname.endsWith('/index.md') || parsed.pathname.endsWith('/index.mdx')) {
-    parsed.pathname = parsed.pathname.replace(/\/index\.mdx?$/, '/');
-    return parsed.toString();
-  }
-  if (/\.mdx?$/i.test(parsed.pathname)) {
-    parsed.pathname = parsed.pathname.replace(/\.mdx?$/i, '');
-    return parsed.toString();
-  }
-  return url;
 }
 
 function worstStatus(statuses: CheckStatus[]): CheckStatus {
