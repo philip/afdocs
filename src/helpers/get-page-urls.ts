@@ -557,15 +557,20 @@ async function fetchSitemap(
   }
 }
 
+export interface SitemapOptions {
+  maxUrls?: number;
+  originOverride?: string;
+  pathFilterBase?: string;
+  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. freshness coverage). */
+  skipRefinement?: boolean;
+}
+
 export async function getUrlsFromSitemap(
   ctx: CheckContext,
   warnings: string[],
-  maxUrls: number = MAX_SITEMAP_URLS,
-  originOverride?: string,
-  pathFilterBase?: string,
-  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. freshness coverage). */
-  skipRefinement?: boolean,
+  opts: SitemapOptions = {},
 ): Promise<string[]> {
+  const { maxUrls = MAX_SITEMAP_URLS, originOverride, pathFilterBase, skipRefinement } = opts;
   const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
   const matchOrigin = originOverride ?? ctx.origin;
@@ -713,7 +718,7 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   }
 
   // 3. Try sitemap (path, locale, and version filtering applied inside)
-  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, undefined, undefined, filterBase);
+  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, { pathFilterBase: filterBase });
   if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
 
   // 4. Fallback
