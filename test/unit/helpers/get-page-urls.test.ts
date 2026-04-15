@@ -332,6 +332,61 @@ describe('getPageUrls', () => {
     expect(result.urls).toHaveLength(MAX_SITEMAP_URLS);
   });
 
+  it('applies path-prefix filter before the sitemap URL cap (#31)', async () => {
+    // Simulate Django-like sitemap index: Greek sitemap comes first alphabetically,
+    // filling the cap before the English sitemap is reached. Without the fix,
+    // path-prefix filtering after the cap would discard all Greek URLs and return 0 matches.
+    const greekLocs = Array.from(
+      { length: MAX_SITEMAP_URLS },
+      (_, i) => `  <url><loc>http://cap-prefix.local/el/page/${i}</loc></url>`,
+    ).join('\n');
+    const englishLocs = Array.from(
+      { length: 50 },
+      (_, i) => `  <url><loc>http://cap-prefix.local/en/6.0/page/${i}</loc></url>`,
+    ).join('\n');
+
+    server.use(
+      http.get('http://cap-prefix.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://cap-prefix.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>http://cap-prefix.local/sitemap-el.xml</loc></sitemap>
+  <sitemap><loc>http://cap-prefix.local/sitemap-en.xml</loc></sitemap>
+</sitemapindex>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://cap-prefix.local/sitemap-el.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${greekLocs}\n</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+      http.get(
+        'http://cap-prefix.local/sitemap-en.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${englishLocs}\n</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    // User wants to test /en/6.0/ docs specifically
+    const ctx = makeCtx('http://cap-prefix.local/en/6.0');
+    const result = await getPageUrls(ctx);
+
+    // With the fix: path filter is applied before the cap, so Greek URLs
+    // don't consume cap slots. All 50 English URLs should be found.
+    expect(result.urls.length).toBe(50);
+    expect(result.urls.every((u) => u.includes('/en/6.0/'))).toBe(true);
+  });
+
   it('handles sitemap fetch network errors gracefully', async () => {
     server.use(
       http.get('http://net-err.local/robots.txt', () => new HttpResponse('', { status: 404 })),

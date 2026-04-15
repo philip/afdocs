@@ -261,26 +261,37 @@ export async function getUrlsFromSitemap(
   warnings: string[],
   maxUrls: number = MAX_SITEMAP_URLS,
   originOverride?: string,
+  pathFilterBase?: string,
 ): Promise<string[]> {
   const sitemapUrls = await discoverSitemapUrls(ctx, originOverride);
   const urls: string[] = [];
   const matchOrigin = originOverride ?? ctx.origin;
+
+  // Pre-compute the path prefix so we can filter before counting against the cap.
+  // When pathFilterBase is provided, only URLs under that prefix consume cap slots.
+  const prefixPath = pathFilterBase ? new URL(pathFilterBase).pathname.replace(/\/$/, '') : '';
+
+  function shouldInclude(url: string): boolean {
+    try {
+      const u = new URL(url);
+      if (u.origin !== matchOrigin) return false;
+      if (prefixPath) return matchesPathPrefix(url, prefixPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   for (const sitemapUrl of sitemapUrls) {
     if (urls.length >= maxUrls) break;
 
     const parsed = await fetchSitemap(ctx, sitemapUrl, warnings);
 
-    // Add direct URLs (filtered to same origin)
+    // Add direct URLs (filtered to same origin and path prefix)
     for (const url of parsed.urls) {
       if (urls.length >= maxUrls) break;
-      try {
-        const u = new URL(url);
-        if (u.origin === matchOrigin) {
-          urls.push(url);
-        }
-      } catch {
-        // Skip malformed URLs
+      if (shouldInclude(url)) {
+        urls.push(url);
       }
     }
 
@@ -293,13 +304,8 @@ export async function getUrlsFromSitemap(
 
         for (const url of subParsed.urls) {
           if (urls.length >= maxUrls) break;
-          try {
-            const u = new URL(url);
-            if (u.origin === matchOrigin) {
-              urls.push(url);
-            }
-          } catch {
-            // Skip malformed URLs
+          if (shouldInclude(url)) {
+            urls.push(url);
           }
         }
       }
@@ -323,6 +329,23 @@ export function getPathFilterBase(ctx: CheckContext): string {
 }
 
 /**
+ * Check whether a single URL falls under the given path prefix.
+ *
+ * Returns true when the baseUrl is at the root (no filtering needed),
+ * when the URL matches the prefix, or when the URL is malformed
+ * (kept rather than silently dropped).
+ */
+export function matchesPathPrefix(url: string, baseUrlPath: string): boolean {
+  if (!baseUrlPath || baseUrlPath === '') return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname === baseUrlPath || parsed.pathname.startsWith(baseUrlPath + '/');
+  } catch {
+    return true; // keep malformed URLs rather than silently dropping them
+  }
+}
+
+/**
  * Filter URLs to those under the baseUrl's path prefix.
  *
  * When the input URL has a non-root path (e.g. `https://plaid.com/docs`),
@@ -334,16 +357,7 @@ export function getPathFilterBase(ctx: CheckContext): string {
  */
 export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
   const baseUrlPath = new URL(baseUrl).pathname.replace(/\/$/, '');
-  if (!baseUrlPath || baseUrlPath === '') return urls;
-
-  return urls.filter((url) => {
-    try {
-      const parsed = new URL(url);
-      return parsed.pathname === baseUrlPath || parsed.pathname.startsWith(baseUrlPath + '/');
-    } catch {
-      return true; // keep malformed URLs rather than silently dropping them
-    }
-  });
+  return urls.filter((url) => matchesPathPrefix(url, baseUrlPath));
 }
 
 /**
@@ -374,10 +388,9 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
     if (scopedFetchedUrls.length > 0) return { urls: scopedFetchedUrls, warnings };
   }
 
-  // 3. Try sitemap
-  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings);
-  const scopedSitemapUrls = filterByPathPrefix(sitemapUrls, filterBase);
-  if (scopedSitemapUrls.length > 0) return { urls: scopedSitemapUrls, warnings };
+  // 3. Try sitemap (path filtering applied inside, before the URL cap)
+  const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, undefined, undefined, filterBase);
+  if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
 
   // 4. Fallback
   return { urls: [ctx.baseUrl], warnings };
