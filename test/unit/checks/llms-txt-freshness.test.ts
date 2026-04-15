@@ -598,9 +598,8 @@ describe('llms-txt-freshness', () => {
 
     const result = await check.run(ctx);
     expect(result.status).toBe('pass');
-    expect(result.details?.localeFiltered).toBe(true);
-    expect(result.details?.detectedLocale).toBe('en');
-    // After locale filtering, only the 3 English pages remain
+    // Locale filtering now happens inside getUrlsFromSitemap, so the freshness
+    // check receives only English URLs and its own locale detection is a no-op.
     expect(result.details?.sitemapDocPages).toBe(3);
   });
 

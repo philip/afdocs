@@ -8,6 +8,7 @@ import {
   parseSitemapDirectives,
   filterByPathPrefix,
   filterLocaleSitemaps,
+  filterLocalizedUrls,
   deduplicateVersionedUrls,
   extractVersionFromUrl,
   extractLocaleFromUrl,
@@ -276,6 +277,63 @@ describe('extractLocaleFromUrl', () => {
 
   it('returns the first locale segment found', () => {
     expect(extractLocaleFromUrl('https://example.com/en/fr/intro')).toBe('en');
+  });
+});
+
+describe('filterLocalizedUrls', () => {
+  it('filters page URLs to English when multiple locales detected', () => {
+    const urls = [
+      'https://example.com/en/docs/intro',
+      'https://example.com/en/docs/guide',
+      'https://example.com/fr/docs/intro',
+      'https://example.com/fr/docs/guide',
+      'https://example.com/de/docs/intro',
+      'https://example.com/de/docs/guide',
+    ];
+    const result = filterLocalizedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/en/docs/intro',
+      'https://example.com/en/docs/guide',
+    ]);
+  });
+
+  it('prefers the locale from the base URL', () => {
+    const urls = [
+      'https://example.com/en/docs/intro',
+      'https://example.com/fr/docs/intro',
+      'https://example.com/de/docs/intro',
+      'https://example.com/en/docs/guide',
+      'https://example.com/fr/docs/guide',
+      'https://example.com/de/docs/guide',
+    ];
+    const result = filterLocalizedUrls(urls, 'fr');
+    expect(result).toEqual([
+      'https://example.com/fr/docs/intro',
+      'https://example.com/fr/docs/guide',
+    ]);
+  });
+
+  it('returns all URLs when no locale pattern is detected', () => {
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/api',
+    ];
+    const result = filterLocalizedUrls(urls);
+    expect(result).toEqual(urls);
+  });
+
+  it('returns all URLs when only one locale is present', () => {
+    const urls = ['https://example.com/en/docs/intro', 'https://example.com/en/docs/guide'];
+    const result = filterLocalizedUrls(urls);
+    expect(result).toEqual(urls);
+  });
+
+  it('falls back to all URLs when preferred locale is not present', () => {
+    const urls = ['https://example.com/en/docs/intro', 'https://example.com/fr/docs/intro'];
+    const result = filterLocalizedUrls(urls, 'ja');
+    // ja not present → returns all
+    expect(result).toEqual(urls);
   });
 });
 
@@ -1126,6 +1184,39 @@ describe('getPageUrls', () => {
     expect(result.urls).toEqual([
       'http://scope-test.local/docs/intro',
       'http://scope-test.local/docs/guide',
+    ]);
+  });
+
+  it('filters llms.txt URLs by locale when multiple locales present', async () => {
+    const content = `# Docs\n## Links\n- [EN Intro](http://locale-llms.local/en/docs/intro): Intro\n- [EN Guide](http://locale-llms.local/en/docs/guide): Guide\n- [FR Intro](http://locale-llms.local/fr/docs/intro): Intro\n- [FR Guide](http://locale-llms.local/fr/docs/guide): Guide\n- [DE Intro](http://locale-llms.local/de/docs/intro): Intro\n- [DE Guide](http://locale-llms.local/de/docs/guide): Guide\n`;
+    // No locale in base URL → defaults to 'en'
+    const ctx = makeCtx('http://locale-llms.local', content);
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://locale-llms.local/en/docs/intro',
+      'http://locale-llms.local/en/docs/guide',
+    ]);
+  });
+
+  it('filters llms.txt URLs to preferred locale from base URL', async () => {
+    const content = `# Docs\n## Links\n- [EN](http://locale-pref.local/en/docs/intro): Intro\n- [FR](http://locale-pref.local/fr/docs/intro): Intro\n- [DE](http://locale-pref.local/de/docs/intro): Intro\n`;
+    // User passed /fr/ in base URL
+    const ctx = makeCtx('http://locale-pref.local/fr', content);
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://locale-pref.local/fr/docs/intro']);
+  });
+
+  it('deduplicates versioned URLs from llms.txt', async () => {
+    const content = `# Docs\n## Links\n- [v1](http://ver-llms.local/docs/v1/intro): Intro v1\n- [v2](http://ver-llms.local/docs/v2/intro): Intro v2\n- [v3](http://ver-llms.local/docs/v3/intro): Intro v3\n- [v1 Guide](http://ver-llms.local/docs/v1/guide): Guide v1\n- [v2 Guide](http://ver-llms.local/docs/v2/guide): Guide v2\n- [v3 Guide](http://ver-llms.local/docs/v3/guide): Guide v3\n`;
+    const ctx = makeCtx('http://ver-llms.local', content);
+
+    const result = await getPageUrls(ctx);
+    // No version in base URL → defaults to highest (v3)
+    expect(result.urls).toEqual([
+      'http://ver-llms.local/docs/v3/intro',
+      'http://ver-llms.local/docs/v3/guide',
     ]);
   });
 

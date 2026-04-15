@@ -318,6 +318,70 @@ export function filterLocaleSitemaps(
 }
 
 /**
+ * Filter page URLs to a single locale when the URL set contains locale-organized paths.
+ *
+ * Detection: for each path segment position, count how many distinct 2-letter
+ * (or xx-yy) codes appear. If a position has ≥2 distinct codes covering >50%
+ * of URLs, it's a locale segment.
+ *
+ * When detected, keeps only URLs matching the preferred locale (from the base
+ * URL), or 'en' as default. Returns the original array if no locale pattern
+ * is detected.
+ */
+export function filterLocalizedUrls(urls: string[], preferredLocale?: string | null): string[] {
+  if (urls.length < 2) return urls;
+
+  // For each path segment position, collect locale-like codes
+  const positionCounts = new Map<number, Map<string, number>>();
+  const positionTotals = new Map<number, number>();
+
+  for (const url of urls) {
+    try {
+      const segments = new URL(url).pathname.split('/').filter(Boolean);
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i].toLowerCase();
+        if (/^[a-z]{2}(-[a-z]{2})?$/.test(seg)) {
+          if (!positionCounts.has(i)) positionCounts.set(i, new Map());
+          const counts = positionCounts.get(i)!;
+          counts.set(seg, (counts.get(seg) ?? 0) + 1);
+          positionTotals.set(i, (positionTotals.get(i) ?? 0) + 1);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Find the position that looks like a locale segment
+  let localePosition: number | null = null;
+  for (const [pos, counts] of positionCounts) {
+    if (counts.size < 2) continue;
+    const total = positionTotals.get(pos) ?? 0;
+    if (total > urls.length * 0.5) {
+      localePosition = pos;
+      break;
+    }
+  }
+
+  if (localePosition === null) return urls;
+
+  const targetLocale = preferredLocale?.toLowerCase() ?? 'en';
+
+  const filtered = urls.filter((url) => {
+    try {
+      const segments = new URL(url).pathname.split('/').filter(Boolean);
+      if (segments.length <= localePosition!) return true; // keep URLs without enough segments
+      return segments[localePosition!].toLowerCase() === targetLocale;
+    } catch {
+      return true;
+    }
+  });
+
+  // If filtering removed everything (target locale not present), return original
+  return filtered.length > 0 ? filtered : urls;
+}
+
+/**
  * Version segment pattern: matches common versioning conventions in URL paths.
  *
  * Matches segments like: v2, v3.1, 2.x, 3.0.1, 1.8, latest, stable, current, dev, next
@@ -553,7 +617,8 @@ export async function getUrlsFromSitemap(
     }
   }
 
-  return deduplicateVersionedUrls(urls, extractVersionFromUrl(ctx.baseUrl));
+  const localeFiltered = filterLocalizedUrls(urls, extractLocaleFromUrl(ctx.baseUrl));
+  return deduplicateVersionedUrls(localeFiltered, extractVersionFromUrl(ctx.baseUrl));
 }
 
 /**
@@ -616,20 +681,28 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
 
   const filterBase = getPathFilterBase(ctx);
+  const baseLocale = extractLocaleFromUrl(ctx.baseUrl);
+  const baseVersion = extractVersionFromUrl(ctx.baseUrl);
+
+  /** Apply locale and version filtering to a discovered URL set. */
+  function refineUrls(urls: string[]): string[] {
+    const localeFiltered = filterLocalizedUrls(urls, baseLocale);
+    return deduplicateVersionedUrls(localeFiltered, baseVersion);
+  }
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
   const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
-  const scopedCachedUrls = filterByPathPrefix(cachedUrls, filterBase);
+  const scopedCachedUrls = refineUrls(filterByPathPrefix(cachedUrls, filterBase));
   if (scopedCachedUrls.length > 0) return { urls: scopedCachedUrls, warnings };
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
   if (!ctx.previousResults.has('llms-txt-exists')) {
     const fetchedUrls = await fetchLlmsTxtUrls(ctx);
-    const scopedFetchedUrls = filterByPathPrefix(fetchedUrls, filterBase);
+    const scopedFetchedUrls = refineUrls(filterByPathPrefix(fetchedUrls, filterBase));
     if (scopedFetchedUrls.length > 0) return { urls: scopedFetchedUrls, warnings };
   }
 
-  // 3. Try sitemap (path filtering applied inside, before the URL cap)
+  // 3. Try sitemap (path, locale, and version filtering applied inside)
   const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, undefined, undefined, filterBase);
   if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
 
