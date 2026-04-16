@@ -5,6 +5,7 @@ import { createContext } from '../../../src/runner.js';
 import { getCheck } from '../../../src/checks/registry.js';
 import '../../../src/checks/index.js';
 import type { DiscoveredFile } from '../../../src/types.js';
+import { mockSitemapNotFound } from '../../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -35,6 +36,7 @@ describe('cache-header-hygiene', () => {
       message: 'Found',
       details: { discoveredFiles: discovered },
     });
+    mockSitemapNotFound(server, `http://${host}`);
 
     return ctx;
   }
@@ -309,6 +311,7 @@ describe('cache-header-hygiene', () => {
       message: 'Found',
       details: { discoveredFiles: discovered },
     });
+    mockSitemapNotFound(server, 'http://chh-llms.local');
 
     const result = await check.run(ctx);
     expect(result.status).toBe('pass');

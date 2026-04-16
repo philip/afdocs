@@ -5,6 +5,7 @@ import { createContext } from '../../../src/runner.js';
 import { getCheck } from '../../../src/checks/registry.js';
 import '../../../src/checks/index.js';
 import type { DiscoveredFile } from '../../../src/types.js';
+import { mockSitemapNotFound } from '../../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -53,6 +54,9 @@ describe('markdown-code-fence-validity', () => {
       message: llmsTxtFiles ? 'Found' : 'Not found',
       details: { discoveredFiles: llmsTxtFiles ?? [] },
     });
+    if (llmsTxtFiles) {
+      mockSitemapNotFound(server, 'http://test.local');
+    }
 
     return ctx;
   }
@@ -265,7 +269,12 @@ describe('markdown-code-fence-validity', () => {
             headers: { 'Content-Type': 'text/markdown' },
           }),
       ),
+      http.get(
+        'http://mcfv-standalone.local/docs/page/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
     );
+    mockSitemapNotFound(server, 'http://mcfv-standalone.local');
 
     // No dependency results set — standalone mode
     const ctx = createContext('http://mcfv-standalone.local', { requestDelay: 0 });

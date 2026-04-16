@@ -238,9 +238,13 @@ async function discoverSitemapUrls(ctx: CheckContext, originOverride?: string): 
   return candidates;
 }
 
+export type DiscoverySource = 'llms-txt' | 'sitemap' | 'fallback';
+
 export interface PageUrlResult {
   urls: string[];
   warnings: string[];
+  /** Which discovery methods contributed to the final URL set. */
+  sources: DiscoverySource[];
 }
 
 function isGzipped(url: string): boolean {
@@ -741,18 +745,39 @@ export function filterByPathPrefix(urls: string[], baseUrl: string): string[] {
 }
 
 /**
+ * Merge two URL arrays, preserving order. Primary URLs come first;
+ * secondary URLs are appended only if not already present.
+ */
+function mergeUrlSets(primary: string[], secondary: string[]): string[] {
+  const seen = new Set(primary);
+  const merged = [...primary];
+  for (const url of secondary) {
+    if (!seen.has(url)) {
+      merged.push(url);
+      seen.add(url);
+    }
+  }
+  return merged;
+}
+
+/**
  * Discover page URLs from llms.txt links, sitemap, or fall back to baseUrl.
  *
  * Priority:
- * 1. llms.txt links (from previous check results)
+ * 1. llms.txt links (from previous check results or direct fetch)
  * 2. Sitemap URLs (robots.txt Sitemap directives, then /sitemap.xml fallback)
  * 3. baseUrl fallback
+ *
+ * When llms.txt produces URLs but fewer than `maxLinksToTest`, sitemap
+ * URLs are merged in (deduped) so the sample covers a broader surface.
+ * The `sources` field records which discovery methods contributed.
  *
  * All discovered URLs are filtered to the baseUrl's path prefix so that
  * docs at a subpath (e.g. `/docs`) don't include unrelated site content.
  */
 export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
   const warnings: string[] = [];
+  const sources: DiscoverySource[] = [];
 
   const locale = ctx.options.preferredLocale ?? extractLocaleFromUrl(ctx.baseUrl);
   const version = ctx.options.preferredVersion ?? extractVersionFromUrl(ctx.baseUrl);
@@ -770,22 +795,43 @@ export async function getPageUrls(ctx: CheckContext): Promise<PageUrlResult> {
 
   // 1. Try llms.txt links from cached results (if llms-txt-exists ran)
   const cachedUrls = await getUrlsFromCachedLlmsTxt(ctx);
-  const scopedCachedUrls = refineUrls(filterByPathPrefix(cachedUrls, filterBase));
-  if (scopedCachedUrls.length > 0) return { urls: scopedCachedUrls, warnings };
+  let llmsTxtUrls = refineUrls(filterByPathPrefix(cachedUrls, filterBase));
 
   // 2. Try fetching llms.txt directly (standalone mode, llms-txt-exists didn't run)
-  if (!ctx.previousResults.has('llms-txt-exists')) {
+  if (llmsTxtUrls.length === 0 && !ctx.previousResults.has('llms-txt-exists')) {
     const fetchedUrls = await fetchLlmsTxtUrls(ctx);
-    const scopedFetchedUrls = refineUrls(filterByPathPrefix(fetchedUrls, filterBase));
-    if (scopedFetchedUrls.length > 0) return { urls: scopedFetchedUrls, warnings };
+    llmsTxtUrls = refineUrls(filterByPathPrefix(fetchedUrls, filterBase));
+  }
+
+  if (llmsTxtUrls.length > 0) {
+    sources.push('llms-txt');
+
+    // If llms.txt meets the requested sample size, no need for sitemap
+    if (llmsTxtUrls.length >= ctx.options.maxLinksToTest) {
+      return { urls: llmsTxtUrls, warnings, sources };
+    }
+
+    // llms.txt is thin — try sitemap to fill the gap
+    const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, { pathFilterBase: filterBase });
+    if (sitemapUrls.length > 0) {
+      sources.push('sitemap');
+      return { urls: mergeUrlSets(llmsTxtUrls, sitemapUrls), warnings, sources };
+    }
+
+    // Sitemap had nothing; return llms.txt URLs alone
+    return { urls: llmsTxtUrls, warnings, sources };
   }
 
   // 3. Try sitemap (path, locale, and version filtering applied inside)
   const sitemapUrls = await getUrlsFromSitemap(ctx, warnings, { pathFilterBase: filterBase });
-  if (sitemapUrls.length > 0) return { urls: sitemapUrls, warnings };
+  if (sitemapUrls.length > 0) {
+    sources.push('sitemap');
+    return { urls: sitemapUrls, warnings, sources };
+  }
 
   // 4. Fallback
-  return { urls: [ctx.baseUrl], warnings };
+  sources.push('fallback');
+  return { urls: [ctx.baseUrl], warnings, sources };
 }
 
 export interface SampledPages {
@@ -795,6 +841,8 @@ export interface SampledPages {
   warnings: string[];
   /** When curated pages have tags, maps page URL to tag label. */
   urlTags?: Record<string, string>;
+  /** Which discovery methods contributed to the page URL set. */
+  sources?: DiscoverySource[];
 }
 
 /**
@@ -888,6 +936,12 @@ export async function discoverAndSamplePages(ctx: CheckContext): Promise<Sampled
     }
   }
 
-  ctx._sampledPages = { urls, totalPages, sampled, warnings: discovery.warnings };
+  ctx._sampledPages = {
+    urls,
+    totalPages,
+    sampled,
+    warnings: discovery.warnings,
+    sources: discovery.sources,
+  };
   return ctx._sampledPages;
 }

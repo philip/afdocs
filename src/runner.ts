@@ -125,6 +125,7 @@ export async function runChecks(
   };
 
   const urlTags = ctx._sampledPages?.urlTags;
+  const discoverySources = ctx._sampledPages?.sources;
 
   return {
     url: baseUrl,
@@ -133,5 +134,6 @@ export async function runChecks(
     results,
     summary,
     ...(urlTags && { urlTags }),
+    ...(discoverySources && { discoverySources }),
   };
 }

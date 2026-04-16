@@ -1,4 +1,4 @@
-import type { SampledPages } from './helpers/get-page-urls.js';
+import type { DiscoverySource, SampledPages } from './helpers/get-page-urls.js';
 
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip' | 'error';
 
@@ -154,6 +154,8 @@ export interface ReportResult {
   };
   /** When curated pages have tags, maps page URL to tag label. */
   urlTags?: Record<string, string>;
+  /** Which discovery methods contributed to the page URL set. */
+  discoverySources?: DiscoverySource[];
 }
 
 export interface AgentDocsConfig {

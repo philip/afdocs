@@ -11,6 +11,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { runChecks } from '../../src/runner.js';
 import '../../src/checks/index.js';
+import { mockSitemapNotFound } from '../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -51,10 +52,16 @@ function setupSite(
     http.get(`http://${host}/docs/llms.txt`, () => new HttpResponse(null, { status: 404 })),
   );
 
+  // Sitemap discovery: return 404 so the fallback doesn't time out
+  handlers.push(
+    http.get(`http://${host}/robots.txt`, () => new HttpResponse('', { status: 404 })),
+    http.get(`http://${host}/sitemap.xml`, () => new HttpResponse('', { status: 404 })),
+  );
+
   const defaultCacheHeaders = opts.cacheControl ? { 'Cache-Control': opts.cacheControl } : {};
 
   for (const page of opts.pages) {
-    // HTML version
+    // HTML version (GET and HEAD)
     handlers.push(
       http.get(`http://${host}${page.path}`, ({ request }) => {
         const accept = request.headers.get('accept') ?? '';
@@ -72,9 +79,11 @@ function setupSite(
           { status: 200, headers: { 'Content-Type': 'text/html', ...defaultCacheHeaders } },
         );
       }),
+      // HEAD handler for llms-txt-links-resolve — mirrors GET status
+      http.head(`http://${host}${page.path}`, () => new HttpResponse(null, { status: 200 })),
     );
 
-    // .md URL
+    // .md URL (both /page.md and /page/index.md candidates from toMdUrls)
     if (page.md) {
       handlers.push(
         http.get(
@@ -85,10 +94,22 @@ function setupSite(
               headers: { 'Content-Type': 'text/markdown', ...defaultCacheHeaders },
             }),
         ),
+        http.get(
+          `http://${host}${page.path}/index.md`,
+          () =>
+            new HttpResponse(page.md!, {
+              status: 200,
+              headers: { 'Content-Type': 'text/markdown', ...defaultCacheHeaders },
+            }),
+        ),
       );
     } else {
       handlers.push(
         http.get(`http://${host}${page.path}.md`, () => new HttpResponse(null, { status: 404 })),
+        http.get(
+          `http://${host}${page.path}/index.md`,
+          () => new HttpResponse(null, { status: 404 }),
+        ),
       );
     }
 
@@ -567,10 +588,15 @@ describe('check pipeline: HTML fetch cache shared across checks', () => {
         () => new HttpResponse(null, { status: 404 }),
       ),
       http.get(
+        'http://pipe-htmlcache.local/docs/guide/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
         'http://pipe-htmlcache.local/docs/guide-afdocs-nonexistent-8f3a',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
+    mockSitemapNotFound(server, 'http://pipe-htmlcache.local');
 
     const report = await runChecks('http://pipe-htmlcache.local', {
       checkIds: ['llms-txt-exists', 'page-size-html', 'tabbed-content-serialization'],
@@ -656,10 +682,15 @@ describe('check pipeline: auth-gate-detection → auth-alternative-access', () =
         () => new HttpResponse(null, { status: 404 }),
       ),
       http.get(
+        'http://pipe-auth-llms.local/docs/page/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
         'http://pipe-auth-llms.local/docs/page-afdocs-nonexistent-8f3a',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
+    mockSitemapNotFound(server, 'http://pipe-auth-llms.local');
 
     const report = await runChecks('http://pipe-auth-llms.local', {
       checkIds: ['llms-txt-exists', 'auth-gate-detection', 'auth-alternative-access'],
@@ -734,6 +765,14 @@ describe('check pipeline: auth-gate-detection → auth-alternative-access', () =
         () => new HttpResponse(null, { status: 403 }),
       ),
       http.get(
+        'http://pipe-auth-md.local/docs/public/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        'http://pipe-auth-md.local/docs/private/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
         'http://pipe-auth-md.local/docs/public-afdocs-nonexistent-8f3a',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
@@ -742,6 +781,7 @@ describe('check pipeline: auth-gate-detection → auth-alternative-access', () =
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
+    mockSitemapNotFound(server, 'http://pipe-auth-md.local');
 
     const report = await runChecks('http://pipe-auth-md.local', {
       checkIds: [
@@ -803,10 +843,16 @@ describe('check pipeline: rendering-strategy → tabbed-content-serialization', 
         () => new HttpResponse(null, { status: 404 }),
       ),
       http.get(
+        'http://pipe-spa-tab.local/docs/guide/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
         'http://pipe-spa-tab.local/docs/guide-afdocs-nonexistent-8f3a',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
+
+    mockSitemapNotFound(server, 'http://pipe-spa-tab.local');
 
     const report = await runChecks('http://pipe-spa-tab.local', {
       checkIds: ['llms-txt-exists', 'rendering-strategy', 'tabbed-content-serialization'],
@@ -867,10 +913,16 @@ describe('check pipeline: tabbed-content-serialization → section-header-qualit
         () => new HttpResponse(null, { status: 404 }),
       ),
       http.get(
+        'http://pipe-tab-hdr.local/docs/install/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
         'http://pipe-tab-hdr.local/docs/install-afdocs-nonexistent-8f3a',
         () => new HttpResponse('Not Found', { status: 404 }),
       ),
     );
+
+    mockSitemapNotFound(server, 'http://pipe-tab-hdr.local');
 
     const report = await runChecks('http://pipe-tab-hdr.local', {
       checkIds: ['llms-txt-exists', 'tabbed-content-serialization', 'section-header-quality'],
@@ -921,6 +973,10 @@ describe('check pipeline: llms-txt-exists → llms-txt-links-markdown data flow'
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
+      http.head(
+        'http://pipe-llms-md.local/docs/guide',
+        () => new HttpResponse(null, { status: 200 }),
+      ),
       // .md URL returns markdown
       http.get(
         'http://pipe-llms-md.local/docs/guide.md',
@@ -930,7 +986,17 @@ describe('check pipeline: llms-txt-exists → llms-txt-links-markdown data flow'
             headers: { 'Content-Type': 'text/markdown' },
           }),
       ),
+      http.head(
+        'http://pipe-llms-md.local/docs/guide.md',
+        () => new HttpResponse(null, { status: 200, headers: { 'Content-Type': 'text/markdown' } }),
+      ),
+      http.get(
+        'http://pipe-llms-md.local/docs/guide/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
     );
+
+    mockSitemapNotFound(server, 'http://pipe-llms-md.local');
 
     const report = await runChecks('http://pipe-llms-md.local', {
       checkIds: ['llms-txt-exists', 'llms-txt-links-markdown'],
@@ -957,6 +1023,8 @@ describe('check pipeline: llms-txt-exists → llms-txt-links-markdown data flow'
         () => new HttpResponse(null, { status: 404 }),
       ),
     );
+
+    mockSitemapNotFound(server, 'http://pipe-llms-md-nollms.local');
 
     const report = await runChecks('http://pipe-llms-md-nollms.local', {
       checkIds: ['llms-txt-exists', 'llms-txt-links-markdown'],

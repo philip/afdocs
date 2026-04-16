@@ -17,6 +17,7 @@ import {
 import { MAX_SITEMAP_URLS } from '../../../src/constants.js';
 import { createContext } from '../../../src/runner.js';
 import type { DiscoveredFile } from '../../../src/types.js';
+import { mockSitemapNotFound } from '../../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -582,6 +583,8 @@ describe('getPageUrls', () => {
         message: 'Found',
         details: { discoveredFiles: discovered },
       });
+
+      mockSitemapNotFound(server, baseUrl);
     } else {
       // Mark llms-txt-exists as having run (but failed) so getPageUrls
       // skips the direct llms.txt fetch and falls through to sitemap.
@@ -597,13 +600,14 @@ describe('getPageUrls', () => {
     return ctx;
   }
 
-  it('returns llms.txt links when available (no sitemap fetch)', async () => {
+  it('returns llms.txt links when available', async () => {
     const content = `# Docs\n> Summary\n## Links\n- [Page](http://test.local/docs/page): A page\n`;
     const ctx = makeCtx('http://test.local', content);
 
     const result = await getPageUrls(ctx);
     expect(result.urls).toEqual(['http://test.local/docs/page']);
     expect(result.warnings).toEqual([]);
+    expect(result.sources).toContain('llms-txt');
   });
 
   it('fetches and parses sitemap.xml when no llms.txt links', async () => {
@@ -632,6 +636,7 @@ describe('getPageUrls', () => {
       'http://sitemap-test.local/docs/intro',
       'http://sitemap-test.local/docs/guide',
     ]);
+    expect(result.sources).toEqual(['sitemap']);
   });
 
   it('handles sitemap index files (follows sub-sitemaps)', async () => {
@@ -708,6 +713,7 @@ describe('getPageUrls', () => {
     const ctx = makeCtx('http://empty-test.local');
     const result = await getPageUrls(ctx);
     expect(result.urls).toEqual(['http://empty-test.local']);
+    expect(result.sources).toEqual(['fallback']);
   });
 
   it('handles malformed sitemap XML gracefully', async () => {
@@ -1032,6 +1038,130 @@ describe('getPageUrls', () => {
     expect(result.warnings[0]).toContain('sitemap-docs.xml.gz');
   });
 
+  // ── Discovery source fallback: merge llms.txt + sitemap (#27) ──
+
+  it('falls back to sitemap when llms.txt has fewer URLs than maxLinksToTest', async () => {
+    const content = `# Docs\n## Links\n- [A](http://merge-test.local/docs/a): Page A\n- [B](http://merge-test.local/docs/b): Page B\n`;
+    const ctx = makeCtx('http://merge-test.local', content);
+    ctx.options.maxLinksToTest = 10;
+
+    // Register sitemap AFTER makeCtx so it takes precedence over the default 404 handlers
+    server.use(
+      http.get(
+        'http://merge-test.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://merge-test.local/docs/c</loc></url>
+  <url><loc>http://merge-test.local/docs/d</loc></url>
+  <url><loc>http://merge-test.local/docs/e</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const result = await getPageUrls(ctx);
+    // llms.txt URLs come first, then sitemap fills the gap
+    expect(result.urls).toEqual([
+      'http://merge-test.local/docs/a',
+      'http://merge-test.local/docs/b',
+      'http://merge-test.local/docs/c',
+      'http://merge-test.local/docs/d',
+      'http://merge-test.local/docs/e',
+    ]);
+    expect(result.sources).toEqual(['llms-txt', 'sitemap']);
+  });
+
+  it('does not fall back to sitemap when llms.txt meets maxLinksToTest', async () => {
+    const content = `# Docs\n## Links\n- [A](http://no-merge.local/docs/a): A\n- [B](http://no-merge.local/docs/b): B\n- [C](http://no-merge.local/docs/c): C\n`;
+    const ctx = makeCtx('http://no-merge.local', content);
+    ctx.options.maxLinksToTest = 3;
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual([
+      'http://no-merge.local/docs/a',
+      'http://no-merge.local/docs/b',
+      'http://no-merge.local/docs/c',
+    ]);
+    expect(result.sources).toEqual(['llms-txt']);
+  });
+
+  it('deduplicates URLs when merging llms.txt and sitemap', async () => {
+    const content = `# Docs\n## Links\n- [A](http://dedup-merge.local/docs/a): A\n- [B](http://dedup-merge.local/docs/b): B\n`;
+    const ctx = makeCtx('http://dedup-merge.local', content);
+    ctx.options.maxLinksToTest = 10;
+
+    server.use(
+      http.get(
+        'http://dedup-merge.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://dedup-merge.local/docs/a</loc></url>
+  <url><loc>http://dedup-merge.local/docs/b</loc></url>
+  <url><loc>http://dedup-merge.local/docs/c</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const result = await getPageUrls(ctx);
+    // Overlapping URLs should not be duplicated
+    expect(result.urls).toEqual([
+      'http://dedup-merge.local/docs/a',
+      'http://dedup-merge.local/docs/b',
+      'http://dedup-merge.local/docs/c',
+    ]);
+    expect(result.sources).toEqual(['llms-txt', 'sitemap']);
+  });
+
+  it('applies path-prefix filtering when merging llms.txt and sitemap', async () => {
+    const content = `# Docs\n## Links\n- [A](http://merge-scope.local/docs/a): A\n- [Blog](http://merge-scope.local/blog/post): Blog\n`;
+    const ctx = makeCtx('http://merge-scope.local/docs', content);
+    ctx.options.maxLinksToTest = 10;
+
+    // Register sitemap AFTER makeCtx so it takes precedence over the default 404 handlers
+    server.use(
+      http.get(
+        'http://merge-scope.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://merge-scope.local/docs/b</loc></url>
+  <url><loc>http://merge-scope.local/docs/c</loc></url>
+  <url><loc>http://merge-scope.local/blog/other</loc></url>
+</urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const result = await getPageUrls(ctx);
+    // llms.txt /blog/post filtered out by path prefix, sitemap /blog/other filtered too
+    expect(result.urls).toEqual([
+      'http://merge-scope.local/docs/a',
+      'http://merge-scope.local/docs/b',
+      'http://merge-scope.local/docs/c',
+    ]);
+    expect(result.sources).toEqual(['llms-txt', 'sitemap']);
+  });
+
+  it('reports only llms-txt source when sitemap is empty during merge attempt', async () => {
+    const content = `# Docs\n## Links\n- [A](http://thin-empty.local/docs/a): A\n`;
+    const ctx = makeCtx('http://thin-empty.local', content);
+    ctx.options.maxLinksToTest = 10;
+    // makeCtx already mocks sitemap as 404 — no sitemap URLs to merge
+
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toEqual(['http://thin-empty.local/docs/a']);
+    expect(result.sources).toEqual(['llms-txt']);
+  });
+
   // ── Progressive disclosure: walking aggregate .txt files ──
 
   it('walks aggregate .txt files linked from llms.txt (Cloudflare pattern)', async () => {
@@ -1179,6 +1309,8 @@ describe('getPageUrls', () => {
         'http://direct-llms.local/docs/llms.txt',
         () => new HttpResponse('Not found', { status: 404 }),
       ),
+      http.get('http://direct-llms.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://direct-llms.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
     );
 
     // No llms-txt-exists in previousResults → standalone mode
@@ -1188,6 +1320,7 @@ describe('getPageUrls', () => {
       'http://direct-llms.local/docs/intro',
       'http://direct-llms.local/docs/guide',
     ]);
+    expect(result.sources).toContain('llms-txt');
   });
 
   it('skips llms.txt with non-text content-type in standalone mode', async () => {
@@ -1675,6 +1808,9 @@ describe('discoverAndSamplePages', () => {
       message: 'Found',
       details: { discoveredFiles: discovered },
     });
+
+    mockSitemapNotFound(server, baseUrl);
+
     return ctx;
   }
 
@@ -1687,6 +1823,7 @@ describe('discoverAndSamplePages', () => {
     expect(result.totalPages).toBe(2);
     expect(result.sampled).toBe(false);
     expect(result.warnings).toEqual([]);
+    expect(result.sources).toContain('llms-txt');
   });
 
   it('samples down to maxLinksToTest when over limit', async () => {
