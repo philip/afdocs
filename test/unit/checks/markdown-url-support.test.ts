@@ -5,6 +5,7 @@ import { createContext } from '../../../src/runner.js';
 import { getCheck } from '../../../src/checks/registry.js';
 import '../../../src/checks/index.js';
 import type { DiscoveredFile } from '../../../src/types.js';
+import { mockSitemapNotFound } from '../../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -35,6 +36,7 @@ describe('markdown-url-support', () => {
         message: 'Found',
         details: { discoveredFiles: discovered },
       });
+      mockSitemapNotFound(server, 'http://test.local');
     } else {
       ctx.previousResults.set('llms-txt-exists', {
         id: 'llms-txt-exists',
@@ -231,6 +233,7 @@ describe('markdown-url-support', () => {
       message: 'Found',
       details: { discoveredFiles: discovered },
     });
+    mockSitemapNotFound(server, 'http://test.local');
 
     const result = await check.run(ctx);
     expect(result.details?.totalPages).toBe(5);
@@ -312,6 +315,7 @@ describe('markdown-url-support', () => {
       message: 'Found',
       details: { discoveredFiles: discovered },
     });
+    mockSitemapNotFound(server, 'http://test.local');
 
     const result = await check.run(ctx);
     expect(result.details?.sampled).toBe(true);

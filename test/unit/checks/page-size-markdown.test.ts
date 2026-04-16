@@ -5,6 +5,7 @@ import { createContext } from '../../../src/runner.js';
 import { getCheck } from '../../../src/checks/registry.js';
 import '../../../src/checks/index.js';
 import type { DiscoveredFile } from '../../../src/types.js';
+import { mockSitemapNotFound } from '../../helpers/mock-sitemap-not-found.js';
 
 const server = setupServer();
 
@@ -30,6 +31,7 @@ describe('page-size-markdown', () => {
         message: 'Found',
         details: { discoveredFiles: discovered },
       });
+      mockSitemapNotFound(server, 'http://test.local');
     }
 
     return ctx;
@@ -163,7 +165,7 @@ describe('page-size-markdown', () => {
           }),
       ),
       http.get(
-        'http://ps-md-standalone.local.md',
+        'http://ps-md-standalone.local/.md',
         () => new HttpResponse('Not found', { status: 404 }),
       ),
       http.get(
@@ -196,7 +198,7 @@ describe('page-size-markdown', () => {
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
-      http.get('http://ps-md-nomd.local.md', () => new HttpResponse('Not found', { status: 404 })),
+      http.get('http://ps-md-nomd.local/.md', () => new HttpResponse('Not found', { status: 404 })),
       http.get(
         'http://ps-md-nomd.local/index.md',
         () => new HttpResponse('Not found', { status: 404 }),

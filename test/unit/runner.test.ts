@@ -202,7 +202,7 @@ describe('runner', () => {
             headers: { 'Content-Type': 'text/html' },
           }),
       ),
-      http.get('http://standalone.local.md', () => new HttpResponse('Not found', { status: 404 })),
+      http.get('http://standalone.local/.md', () => new HttpResponse('Not found', { status: 404 })),
       http.get(
         'http://standalone.local/index.md',
         () => new HttpResponse('Not found', { status: 404 }),
@@ -296,6 +296,23 @@ describe('runner', () => {
   });
 
   it('includes timestamp and url in report', async () => {
+    server.use(
+      http.get('http://meta.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://meta.local/docs/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://meta.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://meta.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://meta.local',
+        () =>
+          new HttpResponse('<html><body><h1>Home</h1></body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get('http://meta.local.md', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://meta.local/index.md', () => new HttpResponse(null, { status: 404 })),
+    );
+
     const report = await runChecks('http://meta.local', {
       checkIds: ['tabbed-content-serialization'],
       requestDelay: 0,
@@ -303,5 +320,38 @@ describe('runner', () => {
 
     expect(report.url).toBe('http://meta.local');
     expect(report.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('includes discoverySources in report when page discovery runs', async () => {
+    server.use(
+      http.get('http://sources.local/llms.txt', () =>
+        HttpResponse.text('# Docs\n## Links\n- [A](http://sources.local/docs/a): A\n'),
+      ),
+      http.get('http://sources.local/docs/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://sources.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get('http://sources.local/sitemap.xml', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://sources.local/docs/a',
+        () =>
+          new HttpResponse('<html><body><h1>A</h1></body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get('http://sources.local/docs/a.md', () => new HttpResponse(null, { status: 404 })),
+      http.get(
+        'http://sources.local/docs/a/index.md',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    // markdown-url-support triggers discoverAndSamplePages, which populates sources
+    const report = await runChecks('http://sources.local', {
+      checkIds: ['llms-txt-exists', 'markdown-url-support'],
+      requestDelay: 0,
+    });
+
+    expect(report.discoverySources).toBeDefined();
+    expect(report.discoverySources).toContain('llms-txt');
   });
 });

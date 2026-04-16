@@ -79,6 +79,7 @@ Just text, no links here.
           }),
       ),
       http.head('http://test.local/page1.md', () => new HttpResponse(null, { status: 404 })),
+      http.head('http://test.local/page1/index.md', () => new HttpResponse(null, { status: 404 })),
       http.head(
         'http://test.local/page2',
         () =>
@@ -88,6 +89,7 @@ Just text, no links here.
           }),
       ),
       http.head('http://test.local/page2.md', () => new HttpResponse(null, { status: 404 })),
+      http.head('http://test.local/page2/index.md', () => new HttpResponse(null, { status: 404 })),
     );
 
     const content = `# Test
