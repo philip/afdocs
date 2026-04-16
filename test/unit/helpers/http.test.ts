@@ -89,4 +89,87 @@ describe('createHttpClient', () => {
     expect(response.status).toBe(429);
     expect(callCount).toBe(1);
   });
+
+  describe('origin rewriting', () => {
+    function makeTextResponse(
+      body: string,
+      opts: { status?: number; contentType?: string; url?: string; redirected?: boolean } = {},
+    ): Response {
+      const status = opts.status ?? 200;
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: 'OK',
+        headers: new Headers(opts.contentType ? { 'content-type': opts.contentType } : undefined),
+        url: opts.url ?? 'http://preview.local/docs/llms.txt',
+        redirected: opts.redirected ?? false,
+        text: async () => body,
+      } as unknown as Response;
+    }
+
+    it('rewrites all occurrences of canonicalOrigin in text responses', async () => {
+      const body = [
+        '- [Guide](https://prod.example.com/docs/guide)',
+        '- [API](https://prod.example.com/docs/api)',
+        'All pages: https://prod.example.com/docs/llms.txt',
+      ].join('\n');
+      globalThis.fetch = vi.fn(async () => makeTextResponse(body, { contentType: 'text/plain' }));
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com',
+        targetOrigin: 'https://preview.local',
+      });
+      const response = await client.fetch('http://preview.local/docs/llms.txt');
+      const text = await response.text();
+
+      expect(text).not.toContain('prod.example.com');
+      expect(text).toContain('https://preview.local/docs/guide');
+      expect(text).toContain('https://preview.local/docs/api');
+      expect(text).toContain('https://preview.local/docs/llms.txt');
+    });
+
+    it('preserves url and redirected from original response', async () => {
+      globalThis.fetch = vi.fn(async () =>
+        makeTextResponse('https://prod.example.com/page', {
+          contentType: 'text/plain',
+          url: 'http://preview.local/docs/llms.txt',
+          redirected: true,
+        }),
+      );
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com',
+        targetOrigin: 'https://preview.local',
+      });
+      const response = await client.fetch('http://preview.local/docs/llms.txt');
+
+      expect(response.url).toBe('http://preview.local/docs/llms.txt');
+      expect(response.redirected).toBe(true);
+    });
+
+    it('skips rewrite for non-text content types', async () => {
+      const original = 'https://prod.example.com/binary-data';
+      globalThis.fetch = vi.fn(async () =>
+        makeTextResponse(original, { contentType: 'application/octet-stream' }),
+      );
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com',
+        targetOrigin: 'https://preview.local',
+      });
+      const response = await client.fetch('http://preview.local/file.bin');
+      const text = await response.text();
+
+      expect(text).toBe(original);
+    });
+  });
 });

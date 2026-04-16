@@ -82,6 +82,8 @@ export interface CheckOptions {
   preferredLocale?: string;
   /** Preferred version for URL discovery (e.g. 'v3', '2.x', 'latest'). Overrides auto-detection from baseUrl. */
   preferredVersion?: string;
+  /** Canonical origin to rewrite in fetched content (for preview/staging testing). */
+  canonicalOrigin?: string;
 }
 
 export interface SizeThresholds {
