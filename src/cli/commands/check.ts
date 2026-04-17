@@ -39,7 +39,7 @@ export function registerCheckCommand(program: Command): void {
     .option('--score', 'Include scoring data in JSON output')
     .option(
       '--canonical-origin <url>',
-      'Rewrite this origin to the target in fetched content (for preview/staging testing)',
+      'The production domain your content links to (for preview/staging testing)',
     )
     .action(async (rawUrl: string | undefined, opts: Record<string, unknown>) => {
       // Load config: explicit path or auto-discover
@@ -184,6 +184,13 @@ export function registerCheckCommand(program: Command): void {
           process.stderr.write(`Error: Invalid --canonical-origin URL "${rawCanonical}".\n`);
           process.exitCode = 1;
           return;
+        }
+        const targetOrigin = new URL(url).origin;
+        if (canonicalOrigin === targetOrigin) {
+          process.stderr.write(
+            `Warning: --canonical-origin "${canonicalOrigin}" is the same as the target origin. The flag has no effect.\n`,
+          );
+          canonicalOrigin = undefined;
         }
       }
 

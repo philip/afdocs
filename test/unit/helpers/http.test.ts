@@ -153,6 +153,63 @@ describe('createHttpClient', () => {
       expect(response.redirected).toBe(true);
     });
 
+    it('rewrites origins that include a port', async () => {
+      const body = 'See https://prod.example.com:8080/docs/guide for details.';
+      globalThis.fetch = vi.fn(async () => makeTextResponse(body, { contentType: 'text/plain' }));
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com:8080',
+        targetOrigin: 'http://localhost:3000',
+      });
+      const response = await client.fetch('http://localhost:3000/docs/guide');
+      const text = await response.text();
+
+      expect(text).toBe('See http://localhost:3000/docs/guide for details.');
+    });
+
+    it('does not match a longer domain that starts with the canonical origin', async () => {
+      const body = [
+        'https://prod.example.com/docs/guide',
+        'https://prod.example.com.evil.com/phishing',
+      ].join('\n');
+      globalThis.fetch = vi.fn(async () => makeTextResponse(body, { contentType: 'text/plain' }));
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com',
+        targetOrigin: 'https://preview.local',
+      });
+      const response = await client.fetch('http://preview.local/docs');
+      const text = await response.text();
+
+      expect(text).toContain('https://preview.local/docs/guide');
+      expect(text).toContain('https://prod.example.com.evil.com/phishing');
+    });
+
+    it('returns the same rewritten body on multiple text() calls', async () => {
+      const body = 'Link: https://prod.example.com/page';
+      globalThis.fetch = vi.fn(async () => makeTextResponse(body, { contentType: 'text/plain' }));
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+        canonicalOrigin: 'https://prod.example.com',
+        targetOrigin: 'https://preview.local',
+      });
+      const response = await client.fetch('http://preview.local/page');
+      const first = await response.text();
+      const second = await response.text();
+
+      expect(first).toBe('Link: https://preview.local/page');
+      expect(second).toBe(first);
+    });
+
     it('skips rewrite for non-text content types', async () => {
       const original = 'https://prod.example.com/binary-data';
       globalThis.fetch = vi.fn(async () =>

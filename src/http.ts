@@ -26,7 +26,7 @@ export function createHttpClient(options: RateLimitedHttpClientOptions): HttpCli
   let activeRequests = 0;
   const originPattern =
     options.canonicalOrigin && options.targetOrigin
-      ? new RegExp(escapeRegExp(options.canonicalOrigin), 'g')
+      ? new RegExp(escapeRegExp(options.canonicalOrigin) + '(?=[/\\s"\'\\]>]|$)', 'g')
       : null;
 
   async function waitForSlot(): Promise<void> {
