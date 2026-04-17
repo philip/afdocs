@@ -83,6 +83,30 @@ Some checks may behave differently against a local server:
 - **Hot reload injection**: Some dev servers inject hot-reload scripts into the page HTML. This can affect `page-size-html` and `content-start-position` results. Build and serve the production output locally (e.g., `npm run build && npm run preview`) for accurate size measurements.
 - **llms.txt**: If your llms.txt is generated at build time, it won't exist on the dev server. Either generate it first or skip the llms.txt checks locally.
 
+## Production URLs in local builds
+
+When you build your site locally, generated files like `llms.txt` and `sitemap.xml` typically contain your production domain. AFDocs sees URLs pointing to `https://docs.example.com` but you're testing `http://localhost:3000`, so origin comparisons fail and checks like `llms-txt-freshness` report 0% coverage.
+
+Use `--canonical-origin` to tell AFDocs which production domain to rewrite:
+
+```bash
+npm run build
+npx serve dist
+npx afdocs check http://localhost:3000 --canonical-origin https://docs.example.com
+```
+
+Or in your config file:
+
+```yaml
+url: http://localhost:3000
+options:
+  canonicalOrigin: https://docs.example.com
+```
+
+AFDocs rewrites the production origin to localhost in every fetched response body, so all downstream checks see consistent same-origin URLs. This also works for preview deployments (Vercel, Netlify, etc.) where the same mismatch occurs.
+
+## Building for accurate results
+
 For the most accurate results, build the production output and serve it with a local static server:
 
 ```bash
