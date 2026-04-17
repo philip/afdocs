@@ -137,10 +137,11 @@ afdocs check https://docs.example.com --doc-locale ja --doc-version 2.x
 
 ### Request behavior
 
-| Flag                    | Default | Description                            |
-| ----------------------- | ------- | -------------------------------------- |
-| `--max-concurrency <n>` | `3`     | Maximum concurrent HTTP requests       |
-| `--request-delay <ms>`  | `200`   | Delay between requests in milliseconds |
+| Flag                       | Default | Description                                 |
+| -------------------------- | ------- | ------------------------------------------- |
+| `--max-concurrency <n>`    | `3`     | Maximum concurrent HTTP requests            |
+| `--request-delay <ms>`     | `200`   | Delay between requests in milliseconds      |
+| `--canonical-origin <url>` |         | The production domain your content links to |
 
 AFDocs enforces delays between requests and caps concurrent connections to avoid overloading your server. Adjust these if you need gentler or faster runs:
 
@@ -150,6 +151,13 @@ afdocs check https://docs.example.com --request-delay 500 --max-concurrency 1
 
 # Faster (for your own infrastructure)
 afdocs check https://docs.example.com --request-delay 50 --max-concurrency 10
+```
+
+Use `--canonical-origin` when your site's URLs in `sitemap.xml` and `llms.txt` don't match the domain you're testing, such as preview deployments or localhost.
+
+```bash
+# Test a preview deployment
+afdocs check https://preview-xyz-example.app/docs --canonical-origin https://example.com
 ```
 
 ### Size thresholds

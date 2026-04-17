@@ -53,6 +53,8 @@ export function createContext(baseUrl: string, options?: Partial<RunnerOptions>)
       requestDelay: merged.requestDelay,
       requestTimeout: merged.requestTimeout,
       maxConcurrency: merged.maxConcurrency,
+      canonicalOrigin: merged.canonicalOrigin,
+      targetOrigin: merged.canonicalOrigin ? url.origin : undefined,
     }),
     options: merged,
     pageCache: new Map(),

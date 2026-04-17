@@ -11,13 +11,23 @@ interface RateLimitedHttpClientOptions {
   requestDelay: number;
   requestTimeout: number;
   maxConcurrency: number;
+  canonicalOrigin?: string;
+  targetOrigin?: string;
 }
 
 const MAX_RETRIES = 2;
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function createHttpClient(options: RateLimitedHttpClientOptions): HttpClient {
   let lastRequestTime = 0;
   let activeRequests = 0;
+  const originPattern =
+    options.canonicalOrigin && options.targetOrigin
+      ? new RegExp(escapeRegExp(options.canonicalOrigin), 'g')
+      : null;
 
   async function waitForSlot(): Promise<void> {
     // Wait for concurrency slot
@@ -63,6 +73,24 @@ export function createHttpClient(options: RateLimitedHttpClientOptions): HttpCli
               retries++;
               await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
               continue;
+            }
+          }
+
+          if (originPattern && options.targetOrigin) {
+            const ct = response.headers.get('content-type') ?? '';
+            if (/text|xml|json|markdown/.test(ct)) {
+              const body = await response.text();
+              originPattern.lastIndex = 0;
+              const rewritten = body.replace(originPattern, options.targetOrigin);
+              return {
+                ok: response.ok,
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+                url: response.url,
+                redirected: response.redirected,
+                text: async () => rewritten,
+              } as HttpResponse;
             }
           }
 

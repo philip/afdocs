@@ -27,6 +27,7 @@ options:
   requestDelay: 100
   preferredLocale: en
   preferredVersion: v3
+  canonicalOrigin: https://example.com
   thresholds:
     pass: 50000
     fail: 100000
@@ -63,6 +64,7 @@ Override default runner options. All fields are optional:
 | `requestTimeout`   | `30000`     | Timeout for individual HTTP requests in milliseconds       |
 | `preferredLocale`  | auto-detect | Preferred locale for URL discovery (e.g. `en`, `fr`, `ja`) |
 | `preferredVersion` | auto-detect | Preferred version for URL discovery (e.g. `v3`, `2.x`)     |
+| `canonicalOrigin`  |             | The production domain your content links to                |
 | `thresholds.pass`  | `50000`     | Page size pass threshold in characters                     |
 | `thresholds.fail`  | `100000`    | Page size fail threshold in characters                     |
 

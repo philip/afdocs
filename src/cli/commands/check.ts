@@ -37,6 +37,10 @@ export function registerCheckCommand(program: Command): void {
     .option('-v, --verbose', 'Show per-page details for checks with issues')
     .option('--fixes', 'Show fix suggestions for warn/fail checks')
     .option('--score', 'Include scoring data in JSON output')
+    .option(
+      '--canonical-origin <url>',
+      'Rewrite this origin to the target in fetched content (for preview/staging testing)',
+    )
     .action(async (rawUrl: string | undefined, opts: Record<string, unknown>) => {
       // Load config: explicit path or auto-discover
       let config;
@@ -170,6 +174,19 @@ export function registerCheckCommand(program: Command): void {
       const preferredVersion =
         (opts.docVersion as string | undefined) ?? config?.options?.preferredVersion;
 
+      let canonicalOrigin: string | undefined;
+      const rawCanonical =
+        (opts.canonicalOrigin as string | undefined) ?? config?.options?.canonicalOrigin;
+      if (rawCanonical) {
+        try {
+          canonicalOrigin = new URL(normalizeUrl(rawCanonical)).origin;
+        } catch {
+          process.stderr.write(`Error: Invalid --canonical-origin URL "${rawCanonical}".\n`);
+          process.exitCode = 1;
+          return;
+        }
+      }
+
       const report = await runChecks(url, {
         checkIds,
         maxConcurrency,
@@ -183,6 +200,7 @@ export function registerCheckCommand(program: Command): void {
         },
         ...(preferredLocale && { preferredLocale }),
         ...(preferredVersion && { preferredVersion }),
+        ...(canonicalOrigin && { canonicalOrigin }),
       });
 
       let output: string;
