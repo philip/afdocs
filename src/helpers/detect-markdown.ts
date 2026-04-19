@@ -5,10 +5,25 @@ const MD_LINK = /\[[^\]]+\]\([^)]+\)/;
 const MD_CODE_FENCE = /^```/m;
 
 /**
+ * Strip fenced code blocks and inline code spans so that HTML tags mentioned
+ * inside code (e.g. `<body>` or a fenced HTML snippet) don't produce false
+ * positives when checking for HTML patterns.
+ */
+function stripCode(text: string): string {
+  // Strip fenced code blocks (``` or ~~~, with optional language tag)
+  text = text.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[ \t]*$/gm, '');
+  // Strip inline code spans
+  text = text.replace(/`[^`\n]+`/g, '``');
+  return text;
+}
+
+/**
  * Returns true if the body looks like HTML (contains DOCTYPE, <html>, <head>, or <body> tags).
+ * Fenced code blocks and inline code spans are stripped first to avoid false positives
+ * from markdown that mentions HTML tags in code examples.
  */
 export function looksLikeHtml(body: string): boolean {
-  const sample = body.slice(0, 2000);
+  const sample = stripCode(body.slice(0, 2000));
   return HTML_PATTERNS.some((p) => p.test(sample));
 }
 
