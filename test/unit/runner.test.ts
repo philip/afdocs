@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { createContext, normalizeUrl, runChecks } from '../../src/runner.js';
@@ -296,6 +296,7 @@ describe('runner', () => {
   });
 
   it('skips checks listed in skipCheckIds without running them', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     server.use(
       http.get('http://skip-ids.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
       http.get(
@@ -326,9 +327,11 @@ describe('runner', () => {
     expect(size).toBeDefined();
     expect(size?.status).toBe('skip');
     expect(size?.message).toContain('dependency');
+    warnSpy.mockRestore();
   });
 
   it('skipCheckIds does not cascade-skip dependent checks', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const content = `# Test\n\n> Summary.\n\n## Links\n\n- [A](http://skip-dep.local/a): A\n`;
     server.use(
       http.get('http://skip-dep.local/llms.txt', () => HttpResponse.text(content)),
@@ -355,6 +358,54 @@ describe('runner', () => {
     const valid = report.results.find((r) => r.id === 'llms-txt-valid');
     expect(valid).toBeDefined();
     expect(valid?.message).not.toContain('dependency');
+    warnSpy.mockRestore();
+  });
+
+  it('warns when checkIds and skipCheckIds overlap', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    server.use(
+      http.get('http://overlap.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get('http://overlap.local/docs/llms.txt', () => new HttpResponse(null, { status: 404 })),
+    );
+
+    const report = await runChecks('http://overlap.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-valid'],
+      skipCheckIds: ['llms-txt-valid'],
+      requestDelay: 0,
+    });
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('llms-txt-valid');
+    expect(warnSpy.mock.calls[0][0]).toContain('--checks');
+    expect(warnSpy.mock.calls[0][0]).toContain('--skip-checks');
+
+    // The overlapping check should still be skipped (skip wins)
+    const skipped = report.results.find((r) => r.id === 'llms-txt-valid');
+    expect(skipped?.status).toBe('skip');
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when checkIds and skipCheckIds do not overlap', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    server.use(
+      http.get('http://no-overlap.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get(
+        'http://no-overlap.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    await runChecks('http://no-overlap.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-valid'],
+      skipCheckIds: ['llms-txt-size'],
+      requestDelay: 0,
+    });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('includes timestamp and url in report', async () => {
