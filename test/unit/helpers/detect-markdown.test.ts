@@ -26,6 +26,26 @@ describe('looksLikeHtml', () => {
   it('returns false for markdown', () => {
     expect(looksLikeHtml('# Hello\n\nThis is **markdown**.')).toBe(false);
   });
+
+  it('ignores HTML tags inside fenced code blocks', () => {
+    const md = '# Example\n\n```html\n<!DOCTYPE html>\n<html>\n<body>Hello</body>\n</html>\n```\n';
+    expect(looksLikeHtml(md)).toBe(false);
+  });
+
+  it('ignores HTML tags inside inline code spans', () => {
+    const md = '# Setup\n\nAdd the script before the closing `</body>` tag.\n';
+    expect(looksLikeHtml(md)).toBe(false);
+  });
+
+  it('ignores HTML tags inside tilde fenced code blocks', () => {
+    const md = '# Example\n\n~~~html\n<html>\n<head><title>Test</title></head>\n</html>\n~~~\n';
+    expect(looksLikeHtml(md)).toBe(false);
+  });
+
+  it('still detects real HTML outside of code blocks', () => {
+    const html = '<!DOCTYPE html>\n<html>\n```not a code block\n```\n</html>';
+    expect(looksLikeHtml(html)).toBe(true);
+  });
 });
 
 describe('looksLikeMarkdown', () => {
@@ -47,5 +67,11 @@ describe('looksLikeMarkdown', () => {
 
   it('returns false for plain text with no markdown signals', () => {
     expect(looksLikeMarkdown('Just some plain text without any formatting.')).toBe(false);
+  });
+
+  it('returns true for markdown containing HTML examples in code', () => {
+    const md =
+      '# Web API\n\nAdd the script before `</body>`.\n\n```html\n<html><body>Hello</body></html>\n```\n';
+    expect(looksLikeMarkdown(md)).toBe(true);
   });
 });
