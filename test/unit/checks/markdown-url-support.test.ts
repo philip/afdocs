@@ -409,4 +409,74 @@ describe('markdown-url-support', () => {
     expect(cached?.markdown?.content).toBe(mdContent);
     expect(cached?.markdown?.source).toBe('md-url');
   });
+
+  it('auto-detects page/index.md preference and tries it first in later batches', async () => {
+    // 3 pages, all served at page/index.md (not page.md). With concurrency=1,
+    // each page is a separate batch, so after page 1+2 the check should
+    // detect the page/index.md pattern and try it first for page 3.
+    const md = '# Page\n\nContent here.';
+    const requestLog: string[] = [];
+
+    server.use(
+      // page.md forms — all 404
+      http.get('http://test.local/docs/a.md', () => {
+        requestLog.push('/docs/a.md');
+        return new HttpResponse('Not found', { status: 404 });
+      }),
+      http.get('http://test.local/docs/b.md', () => {
+        requestLog.push('/docs/b.md');
+        return new HttpResponse('Not found', { status: 404 });
+      }),
+      http.get('http://test.local/docs/c.md', () => {
+        requestLog.push('/docs/c.md');
+        return new HttpResponse('Not found', { status: 404 });
+      }),
+      // index.md forms — all succeed
+      http.get('http://test.local/docs/a/index.md', () => {
+        requestLog.push('/docs/a/index.md');
+        return new HttpResponse(md, {
+          status: 200,
+          headers: { 'Content-Type': 'text/markdown' },
+        });
+      }),
+      http.get('http://test.local/docs/b/index.md', () => {
+        requestLog.push('/docs/b/index.md');
+        return new HttpResponse(md, {
+          status: 200,
+          headers: { 'Content-Type': 'text/markdown' },
+        });
+      }),
+      http.get('http://test.local/docs/c/index.md', () => {
+        requestLog.push('/docs/c/index.md');
+        return new HttpResponse(md, {
+          status: 200,
+          headers: { 'Content-Type': 'text/markdown' },
+        });
+      }),
+    );
+
+    const content = `# Docs
+> Summary
+## Links
+- [A](http://test.local/docs/a): A
+- [B](http://test.local/docs/b): B
+- [C](http://test.local/docs/c): C
+`;
+    const ctx = makeCtx({ content });
+    // Force concurrency=1 so each page is its own batch
+    ctx.options.maxConcurrency = 1;
+    const result = await check.run(ctx);
+
+    expect(result.status).toBe('pass');
+
+    // Pages A and B: tried page.md first (default order), got 404, then page/index.md
+    // Page C: after detecting page/index.md preference, should try page/index.md first
+    // So /docs/c.md should NOT appear in the request log
+    expect(requestLog).toContain('/docs/a.md');
+    expect(requestLog).toContain('/docs/a/index.md');
+    expect(requestLog).toContain('/docs/b.md');
+    expect(requestLog).toContain('/docs/b/index.md');
+    expect(requestLog).not.toContain('/docs/c.md');
+    expect(requestLog).toContain('/docs/c/index.md');
+  });
 });

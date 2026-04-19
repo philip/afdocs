@@ -14,6 +14,41 @@ interface PageResult {
   error?: string;
 }
 
+/**
+ * Detect whether the site prefers `page.md` (direct) or `page/index.md` (index)
+ * based on which candidate succeeded in previous results.
+ * Returns 'index' if `page/index.md` wins, 'direct' if `page.md` wins, or null if
+ * there's no clear winner yet.
+ */
+function detectPreferredMdForm(results: PageResult[]): 'direct' | 'index' | null {
+  let directWins = 0;
+  let indexWins = 0;
+  for (const r of results) {
+    if (!r.supported || !r.mdUrl) continue;
+    if (r.mdUrl.endsWith('/index.md') || r.mdUrl.endsWith('/index.mdx')) {
+      indexWins++;
+    } else {
+      directWins++;
+    }
+  }
+  const total = directWins + indexWins;
+  if (total < 2) return null;
+  if (indexWins / total >= 0.8) return 'index';
+  if (directWins / total >= 0.8) return 'direct';
+  return null;
+}
+
+/**
+ * Reorder toMdUrls() candidates based on the detected site preference.
+ * 'index' puts `page/index.md` first; 'direct' keeps the default order (`page.md` first).
+ */
+function orderCandidates(candidates: string[], preference: 'direct' | 'index' | null): string[] {
+  if (preference === 'index') {
+    return [...candidates].reverse();
+  }
+  return candidates;
+}
+
 async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'markdown-url-support';
   const category = 'markdown-availability';
@@ -27,6 +62,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
   const results: PageResult[] = [];
   const concurrency = ctx.options.maxConcurrency;
+  let mdFormPreference: 'direct' | 'index' | null = null;
 
   for (let i = 0; i < pageUrls.length; i += concurrency) {
     const batch = pageUrls.slice(i, i + concurrency);
@@ -38,8 +74,9 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
           return { url, mdUrl: url, supported: false, skipped: true, status: 0 };
         }
         const alreadyMd = /\.mdx?$/i.test(new URL(url).pathname);
+        const ordered = orderCandidates(candidates, mdFormPreference);
         let lastError: string | undefined;
-        for (const mdUrl of candidates) {
+        for (const mdUrl of ordered) {
           try {
             const response = await ctx.http.fetch(mdUrl);
             const body = await response.text();
@@ -62,7 +99,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
         }
         return {
           url,
-          mdUrl: candidates[0],
+          mdUrl: ordered[0],
           supported: false,
           alreadyMd,
           status: 0,
@@ -71,6 +108,13 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       }),
     );
     results.push(...batchResults);
+
+    // After each batch, re-evaluate the preferred .md URL form.
+    // Once a clear pattern emerges (80%+ one form), subsequent batches
+    // try the preferred form first, saving one request per page.
+    if (mdFormPreference === null) {
+      mdFormPreference = detectPreferredMdForm(results);
+    }
   }
 
   const testedResults = results.filter((r) => !r.skipped);
