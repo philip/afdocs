@@ -32,7 +32,8 @@ Pass a second argument to configure sampling, concurrency, and thresholds:
 import { runChecks } from 'afdocs';
 
 const report = await runChecks('https://docs.example.com', {
-  checkIds: ['llms-txt-exists', 'llms-txt-valid', 'llms-txt-size'],
+  checkIds: ['llms-txt-exists', 'llms-txt-valid', 'llms-txt-size'], // include-list
+  skipCheckIds: ['markdown-content-parity'], // exclude-list
   samplingStrategy: 'deterministic',
   maxLinksToTest: 20,
   maxConcurrency: 5,

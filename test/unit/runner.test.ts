@@ -295,6 +295,68 @@ describe('runner', () => {
     expect(child?.status).toBe('pass');
   });
 
+  it('skips checks listed in skipCheckIds without running them', async () => {
+    server.use(
+      http.get('http://skip-ids.local/llms.txt', () => new HttpResponse(null, { status: 404 })),
+      http.get(
+        'http://skip-ids.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://skip-ids.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-valid', 'llms-txt-size'],
+      skipCheckIds: ['llms-txt-valid'],
+      requestDelay: 0,
+    });
+
+    const skipped = report.results.find((r) => r.id === 'llms-txt-valid');
+    expect(skipped).toBeDefined();
+    expect(skipped?.status).toBe('skip');
+    expect(skipped?.message).toContain('--skip-checks');
+
+    // llms-txt-exists should still run (not in skipCheckIds)
+    const exists = report.results.find((r) => r.id === 'llms-txt-exists');
+    expect(exists).toBeDefined();
+    expect(exists?.status).toBe('fail');
+
+    // llms-txt-size depends on llms-txt-exists which failed, so it should be
+    // skipped due to dependency — not due to skipCheckIds
+    const size = report.results.find((r) => r.id === 'llms-txt-size');
+    expect(size).toBeDefined();
+    expect(size?.status).toBe('skip');
+    expect(size?.message).toContain('dependency');
+  });
+
+  it('skipCheckIds does not cascade-skip dependent checks', async () => {
+    const content = `# Test\n\n> Summary.\n\n## Links\n\n- [A](http://skip-dep.local/a): A\n`;
+    server.use(
+      http.get('http://skip-dep.local/llms.txt', () => HttpResponse.text(content)),
+      http.get(
+        'http://skip-dep.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    // Skip llms-txt-exists; llms-txt-valid depends on it.
+    // Since skipCheckIds doesn't store in previousResults, llms-txt-valid
+    // should run in standalone mode (same as checkIds filtering).
+    const report = await runChecks('http://skip-dep.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-valid'],
+      skipCheckIds: ['llms-txt-exists'],
+      requestDelay: 0,
+    });
+
+    const exists = report.results.find((r) => r.id === 'llms-txt-exists');
+    expect(exists?.status).toBe('skip');
+    expect(exists?.message).toContain('--skip-checks');
+
+    // llms-txt-valid should run in standalone mode, not cascade-skip
+    const valid = report.results.find((r) => r.id === 'llms-txt-valid');
+    expect(valid).toBeDefined();
+    expect(valid?.message).not.toContain('dependency');
+  });
+
   it('includes timestamp and url in report', async () => {
     server.use(
       http.get('http://meta.local/llms.txt', () => new HttpResponse(null, { status: 404 })),

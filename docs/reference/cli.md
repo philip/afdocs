@@ -64,14 +64,20 @@ See [Config File](/reference/config-file) for the full config format.
 
 ### Check selection
 
-| Flag                 | Default | Description                              |
-| -------------------- | ------- | ---------------------------------------- |
-| `-c, --checks <ids>` | all     | Comma-separated list of check IDs to run |
+| Flag                  | Default | Description                               |
+| --------------------- | ------- | ----------------------------------------- |
+| `-c, --checks <ids>`  | all     | Comma-separated list of check IDs to run  |
+| `--skip-checks <ids>` |         | Comma-separated list of check IDs to skip |
 
 ```bash
 # Run only llms.txt checks
 afdocs check https://docs.example.com --checks llms-txt-exists,llms-txt-valid,llms-txt-size
+
+# Run all checks except one
+afdocs check https://docs.example.com --skip-checks markdown-content-parity
 ```
+
+`--checks` is an include-list (only run these). `--skip-checks` is an exclude-list (run everything except these). Skipped checks appear in the report with `status: "skip"` and are excluded from scoring.
 
 Some checks depend on others. If you include a check without its dependency, the dependent check will be skipped. See [Check dependencies](/checks/#check-dependencies) for the full list.
 

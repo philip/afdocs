@@ -19,6 +19,7 @@ export function registerCheckCommand(program: Command): void {
     .option('--config <path>', 'Path to config file (default: auto-discover agent-docs.config.yml)')
     .option('-f, --format <format>', 'Output format: text, json, or scorecard', 'text')
     .option('-c, --checks <checks>', 'Comma-separated list of check IDs to run')
+    .option('--skip-checks <checks>', 'Comma-separated list of check IDs to skip')
     .option('--max-concurrency <n>', 'Maximum concurrent requests')
     .option('--request-delay <ms>', 'Delay between requests in ms')
     .option('--max-links <n>', 'Maximum links to test')
@@ -109,6 +110,10 @@ export function registerCheckCommand(program: Command): void {
         ? (opts.checks as string).split(',').map((s) => s.trim())
         : config?.checks;
 
+      const skipCheckIds = opts.skipChecks
+        ? (opts.skipChecks as string).split(',').map((s) => s.trim())
+        : config?.skipChecks;
+
       const format = opts.format as string;
       if (!FORMAT_OPTIONS.includes(format as (typeof FORMAT_OPTIONS)[number])) {
         process.stderr.write(
@@ -196,6 +201,7 @@ export function registerCheckCommand(program: Command): void {
 
       const report = await runChecks(url, {
         checkIds,
+        skipCheckIds,
         maxConcurrency,
         requestDelay,
         maxLinksToTest,
