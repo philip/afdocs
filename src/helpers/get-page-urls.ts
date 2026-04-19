@@ -1,6 +1,6 @@
 import { extractMarkdownLinks } from '../checks/content-discoverability/llms-txt-valid.js';
 import { MAX_SITEMAP_URLS } from '../constants.js';
-import { isNonPageUrl } from './to-md-urls.js';
+import { isNonPageUrl, isMdUrl, toHtmlUrl } from './to-md-urls.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';
 
 /**
@@ -44,18 +44,28 @@ export async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<strin
   return walkAggregateLinks(ctx, urls);
 }
 
+/**
+ * Normalize a discovered page URL: convert .md/.mdx URLs to their HTML
+ * equivalent so that llms.txt entries like `/docs/guide/index.md` deduplicate
+ * against sitemap entries like `/docs/guide/`. Markdown-specific checks are
+ * unaffected because they derive .md candidates from HTML URLs via toMdUrls().
+ */
+function normalizePageUrl(url: string): string {
+  return isMdUrl(url) ? toHtmlUrl(url) : url;
+}
+
 function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
   const urls = new Set<string>();
   for (const file of files) {
     const links = extractMarkdownLinks(file.content);
     for (const link of links) {
       if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-        urls.add(link.url);
+        urls.add(normalizePageUrl(link.url));
       } else if (link.url.startsWith('/')) {
         // Resolve root-relative URLs against the source file's origin
         try {
           const base = new URL(file.url);
-          urls.add(new URL(link.url, base.origin).toString());
+          urls.add(normalizePageUrl(new URL(link.url, base.origin).toString()));
         } catch {
           // Skip malformed URLs
         }
@@ -91,10 +101,10 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
       } else if (parsed.origin === ctx.origin || parsed.origin === siteOrigin) {
         // Only include same-origin page URLs; cross-origin links are
         // external resources the site owner doesn't control.
-        pageUrls.push(url);
+        pageUrls.push(normalizePageUrl(url));
       }
     } catch {
-      pageUrls.push(url);
+      pageUrls.push(normalizePageUrl(url));
     }
   }
 
