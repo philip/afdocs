@@ -23,7 +23,7 @@ function stripCode(text: string): string {
  * from markdown that mentions HTML tags in code examples.
  */
 export function looksLikeHtml(body: string): boolean {
-  const sample = stripCode(body.slice(0, 2000));
+  const sample = stripCode(body).slice(0, 2000);
   return HTML_PATTERNS.some((p) => p.test(sample));
 }
 

@@ -42,6 +42,12 @@ describe('looksLikeHtml', () => {
     expect(looksLikeHtml(md)).toBe(false);
   });
 
+  it('ignores HTML in code blocks longer than 2000 characters', () => {
+    const md =
+      '# Setup\n\n```html\n<html>\n<body>\n' + 'x'.repeat(3000) + '\n</body>\n</html>\n```\n';
+    expect(looksLikeHtml(md)).toBe(false);
+  });
+
   it('still detects real HTML outside of code blocks', () => {
     const html = '<!DOCTYPE html>\n<html>\n```not a code block\n```\n</html>';
     expect(looksLikeHtml(html)).toBe(true);
