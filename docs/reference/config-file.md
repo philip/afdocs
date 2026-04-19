@@ -19,6 +19,10 @@ checks:
   - http-status-codes
   - auth-gate-detection
 
+# Optional: skip specific checks (run everything else)
+# skipChecks:
+#   - markdown-content-parity
+
 # Optional: override default options
 options:
   maxLinksToTest: 20
@@ -50,6 +54,17 @@ The documentation site URL to check. This is the only required field.
 A list of check IDs to run. If omitted, all 22 checks run. Use this to focus on checks that are actionable for your platform. See the [Checks Reference](/checks/) for the full list of check IDs.
 
 This is particularly useful when your docs platform doesn't support certain capabilities. For example, if you can't serve markdown, exclude the markdown-related checks so your score reflects what you can control. See [Improve Your Score](/improve-your-score#step-3-work-through-fixes-iteratively) for more on this approach.
+
+### `skipChecks` (optional)
+
+A list of check IDs to skip. Unlike `checks` (which is an include-list), `skipChecks` is an exclude-list — all checks run except the ones listed here. Skipped checks appear in the report with `status: "skip"` and are excluded from scoring.
+
+Use this when you want to disable a specific check without having to list all the others:
+
+```yaml
+skipChecks:
+  - markdown-content-parity
+```
 
 ### `options` (optional)
 

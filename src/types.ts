@@ -137,6 +137,8 @@ export interface DiscoveredFile {
 export interface RunnerOptions extends CheckOptions {
   /** Only run checks matching these IDs. If empty, run all. */
   checkIds?: string[];
+  /** Skip checks matching these IDs, emitting a 'skip' result without running them. */
+  skipCheckIds?: string[];
   /** Curated page list from config or --urls. Used when samplingStrategy is 'curated'. */
   curatedPages?: PageConfigEntry[];
 }
@@ -163,6 +165,8 @@ export interface ReportResult {
 export interface AgentDocsConfig {
   url: string;
   checks?: string[];
+  /** Check IDs to skip, emitting a 'skip' result without running them. */
+  skipChecks?: string[];
   options?: Partial<CheckOptions>;
   /** Curated page URLs to test. Implies `samplingStrategy: 'curated'` when no strategy is set. */
   pages?: PageConfigEntry[];

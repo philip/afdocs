@@ -70,12 +70,27 @@ export async function runChecks(
   const ctx = createContext(baseUrl, options);
   const allChecks = getChecksSorted();
   const checkIds = options?.checkIds;
+  const skipCheckIds = options?.skipCheckIds ?? [];
 
   const results: CheckResult[] = [];
 
   for (const check of allChecks) {
     // Filter by requested check IDs if provided
     if (checkIds && checkIds.length > 0 && !checkIds.includes(check.id)) {
+      continue;
+    }
+
+    // Emit a skip result for explicitly excluded checks without running them.
+    // Intentionally not stored in previousResults so dependent checks see
+    // "dependency never ran" and can run in standalone mode — matching the
+    // behaviour of checks filtered out by checkIds.
+    if (skipCheckIds.includes(check.id)) {
+      results.push({
+        id: check.id,
+        category: check.category,
+        status: 'skip',
+        message: 'Check skipped (excluded via --skip-checks)',
+      });
       continue;
     }
 
