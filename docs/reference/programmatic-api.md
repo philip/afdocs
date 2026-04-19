@@ -31,9 +31,9 @@ Pass a second argument to configure sampling, concurrency, and thresholds:
 ```ts
 import { runChecks } from 'afdocs';
 
+// Run specific checks (include-list)
 const report = await runChecks('https://docs.example.com', {
-  checkIds: ['llms-txt-exists', 'llms-txt-valid', 'llms-txt-size'], // include-list
-  skipCheckIds: ['markdown-content-parity'], // exclude-list
+  checkIds: ['llms-txt-exists', 'llms-txt-valid', 'llms-txt-size'],
   samplingStrategy: 'deterministic',
   maxLinksToTest: 20,
   maxConcurrency: 5,
@@ -44,7 +44,12 @@ const report = await runChecks('https://docs.example.com', {
   },
 });
 
-// Or test specific pages with curated sampling:
+// Or run all checks except a few (exclude-list)
+const skipReport = await runChecks('https://docs.example.com', {
+  skipCheckIds: ['markdown-content-parity'],
+});
+
+// Or test specific pages with curated sampling
 const curatedReport = await runChecks('https://docs.example.com', {
   samplingStrategy: 'curated',
   curatedPages: [
