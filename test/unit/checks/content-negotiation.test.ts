@@ -353,8 +353,8 @@ describe('content-negotiation', () => {
   });
 
   it('normalizes .md URLs to canonical form before testing (#33)', async () => {
-    // The handler is on the canonical (non-.md) URL because the check
-    // should strip the extension before fetching.
+    // Curated pages bypass discovery, so .md URLs reach the check directly.
+    // The check should strip the extension before fetching.
     server.use(
       http.get(
         'http://test.local/docs/page1',
@@ -366,8 +366,12 @@ describe('content-negotiation', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1.md): First\n`;
-    const result = await check.run(makeCtx(content));
+    const ctx = createContext('http://test.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+      curatedPages: ['http://test.local/docs/page1.md'],
+    });
+    const result = await check.run(ctx);
 
     expect(result.status).toBe('fail');
     expect(result.details?.normalizedMdUrls).toBe(1);
@@ -377,6 +381,7 @@ describe('content-negotiation', () => {
   });
 
   it('reports testedUrl when .md URL is normalized (#33)', async () => {
+    // Curated pages bypass discovery, so .md URLs reach the check directly.
     server.use(
       http.get(
         'http://test.local/docs/page1',
@@ -388,8 +393,12 @@ describe('content-negotiation', () => {
       ),
     );
 
-    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1.md): First\n`;
-    const result = await check.run(makeCtx(content));
+    const ctx = createContext('http://test.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+      curatedPages: ['http://test.local/docs/page1.md'],
+    });
+    const result = await check.run(ctx);
 
     const pageResults = result.details?.pageResults as Array<{
       url: string;
