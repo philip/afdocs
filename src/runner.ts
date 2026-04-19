@@ -72,6 +72,17 @@ export async function runChecks(
   const checkIds = options?.checkIds;
   const skipCheckIds = options?.skipCheckIds ?? [];
 
+  // Warn about overlapping checkIds and skipCheckIds
+  if (checkIds && checkIds.length > 0 && skipCheckIds.length > 0) {
+    const overlap = skipCheckIds.filter((id) => checkIds.includes(id));
+    if (overlap.length > 0) {
+      console.warn(
+        `Warning: ${overlap.join(', ')} listed in both --checks and --skip-checks. ` +
+          `These checks will be skipped.`,
+      );
+    }
+  }
+
   const results: CheckResult[] = [];
 
   for (const check of allChecks) {
