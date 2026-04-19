@@ -265,6 +265,8 @@ describe('llms-txt-directive', () => {
   });
 
   it('falls back to .md URL when HTML version has no directive', async () => {
+    // Curated pages bypass discovery, so .md URLs reach the check directly.
+    // The check should try the HTML version first, then fall back to the .md URL.
     server.use(
       http.get(
         'http://test.local/docs/page1/',
@@ -284,7 +286,12 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
+    const ctx = createContext('http://test.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+      curatedPages: ['http://test.local/docs/page1/index.md'],
+    });
+    const result = await check.run(ctx);
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
     const pages = result.details?.pageResults as Array<{ source?: string }>;
