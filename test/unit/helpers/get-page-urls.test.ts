@@ -1191,9 +1191,10 @@ describe('getPageUrls', () => {
 
     const ctx = makeCtx('http://walk-test.local', rootContent);
     const result = await getPageUrls(ctx);
-    expect(result.urls).toContain('http://walk-test.local/workers/guide/index.md');
-    expect(result.urls).toContain('http://walk-test.local/workers/api/index.md');
-    expect(result.urls).toContain('http://walk-test.local/cache/overview/index.md');
+    // .md URLs from llms.txt are normalized to their HTML equivalents
+    expect(result.urls).toContain('http://walk-test.local/workers/guide/');
+    expect(result.urls).toContain('http://walk-test.local/workers/api/');
+    expect(result.urls).toContain('http://walk-test.local/cache/overview/');
     expect(result.urls).toHaveLength(3);
   });
 
@@ -1294,6 +1295,43 @@ describe('getPageUrls', () => {
     const ctx = makeCtx('http://walk-empty.local', rootContent);
     const result = await getPageUrls(ctx);
     expect(result.urls).toEqual(['http://walk-empty.local/docs/page']);
+  });
+
+  // ── .md URL normalization ──
+
+  it('normalizes .md URLs from llms.txt to HTML equivalents', async () => {
+    const content = `# Docs\n- [Guide](http://md-norm.local/docs/guide/index.md): Guide\n- [API](http://md-norm.local/docs/api.md): API\n`;
+    const ctx = makeCtx('http://md-norm.local', content);
+    const result = await getPageUrls(ctx);
+    expect(result.urls).toContain('http://md-norm.local/docs/guide/');
+    expect(result.urls).toContain('http://md-norm.local/docs/api');
+    expect(result.urls).not.toContain('http://md-norm.local/docs/guide/index.md');
+    expect(result.urls).not.toContain('http://md-norm.local/docs/api.md');
+  });
+
+  it('deduplicates .md and HTML URLs for the same page', async () => {
+    // llms.txt has .md URL, sitemap has HTML URL for the same page
+    const content = `# Docs\n- [Guide](http://md-dedup.local/docs/guide/index.md): Guide\n`;
+    const ctx = makeCtx('http://md-dedup.local', content);
+
+    server.use(
+      http.get('http://md-dedup.local/robots.txt', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://md-dedup.local/sitemap.xml',
+        () =>
+          new HttpResponse(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>http://md-dedup.local/docs/guide/</loc></url><url><loc>http://md-dedup.local/docs/other/</loc></url></urlset>`,
+            { status: 200, headers: { 'Content-Type': 'application/xml' } },
+          ),
+      ),
+    );
+
+    const result = await getPageUrls(ctx);
+    // /docs/guide/ should appear only once (not twice for .md + HTML)
+    const guideCount = result.urls.filter((u) => u === 'http://md-dedup.local/docs/guide/').length;
+    expect(guideCount).toBe(1);
+    // /docs/other/ from sitemap should still be present
+    expect(result.urls).toContain('http://md-dedup.local/docs/other/');
   });
 
   // ── Direct llms.txt fetch (standalone mode) ──
