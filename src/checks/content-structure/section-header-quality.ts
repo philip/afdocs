@@ -1,3 +1,4 @@
+import type { HTMLElement } from 'node-html-parser';
 import { parse } from 'node-html-parser';
 import { registerCheck } from '../registry.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
@@ -23,17 +24,52 @@ interface GroupHeaderAnalysis {
 
 const MD_HEADING_RE = /^#{1,6}\s+(.+)$/gm;
 
+const CALLOUT_ROLES = new Set(['alert', 'note', 'status', 'complementary']);
+
 /**
- * Extract header text from content that may be HTML, markdown, or a mix (MDX).
- * Tries HTML parsing first, then falls back to markdown heading regex.
+ * Check whether a heading is inside a callout/admonition container rather than
+ * being a structural section header. Walks up the ancestor chain looking for
+ * signals: semantic HTML (<aside>), ARIA roles, class names containing
+ * "callout"/"admonition", or data-* attribute values containing those keywords.
+ */
+function isCalloutHeading(h: HTMLElement): boolean {
+  let el: HTMLElement | null = h;
+  while (el) {
+    // Semantic HTML
+    if (el.rawTagName === 'aside') return true;
+
+    // ARIA roles
+    const role = el.getAttribute('role');
+    if (role && CALLOUT_ROLES.has(role)) return true;
+
+    // Class and data-* attribute values
+    const attrs = el.attributes;
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key === 'role') continue; // already checked
+      if (key === 'class' || key.startsWith('data-')) {
+        const lower = value.toLowerCase();
+        if (lower.includes('callout') || lower.includes('admonition')) return true;
+      }
+    }
+
+    el = el.parentNode as HTMLElement | null;
+  }
+  return false;
+}
+
+/**
+ * Extract section header text from content that may be HTML, markdown, or a
+ * mix (MDX). Excludes headings inside callout/admonition containers, which
+ * are supplementary labels rather than structural section headers.
  */
 function extractHeaders(content: string): string[] {
   const headers: string[] = [];
 
-  // HTML headers
+  // HTML headers — skip callout/admonition headings
   const root = parse(content);
   const htmlHeaders = root.querySelectorAll('h1, h2, h3, h4, h5, h6');
   for (const h of htmlHeaders) {
+    if (isCalloutHeading(h)) continue;
     const text = h.textContent.trim();
     if (text.length > 0) headers.push(text);
   }
