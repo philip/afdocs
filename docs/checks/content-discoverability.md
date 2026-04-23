@@ -41,6 +41,21 @@ If any of these redirect cross-host (e.g., `example.com` redirects to `docs.exam
 
 If your `llms.txt` lives at a location not covered by these candidates, AFDocs won't find it. You can either move it to one of the candidate locations or [open an issue](https://github.com/agent-ecosystem/afdocs/issues) to suggest expanding the candidate list.
 
+### Canonical selection
+
+When more than one candidate returns a file (e.g. an apex `llms.txt` for the marketing site _and_ a `/docs/llms.txt` for the docs section), AFDocs picks one as **canonical**. The canonical file is the single source of truth for downstream checks: link sampling, size, validation, freshness, and link-resolution all operate on it alone. Other discovered files still appear in `details.discoveredFiles` for visibility, and `cache-header-hygiene` still verifies headers on every llms.txt found.
+
+The selection rule is _most-specific-to-the-baseUrl wins_. AFDocs picks the file whose directory is the longest prefix of the URL you passed. For example:
+
+| You passed            | Files found                                 | Canonical                       |
+| --------------------- | ------------------------------------------- | ------------------------------- |
+| `example.com/docs`    | `/llms.txt` and `/docs/llms.txt`            | `/docs/llms.txt`                |
+| `example.com`         | `/llms.txt` and `/docs/llms.txt`            | `/llms.txt`                     |
+| `example.com/docs/v1` | `/llms.txt`, `/docs/llms.txt`, `/docs/v1/…` | `/docs/v1/llms.txt`             |
+| `example.com/docs/v1` | `/llms.txt` and `/docs/llms.txt`            | `/docs/llms.txt` (longer match) |
+
+Use `--llms-txt-url` (or the `llmsTxtUrl` config option) to override the heuristic when the canonical lives at a non-standard path. See the [CLI reference](/reference/cli#llms-txt-selection) for details.
+
 ### How to fix
 
 **If this check fails**, create an `llms.txt` at one of the candidate locations above. The file should contain an H1 title, a blockquote summary, and markdown links to your key documentation pages. See the [llms.txt specification](https://llmstxt.org/) for the format.

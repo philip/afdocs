@@ -1,5 +1,6 @@
 import { extractMarkdownLinks } from '../checks/content-discoverability/llms-txt-valid.js';
 import { MAX_SITEMAP_URLS } from '../constants.js';
+import { getLlmsTxtFilesForAnalysis, selectCanonicalLlmsTxt } from './llms-txt.js';
 import { isNonPageUrl, isMdUrl, toHtmlUrl } from './to-md-urls.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';
 
@@ -38,7 +39,7 @@ export function parseSitemapUrls(xml: string): { urls: string[]; sitemapIndexUrl
 
 export async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
+  const discovered = getLlmsTxtFilesForAnalysis(existsResult);
 
   const urls = extractLinksFromLlmsTxtFiles(discovered);
   return walkAggregateLinks(ctx, urls);
@@ -155,12 +156,21 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
 /**
  * Directly fetch llms.txt candidate URLs and extract links.
  * Used when `llms-txt-exists` hasn't run (e.g. standalone check mode).
+ *
+ * Mirrors the canonical-selection logic in `llms-txt-exists` so that the same
+ * single source of truth drives sampling whether or not `llms-txt-exists` ran.
  */
 async function fetchLlmsTxtUrls(ctx: CheckContext): Promise<string[]> {
-  const candidates = new Set<string>();
-  candidates.add(`${ctx.baseUrl}/llms.txt`);
-  candidates.add(`${ctx.origin}/llms.txt`);
-  candidates.add(`${ctx.origin}/docs/llms.txt`);
+  const explicitUrl = ctx.options.llmsTxtUrl;
+  const candidates = explicitUrl
+    ? [explicitUrl]
+    : Array.from(
+        new Set([
+          `${ctx.baseUrl}/llms.txt`,
+          `${ctx.origin}/llms.txt`,
+          `${ctx.origin}/docs/llms.txt`,
+        ]),
+      );
 
   const discovered: DiscoveredFile[] = [];
   for (const url of candidates) {
@@ -184,7 +194,9 @@ async function fetchLlmsTxtUrls(ctx: CheckContext): Promise<string[]> {
     }
   }
 
-  const urls = extractLinksFromLlmsTxtFiles(discovered);
+  const canonical = selectCanonicalLlmsTxt(discovered, ctx.baseUrl);
+  const filesForAnalysis = canonical ? [canonical] : [];
+  const urls = extractLinksFromLlmsTxtFiles(filesForAnalysis);
   return walkAggregateLinks(ctx, urls);
 }
 

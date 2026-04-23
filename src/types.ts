@@ -84,6 +84,16 @@ export interface CheckOptions {
   preferredVersion?: string;
   /** Canonical origin to rewrite in fetched content (for preview/staging testing). */
   canonicalOrigin?: string;
+  /**
+   * Explicit URL to use as the canonical llms.txt for downstream sampling and
+   * analysis. When set, the standard candidate-discovery heuristic is bypassed
+   * and only this URL is probed.
+   *
+   * Useful when a site has both an apex llms.txt (e.g. for marketing) and a
+   * docs-section llms.txt, and the heuristic would otherwise pick the wrong
+   * one.
+   */
+  llmsTxtUrl?: string;
 }
 
 export interface SizeThresholds {

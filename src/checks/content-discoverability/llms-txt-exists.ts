@@ -1,4 +1,5 @@
 import { registerCheck } from '../registry.js';
+import { selectCanonicalLlmsTxt } from '../../helpers/llms-txt.js';
 import { isCrossHostRedirect } from '../../helpers/to-md-urls.js';
 import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
 
@@ -16,7 +17,8 @@ function getCandidateUrls(baseUrl: string, origin: string): string[] {
 }
 
 async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
-  const candidates = getCandidateUrls(ctx.baseUrl, ctx.origin);
+  const explicitUrl = ctx.options.llmsTxtUrl;
+  const candidates = explicitUrl ? [explicitUrl] : getCandidateUrls(ctx.baseUrl, ctx.origin);
   const discovered: DiscoveredFile[] = [];
   const checkedUrls: Array<{
     url: string;
@@ -68,8 +70,11 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
 
   // When no llms.txt found, check if any candidates redirected cross-host.
   // If so, try {redirected_origin}/llms.txt as a fallback.
+  // Skip the fallback when the user explicitly specified an llmsTxtUrl —
+  // they told us exactly where to look, so silently probing other origins
+  // would defeat the purpose of the override.
   const redirectedOrigins: string[] = [];
-  if (discovered.length === 0) {
+  if (discovered.length === 0 && !explicitUrl) {
     const checkedSet = new Set(checkedUrls.map((u) => u.url));
     const seenOrigins = new Set<string>();
     for (const checked of checkedUrls) {
@@ -134,6 +139,12 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     (fetchErrors > 0 ? `; ${fetchErrors} failed to fetch` : '') +
     (rateLimited > 0 ? `; ${rateLimited} rate-limited (HTTP 429)` : '');
 
+  // Pick the canonical llms.txt — the one downstream checks should use as the
+  // single source of truth for sampling links, measuring size, validating
+  // structure, etc. When multiple llms.txt files exist (apex + docs section),
+  // the heuristic prefers the most-specific one relative to the baseUrl.
+  const canonical = selectCanonicalLlmsTxt(discovered, ctx.baseUrl);
+
   // Store discovered files for downstream checks
   const details: Record<string, unknown> = {
     candidateUrls: checkedUrls,
@@ -141,6 +152,16 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     fetchErrors,
     rateLimited,
   };
+
+  if (canonical) {
+    details.canonicalLlmsTxt = canonical;
+    details.canonicalUrl = canonical.url;
+    if (explicitUrl) {
+      details.canonicalSource = 'explicit';
+    } else if (discovered.length > 1) {
+      details.canonicalSource = 'heuristic';
+    }
+  }
 
   if (redirectedOrigins.length > 0) {
     details.redirectedOrigins = redirectedOrigins;
@@ -174,11 +195,14 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
       redirectedOrigins.length > 0
         ? `; candidates redirected cross-host to ${redirectedOrigins.join(', ')} (agents can't follow cross-host redirects)`
         : '';
+    const message = explicitUrl
+      ? `No llms.txt found at the URL specified via --llms-txt-url (${explicitUrl})${redirectNote}${suffix}`
+      : `No llms.txt found at any candidate location (${candidates.join(', ')})${redirectNote}${suffix}`;
     return {
       id: 'llms-txt-exists',
       category: 'content-discoverability',
       status: 'fail',
-      message: `No llms.txt found at any candidate location (${candidates.join(', ')})${redirectNote}${suffix}`,
+      message,
       details,
     };
   }
@@ -203,11 +227,24 @@ async function checkLlmsTxtExists(ctx: CheckContext): Promise<CheckResult> {
     details.sameContent = allSame;
   }
 
+  // Build a message that surfaces which file was picked as canonical, so users
+  // can see at a glance which one drives the rest of the report.
+  let message: string;
+  if (explicitUrl && canonical) {
+    message = `llms.txt found at ${canonical.url} (specified via --llms-txt-url)`;
+  } else if (discovered.length === 1) {
+    message = `llms.txt found at ${discovered[0].url}`;
+  } else if (canonical) {
+    message = `llms.txt found at ${discovered.length} locations; using ${canonical.url} as canonical`;
+  } else {
+    message = `llms.txt found at ${discovered.length} location(s)`;
+  }
+
   return {
     id: 'llms-txt-exists',
     category: 'content-discoverability',
     status: 'pass',
-    message: `llms.txt found at ${discovered.length} location(s)${suffix}`,
+    message: message + suffix,
     details,
   };
 }

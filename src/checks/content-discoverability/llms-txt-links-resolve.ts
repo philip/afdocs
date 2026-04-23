@@ -2,7 +2,8 @@ import { registerCheck } from '../registry.js';
 import { LINK_RESOLVE_THRESHOLD } from '../../constants.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
 import { filterByPathPrefix, getPathFilterBase } from '../../helpers/get-page-urls.js';
-import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
+import { getLlmsTxtFilesForAnalysis } from '../../helpers/llms-txt.js';
+import type { CheckContext, CheckResult } from '../../types.js';
 
 interface LinkCheckResult {
   url: string;
@@ -13,7 +14,7 @@ interface LinkCheckResult {
 
 async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
+  const discovered = getLlmsTxtFilesForAnalysis(existsResult);
 
   if (discovered.length === 0) {
     return {
