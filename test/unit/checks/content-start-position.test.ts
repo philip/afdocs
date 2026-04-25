@@ -270,12 +270,12 @@ describe('content-start-position', () => {
   // ── Status threshold: fail (>50%) ──
 
   it('fails when content starts past 50%', async () => {
-    // Massive CSS boilerplate (leaks through Turndown) before a tiny heading
-    const cssRules = Array.from(
-      { length: 200 },
-      (_, i) => `.class${i} { color: red; margin: ${i}px; }`,
-    ).join('\n');
-    const html = `<html><head><style>${cssRules}</style></head><body><h3>Tiny Content</h3></body></html>`;
+    // Massive nav boilerplate before a tiny content section
+    const navLinks = Array.from(
+      { length: 100 },
+      (_, i) => `<li><a href="/nav${i}">Navigation Link ${i}</a></li>`,
+    ).join('');
+    const html = `<html><body><nav><ul>${navLinks}</ul></nav><h3>Tiny Content</h3><p>A short paragraph of documentation.</p></body></html>`;
 
     server.use(
       http.get(
@@ -305,17 +305,17 @@ describe('content-start-position', () => {
       ),
     );
 
-    // Page 2: massive CSS boilerplate before content (fail)
-    const cssRules = Array.from(
-      { length: 200 },
-      (_, i) => `.c${i} { color: red; margin: ${i}px; }`,
-    ).join('\n');
+    // Page 2: massive nav boilerplate before content (fail)
+    const navLinks = Array.from(
+      { length: 100 },
+      (_, i) => `<li><a href="/nav${i}">Navigation Link ${i}</a></li>`,
+    ).join('');
     server.use(
       http.get(
         'http://test.local/docs/bad',
         () =>
           new HttpResponse(
-            `<html><head><style>${cssRules}</style></head><body><h3>Late Content</h3></body></html>`,
+            `<html><body><nav><ul>${navLinks}</ul></nav><h3>Late Content</h3><p>A short paragraph.</p></body></html>`,
             { status: 200, headers: { 'Content-Type': 'text/html' } },
           ),
       ),
