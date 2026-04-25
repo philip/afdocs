@@ -465,6 +465,6 @@ describe('formatScorecard', () => {
     expect(output).toContain('(N/A)');
     // Should fire the single-page-sample diagnostic
     expect(output).toContain('Interaction Diagnostics');
-    expect(output).toContain('Only one page was discovered');
+    expect(output).toContain('Only 1 page was discovered');
   });
 });

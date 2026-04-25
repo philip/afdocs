@@ -40,5 +40,8 @@ export const DEFAULT_COVERAGE_PASS_THRESHOLD = 95;
 /** Default llms-txt-coverage warn threshold (percentage). */
 export const DEFAULT_COVERAGE_WARN_THRESHOLD = 80;
 
+/** Minimum discovered pages before page-level scores are considered meaningful. */
+export const MIN_PAGES_FOR_SCORING = 5;
+
 /** Base URL for the Agent-Friendly Documentation Spec. */
 export const SPEC_BASE_URL = 'https://agentdocsspec.com/spec/';

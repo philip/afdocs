@@ -1,5 +1,6 @@
 import type { CheckResult, ReportResult } from '../types.js';
 import type { Diagnostic, DiagnosticSeverity } from './types.js';
+import { MIN_PAGES_FOR_SCORING } from '../constants.js';
 
 interface DiagnosticDefinition {
   id: string;
@@ -262,13 +263,22 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
     triggers: (_results, _triggered, report) => {
       const isDiscoveryBased =
         report.samplingStrategy === 'random' || report.samplingStrategy === 'deterministic';
-      return isDiscoveryBased && report.testedPages === 1;
+      return (
+        isDiscoveryBased &&
+        report.testedPages !== undefined &&
+        report.testedPages < MIN_PAGES_FOR_SCORING
+      );
     },
-    message: () =>
-      'Only one page was discovered and tested. Page-level category scores ' +
-      '(page size, content structure, URL stability, etc.) are based on a ' +
-      'single page and may not represent the site. These categories are ' +
-      'marked as N/A in the score.',
+    message: (_results, _triggered, report) => {
+      const n = report.testedPages ?? 0;
+      const pageWord = n === 1 ? 'page was' : 'pages were';
+      return (
+        `Only ${n} ${pageWord} discovered and tested (minimum ${MIN_PAGES_FOR_SCORING} ` +
+        'needed for reliable scoring). Page-level category scores (page size, ' +
+        'content structure, URL stability, etc.) may not represent the site. ' +
+        'These categories are marked as N/A in the score.'
+      );
+    },
     resolution:
       'If your site has an llms.txt, ensure it contains working links so ' +
       'the tool can discover more pages. If testing a preview deployment, ' +

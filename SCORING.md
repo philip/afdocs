@@ -125,7 +125,7 @@ Rounded to the nearest integer. Checks marked as `notApplicable` (see below) are
 
 ### Insufficient-data handling (scoreDisplayMode)
 
-When the tool discovers only a single page using automatic discovery (`random` or `deterministic` sampling), page-level check scores are unreliable because they represent one page out of potentially thousands. In this case:
+When automatic discovery (`random` or `deterministic` sampling) finds fewer than 5 pages, page-level check scores are unreliable because they represent a handful of pages out of potentially thousands. In this case:
 
 - **Page-level checks** get `scoreDisplayMode: "notApplicable"` and are excluded from the overall score calculation.
 - **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) remain `scoreDisplayMode: "numeric"` and are scored normally.
@@ -237,9 +237,9 @@ Some problems only become visible when you look at multiple checks together. The
 
 ### Single-page sample
 
-**Triggers when** automatic discovery (`random` or `deterministic` sampling) found only one page to test.
+**Triggers when** automatic discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
 
-**What it means**: Page-level category scores (page size, content structure, URL stability, etc.) are based on a single page and may not represent the site. These categories are marked as N/A in the score.
+**What it means**: Page-level category scores (page size, content structure, URL stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score.
 
 **What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls`.
 

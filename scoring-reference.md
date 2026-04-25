@@ -211,7 +211,7 @@ Each `CheckScore` has a `scoreDisplayMode` field:
 The `notApplicable` mode triggers when all of:
 
 - `samplingStrategy` is `random` or `deterministic` (discovery-based).
-- `testedPages` equals 1.
+- `testedPages` is less than `MIN_PAGES_FOR_SCORING` (default 5).
 - The check is page-level (tests sampled pages, not site-level resources).
 
 Page-level checks: `llms-txt-directive-html`, `llms-txt-directive-md`,
@@ -555,10 +555,10 @@ in dependency order: `markdown-undiscoverable` and
 
 - **Severity**: warning
 - **Triggers when**: `samplingStrategy` is `random` or `deterministic` AND
-  `testedPages` equals 1.
-- **Message**: Only one page was discovered and tested. Page-level category
-  scores are based on a single page and may not represent the site. These
-  categories are marked as N/A in the score.
+  `testedPages` is less than `MIN_PAGES_FOR_SCORING` (default 5).
+- **Message**: Only {n} page(s) discovered and tested (minimum 5 needed for
+  reliable scoring). Page-level category scores may not represent the site.
+  These categories are marked as N/A in the score.
 - **Resolution**: If your site has an llms.txt, ensure it contains working
   links so the tool can discover more pages. If testing a preview deployment,
   use --canonical-origin to rewrite cross-origin llms.txt links. You can also

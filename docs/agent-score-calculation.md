@@ -162,7 +162,7 @@ The `rendering-strategy` and `auth-gate-detection` caps do not apply when the ch
 
 ## Insufficient data
 
-When automatic page discovery finds only a single page (using `random` or `deterministic` sampling), page-level check scores are unreliable because they represent one page out of potentially thousands. In this case:
+When automatic page discovery finds fewer than 5 pages (using `random` or `deterministic` sampling), page-level check scores are unreliable because they represent a handful of pages out of potentially thousands. In this case:
 
 - **Page-level checks** (those that test sampled pages like `page-size-html`, `rendering-strategy`, `http-status-codes`, etc.) are marked as "not applicable" and excluded from the score.
 - **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) are scored normally.
@@ -170,7 +170,7 @@ When automatic page discovery finds only a single page (using `random` or `deter
 
 This typically happens when a site has no llms.txt or its llms.txt links point to a different origin (common with preview deployments). A [`single-page-sample` diagnostic](/interaction-diagnostics#single-page-sample) fires to explain the situation.
 
-This behavior does not apply when you explicitly choose pages with `--urls` or `--sampling curated`, or when you use `--sampling none`. If you intentionally test a single page, the score reflects that page.
+This behavior does not apply when you explicitly choose pages with `--urls` or `--sampling curated`, or when you use `--sampling none`. If you intentionally select pages, the score reflects those pages regardless of count.
 
 ## Cluster coefficients
 

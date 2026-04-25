@@ -356,10 +356,19 @@ describe('diagnostics', () => {
       expect(diags.find((d) => d.id === 'single-page-sample')).toBeUndefined();
     });
 
-    it('does not trigger when testedPages > 1', () => {
+    it('does not trigger when testedPages >= threshold', () => {
       const report = { ...defaultReport(), testedPages: 5, samplingStrategy: 'random' as const };
       const diags = evaluateDiagnostics(resultsMap(), report);
       expect(diags.find((d) => d.id === 'single-page-sample')).toBeUndefined();
+    });
+
+    it('triggers when testedPages is below threshold but above 1', () => {
+      const report = { ...defaultReport(), testedPages: 3, samplingStrategy: 'random' as const };
+      const diags = evaluateDiagnostics(resultsMap(), report);
+      const diag = diags.find((d) => d.id === 'single-page-sample');
+      expect(diag).toBeDefined();
+      expect(diag!.message).toContain('3 pages were');
+      expect(diag!.message).toContain('minimum 5');
     });
 
     it('does not trigger when testedPages is undefined', () => {

@@ -487,7 +487,7 @@ describe('computeScore', () => {
     it('does not mark checks as notApplicable when testedPages > 1', () => {
       const results: CheckResult[] = [makeResult('page-size-html', 'page-size', 'pass')];
       const score = computeScore(
-        makeReport(results, { testedPages: 5, samplingStrategy: 'random' }),
+        makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
       );
       expect(score.checkScores['page-size-html'].scoreDisplayMode).toBe('numeric');
     });
@@ -536,7 +536,7 @@ describe('computeScore', () => {
       );
       // Without N/A: both count, page-size-html fails -> less than 100
       const scoreNormal = computeScore(
-        makeReport(results, { testedPages: 5, samplingStrategy: 'random' }),
+        makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
       );
       expect(scoreNA.overall).toBe(100);
       expect(scoreNormal.overall).toBeLessThan(100);

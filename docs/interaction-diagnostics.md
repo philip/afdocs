@@ -76,9 +76,9 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 ## Single-page sample
 
-**Triggers when** automatic page discovery (`random` or `deterministic` sampling) found only one page to test.
+**Triggers when** automatic page discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
 
-**What it means**: Page-level category scores (Page Size, Content Structure, URL Stability, etc.) are based on a single page and may not represent the site. These categories are marked as N/A in the score rather than showing potentially misleading numbers.
+**What it means**: Page-level category scores (Page Size, Content Structure, URL Stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score rather than showing potentially misleading numbers.
 
 **What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls` to test exactly the pages you care about.
 

@@ -1,5 +1,5 @@
 import type { CheckResult, ReportResult } from '../types.js';
-import { CATEGORIES } from '../constants.js';
+import { CATEGORIES, MIN_PAGES_FOR_SCORING } from '../constants.js';
 import type { CategoryScore, CheckScore, Grade, ScoreCap, ScoreResult } from './types.js';
 import { getCheckWeight } from './weights.js';
 import { getCheckProportion } from './proportions.js';
@@ -42,7 +42,10 @@ export function computeScore(report: ReportResult): ScoreResult {
   // Determine if page-level scores lack meaningful data
   const isDiscoveryBased =
     report.samplingStrategy === 'random' || report.samplingStrategy === 'deterministic';
-  const insufficientData = isDiscoveryBased && report.testedPages === 1;
+  const insufficientData =
+    isDiscoveryBased &&
+    report.testedPages !== undefined &&
+    report.testedPages < MIN_PAGES_FOR_SCORING;
 
   // Compute per-check scores
   const checkScores: Record<string, CheckScore> = {};

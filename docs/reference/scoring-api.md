@@ -46,7 +46,7 @@ This is the same function; the subpath is provided for consumers who want a narr
 | `resolutions`    | `Record<string, string>`        | Fix suggestions keyed by check ID                                                                                                     |
 | `tagScores`      | `Record<string, TagScore>`      | Per-tag aggregate scores (present when curated pages have tags)                                                                       |
 
-Each `CheckScore` includes a `scoreDisplayMode` field (`"numeric"` or `"notApplicable"`). When automatic page discovery finds only one page, page-level checks are marked `"notApplicable"` and excluded from overall and category score calculations. See [Insufficient data](/agent-score-calculation#insufficient-data) for details.
+Each `CheckScore` includes a `scoreDisplayMode` field (`"numeric"` or `"notApplicable"`). When automatic page discovery finds fewer than 5 pages, page-level checks are marked `"notApplicable"` and excluded from overall and category score calculations. See [Insufficient data](/agent-score-calculation#insufficient-data) for details.
 
 ## TagScore
 
