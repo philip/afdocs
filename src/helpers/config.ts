@@ -40,6 +40,34 @@ export function validatePages(pages: unknown[], source: string): void {
 }
 
 /**
+ * Validate that a config field is a flat array of strings.
+ * Catches the common YAML mistake of unquoted values containing special
+ * characters (e.g., `[data-foo]` parsed as a nested array instead of a string).
+ */
+function validateStringArray(value: unknown, field: string, source: string): void {
+  if (!Array.isArray(value)) {
+    throw new Error(`${source}: "${field}" must be an array of strings`);
+  }
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== 'string') {
+      throw new Error(
+        `${source}: ${field}[${i}] must be a string, got ${typeof value[i]}. ` +
+          'If the value contains [ or *, wrap it in quotes.',
+      );
+    }
+  }
+}
+
+function validateOptions(options: Record<string, unknown>, source: string): void {
+  if (options.coverageExclusions != null) {
+    validateStringArray(options.coverageExclusions, 'options.coverageExclusions', source);
+  }
+  if (options.parityExclusions != null) {
+    validateStringArray(options.parityExclusions, 'options.parityExclusions', source);
+  }
+}
+
+/**
  * Search for an agent-docs config file starting from `dir` and walking up
  * to the filesystem root (like eslint, prettier, etc.).
  * If `dir` is omitted, starts from `process.cwd()`.
@@ -59,6 +87,9 @@ export async function loadConfig(dir?: string): Promise<AgentDocsConfig> {
         if (parsed.pages) {
           assertPagesArray(parsed.pages, filepath);
           validatePages(parsed.pages, filepath);
+        }
+        if (parsed.options) {
+          validateOptions(parsed.options as Record<string, unknown>, filepath);
         }
         return parsed;
       } catch (err) {
@@ -96,6 +127,9 @@ export async function findConfig(
       assertPagesArray(parsed.pages, filepath);
       validatePages(parsed.pages, filepath);
     }
+    if (parsed.options) {
+      validateOptions(parsed.options as Record<string, unknown>, filepath);
+    }
     return parsed;
   }
 
@@ -109,6 +143,9 @@ export async function findConfig(
         if (parsed.pages) {
           assertPagesArray(parsed.pages, filepath);
           validatePages(parsed.pages, filepath);
+        }
+        if (parsed.options) {
+          validateOptions(parsed.options as Record<string, unknown>, filepath);
         }
         return parsed;
       } catch (err) {

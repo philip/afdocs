@@ -90,6 +90,12 @@ export interface CheckOptions {
   coverageWarnThreshold?: number;
   /** Glob patterns to exclude from the sitemap before calculating coverage. */
   coverageExclusions?: string[];
+  /** Pass threshold for markdown-content-parity (0–100). Default 5. */
+  parityPassThreshold?: number;
+  /** Warn threshold for markdown-content-parity (0–100). Default 20. */
+  parityWarnThreshold?: number;
+  /** CSS selectors to strip from HTML before parity comparison (e.g. '[data-markdown-ignore]'). */
+  parityExclusions?: string[];
   /**
    * Explicit URL to use as the canonical llms.txt for downstream sampling and
    * analysis. When set, the standard candidate-discovery heuristic is bypassed

@@ -43,6 +43,12 @@ options:
   #   - /docs/reference/**
   #   - /docs/changelog/**
   #   - "**/release-notes/**"  # quote patterns starting with *
+  # Parity check: thresholds and exclusions
+  # parityPassThreshold: 5
+  # parityWarnThreshold: 20
+  # parityExclusions:
+  #   - .human-only-content
+  #   - '[data-audience="humans"]'  # quote selectors starting with [ (YAML treats unquoted [] as arrays)
 
 # Optional: test specific pages instead of discovering via llms.txt/sitemap
 # pages:
@@ -91,9 +97,12 @@ Override default runner options. All fields are optional:
 | `llmsTxtUrl`            |             | Explicit llms.txt URL to use as canonical (overrides the discovery heuristic; see CLI docs)              |
 | `thresholds.pass`       | `50000`     | Page size pass threshold in characters                                                                   |
 | `thresholds.fail`       | `100000`    | Page size fail threshold in characters                                                                   |
-| `coveragePassThreshold` | `95`        | `llms-txt-coverage` pass threshold (percentage, 0-100)                                                   |
-| `coverageWarnThreshold` | `80`        | `llms-txt-coverage` warn threshold (percentage, 0-100)                                                   |
+| `coveragePassThreshold` | `95`        | `llms-txt-coverage` pass threshold: minimum coverage % to pass (higher = stricter)                       |
+| `coverageWarnThreshold` | `80`        | `llms-txt-coverage` warn threshold: minimum coverage % to avoid failure (higher = stricter)              |
 | `coverageExclusions`    |             | Glob patterns to exclude from the sitemap before calculating coverage (quote patterns starting with `*`) |
+| `parityPassThreshold`   | `5`         | `markdown-content-parity` pass threshold: maximum missing % to pass (lower = stricter)                   |
+| `parityWarnThreshold`   | `20`        | `markdown-content-parity` warn threshold: maximum missing % to avoid failure (lower = stricter)          |
+| `parityExclusions`      |             | CSS selectors to strip from HTML before parity comparison                                                |
 
 ### `pages` (optional)
 

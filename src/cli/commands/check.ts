@@ -38,11 +38,29 @@ export function registerCheckCommand(program: Command): void {
     .option('-v, --verbose', 'Show per-page details for checks with issues')
     .option('--fixes', 'Show fix suggestions for warn/fail checks')
     .option('--score', 'Include scoring data in JSON output')
-    .option('--coverage-pass-threshold <n>', 'llms-txt-coverage pass threshold (0-100, default 95)')
-    .option('--coverage-warn-threshold <n>', 'llms-txt-coverage warn threshold (0-100, default 80)')
+    .option(
+      '--coverage-pass-threshold <n>',
+      'Minimum coverage % to pass (0-100, default 95; higher = stricter)',
+    )
+    .option(
+      '--coverage-warn-threshold <n>',
+      'Minimum coverage % to avoid failure (0-100, default 80; higher = stricter)',
+    )
     .option(
       '--coverage-exclusions <patterns>',
       'Comma-separated glob patterns to exclude from coverage denominator',
+    )
+    .option(
+      '--parity-pass-threshold <n>',
+      'Maximum missing % to pass (0-100, default 5; lower = stricter)',
+    )
+    .option(
+      '--parity-warn-threshold <n>',
+      'Maximum missing % to avoid failure (0-100, default 20; lower = stricter)',
+    )
+    .option(
+      '--parity-exclusions <selectors>',
+      'Comma-separated CSS selectors to strip from HTML before parity comparison',
     )
     .option(
       '--canonical-origin <url>',
@@ -244,6 +262,23 @@ export function registerCheckCommand(program: Command): void {
               .filter(Boolean)
           : (config?.options?.coverageExclusions ?? undefined);
 
+      const parityPassThreshold =
+        opts.parityPassThreshold != null
+          ? parseInt(String(opts.parityPassThreshold), 10)
+          : (config?.options?.parityPassThreshold ?? undefined);
+      const parityWarnThreshold =
+        opts.parityWarnThreshold != null
+          ? parseInt(String(opts.parityWarnThreshold), 10)
+          : (config?.options?.parityWarnThreshold ?? undefined);
+
+      const parityExclusions =
+        opts.parityExclusions != null
+          ? (opts.parityExclusions as string)
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : (config?.options?.parityExclusions ?? undefined);
+
       const report = await runChecks(url, {
         checkIds,
         skipCheckIds,
@@ -263,6 +298,9 @@ export function registerCheckCommand(program: Command): void {
         ...(coveragePassThreshold != null && { coveragePassThreshold }),
         ...(coverageWarnThreshold != null && { coverageWarnThreshold }),
         ...(coverageExclusions && { coverageExclusions }),
+        ...(parityPassThreshold != null && { parityPassThreshold }),
+        ...(parityWarnThreshold != null && { parityWarnThreshold }),
+        ...(parityExclusions && { parityExclusions }),
       });
 
       let output: string;
