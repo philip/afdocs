@@ -679,17 +679,38 @@ export async function getUrlsFromSitemap(
   return deduplicated.slice(0, maxUrls);
 }
 
+function isWwwVariant(hostname1: string, hostname2: string): boolean {
+  return hostname1 === `www.${hostname2}` || hostname2 === `www.${hostname1}`;
+}
+
 /**
  * Get the base URL for path-prefix filtering, accounting for cross-host redirects.
  *
- * When a cross-host redirect is in play (e.g. example.com/docs → docs.example.com),
+ * When a true cross-host redirect is in play (e.g. example.com/docs → docs.example.com),
  * the original baseUrl path doesn't apply to the redirected host, so we return the
  * effectiveOrigin (a root URL) which makes path filtering a no-op.
+ *
+ * When the redirect is www-canonicalization (e.g. alchemy.com → www.alchemy.com),
+ * the path structure is preserved, so we transfer the baseUrl's path to the
+ * effective origin to keep path-prefix filtering active.
  */
 export function getPathFilterBase(ctx: CheckContext): string {
-  return ctx.effectiveOrigin && ctx.effectiveOrigin !== ctx.origin
-    ? ctx.effectiveOrigin
-    : ctx.baseUrl;
+  if (!ctx.effectiveOrigin || ctx.effectiveOrigin === ctx.origin) {
+    return ctx.baseUrl;
+  }
+
+  try {
+    const originalHost = new URL(ctx.origin).hostname;
+    const effectiveHost = new URL(ctx.effectiveOrigin).hostname;
+    if (isWwwVariant(originalHost, effectiveHost)) {
+      const basePath = new URL(ctx.baseUrl).pathname.replace(/\/$/, '');
+      return basePath ? `${ctx.effectiveOrigin}${basePath}` : ctx.effectiveOrigin;
+    }
+  } catch {
+    // fall through
+  }
+
+  return ctx.effectiveOrigin;
 }
 
 /**
