@@ -12,7 +12,7 @@ interface DiagnosticDefinition {
 
 // Evaluated in this order (dependency order matters)
 const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
-  // --- markdown-undiscoverable must be first (others reference it) ---
+  // --- markdown discovery diagnostics must be first (others reference them) ---
   {
     id: 'markdown-undiscoverable',
     severity: 'warning',
@@ -21,21 +21,47 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
       if (mdSupport?.status !== 'pass') return false;
 
       const cn = results.get('content-negotiation');
-      const directive = results.get('llms-txt-directive');
-      const linksMd = results.get('llms-txt-links-markdown');
+      const directiveHtml = results.get('llms-txt-directive-html');
 
-      return cn?.status !== 'pass' && directive?.status !== 'pass' && linksMd?.status !== 'pass';
+      return cn?.status !== 'pass' && directiveHtml?.status !== 'pass';
     },
     message: () =>
       'Your site serves markdown at .md URLs, but agents have no way to ' +
-      'discover this. Without content negotiation, an llms.txt directive ' +
-      'on your pages, or .md links in your llms.txt, most agents will ' +
-      'default to the HTML path. Your markdown support is not being utilized.',
+      'discover this. No agent-facing directive points to your llms.txt, ' +
+      'and the server does not support content negotiation. Most agents ' +
+      'will default to the HTML path and never benefit from your markdown ' +
+      'support.',
     resolution:
-      'Add a blockquote directive near the top of each docs page ' +
-      'pointing to your llms.txt, or implement content negotiation for ' +
-      'Accept: text/markdown. Either change makes your existing markdown ' +
-      'support discoverable.',
+      'Add a directive near the top of each docs page pointing to your ' +
+      'llms.txt, and implement content negotiation for Accept: text/markdown. ' +
+      'The directive is the primary discovery mechanism (it reaches all ' +
+      'agents); content negotiation provides a fast path for agents that ' +
+      'request markdown by default.',
+  },
+
+  {
+    id: 'markdown-partially-discoverable',
+    severity: 'warning',
+    triggers: (results) => {
+      const mdSupport = results.get('markdown-url-support');
+      if (mdSupport?.status !== 'pass') return false;
+
+      const cn = results.get('content-negotiation');
+      const directiveHtml = results.get('llms-txt-directive-html');
+
+      return cn?.status === 'pass' && directiveHtml?.status !== 'pass';
+    },
+    message: () =>
+      'Your site serves markdown and supports content negotiation, but ' +
+      'has no agent-facing directive on HTML pages pointing to llms.txt. ' +
+      'Agents that send Accept: text/markdown (Claude Code, Cursor, ' +
+      'OpenCode) get markdown automatically, but the majority of agents ' +
+      'fetch HTML by default and have no signal to try the markdown path.',
+    resolution:
+      'Add a directive near the top of each docs page pointing to your ' +
+      'llms.txt. If your site serves markdown, mention that in the ' +
+      'directive too. The directive reaches all agents, not just the ones ' +
+      'that request markdown by default.',
   },
 
   {
@@ -135,7 +161,11 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
 
       const mdSupport = results.get('markdown-url-support');
       if (mdSupport?.status === 'fail') return true;
-      if (triggered.has('markdown-undiscoverable')) return true;
+      if (
+        triggered.has('markdown-undiscoverable') ||
+        triggered.has('markdown-partially-discoverable')
+      )
+        return true;
 
       return false;
     },
@@ -191,7 +221,11 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
 
       const mdSupport = results.get('markdown-url-support');
       if (mdSupport?.status === 'fail') return true;
-      if (triggered.has('markdown-undiscoverable')) return true;
+      if (
+        triggered.has('markdown-undiscoverable') ||
+        triggered.has('markdown-partially-discoverable')
+      )
+        return true;
 
       return false;
     },

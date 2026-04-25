@@ -4,7 +4,7 @@ Scoring Version: 0.1.0 · [Agent-Friendly Docs Spec v0.3.0](https://agentdocsspe
 
 ## What is this score?
 
-The Agent-Friendly Docs Scorecard measures how effectively AI coding agents can discover, navigate, and consume a documentation site. It runs 22 automated checks against your site and produces a 0–100 score with a letter grade.
+The Agent-Friendly Docs Scorecard measures how effectively AI coding agents can discover, navigate, and consume a documentation site. It runs 23 automated checks against your site and produces a 0–100 score with a letter grade.
 
 Each check corresponds to a section of the [Agent-Friendly Docs Spec](https://agentdocsspec.com), which documents what the check measures, why it matters for real agent workflows, and the observed behaviors that motivated it. This document covers how checks are **scored**, not what they **measure**. If you want to understand a specific check in depth, follow the spec links in the table below.
 
@@ -23,7 +23,7 @@ The score reflects how well agents can _actually use_ your documentation, not ju
 
 ## What we check
 
-The 22 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows:
+The 23 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows:
 
 - **Critical (10 pts)**: Agents cannot function without this. Failure means zero content, zero navigation, or zero access.
 - **High (7 pts)**: Directly limits agent effectiveness. Failure means truncation, dead ends, or agents stuck on a worse path.
@@ -41,7 +41,8 @@ How agents find and navigate your documentation.
 | [llms-txt-size](https://agentdocsspec.com/spec/#llms-txt-size)                     | High (7)      | Whether your llms.txt fits within agent context windows. Truncated indexes defeat their purpose.                         |
 | [llms-txt-links-resolve](https://agentdocsspec.com/spec/#llms-txt-links-resolve)   | High (7)      | Whether links in your llms.txt actually work. Broken links send agents down dead ends with high confidence.              |
 | [llms-txt-links-markdown](https://agentdocsspec.com/spec/#llms-txt-links-markdown) | High (7)      | Whether llms.txt links point to markdown rather than HTML. Agents work significantly less effectively with HTML content. |
-| [llms-txt-directive](https://agentdocsspec.com/spec/#llms-txt-directive)           | High (7)      | Whether your docs pages tell agents where to find llms.txt. Without this, agents won't know it exists.                   |
+| [llms-txt-directive-html](https://agentdocsspec.com/spec/#llms-txt-directive-html) | High (7)      | Whether your HTML pages tell agents where to find llms.txt. Without this, agents won't know it exists.                   |
+| [llms-txt-directive-md](https://agentdocsspec.com/spec/#llms-txt-directive-md)     | Medium (4)    | Whether your markdown pages tell agents where to find llms.txt.                                                          |
 
 ### Markdown Availability
 
@@ -129,7 +130,7 @@ Not all warnings represent the same degree of degradation. A warning on `llms-tx
 | Coefficient | Meaning                                  | Checks                                                                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-coverage`, `markdown-content-parity`                                                                                                                                                                      |
-| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive`, `redirect-behavior`                                                                                                                                                                                                                                              |
+| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive-html`, `llms-txt-directive-md`, `redirect-behavior`                                                                                                                                                                                                                |
 | **0.50**    | Genuine functional degradation           | `llms-txt-exists`, `llms-txt-size`, `rendering-strategy`, `markdown-url-support`, `page-size-markdown`, `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`, `cache-header-hygiene`, `auth-gate-detection`, `auth-alternative-access` |
 | **0.25**    | Actively steering agents to a worse path | `llms-txt-links-markdown` (markdown exists but llms.txt links to HTML; agents don't discover .md variants on their own)                                                                                                                                                                |
 
@@ -160,11 +161,19 @@ Some problems only become visible when you look at multiple checks together. The
 
 ### Markdown support is undiscoverable
 
-**Triggers when** your site serves markdown at .md URLs, but none of the discovery mechanisms (content negotiation, llms.txt directive, .md links in llms.txt) are in place.
+**Triggers when** your site serves markdown at .md URLs, but there is no agent-facing directive on HTML pages pointing to llms.txt and the server does not support content negotiation.
 
 **What it means**: You've done the work to support markdown, but agents have no way to find out. They'll default to the HTML path. In observed agent behavior, agents do not independently discover .md URL variants; they need to be told.
 
-**What to do**: Add a directive on your docs pages pointing to llms.txt, or implement content negotiation for `Accept: text/markdown`. Either change makes your existing markdown support visible to agents.
+**What to do**: Add a directive on your docs pages pointing to llms.txt, and implement content negotiation for `Accept: text/markdown`. The directive is the primary discovery mechanism because it reaches all agents; content negotiation provides a fast path for agents that request markdown by default. Both are recommended.
+
+### Markdown support is only partially discoverable
+
+**Triggers when** your site serves markdown at .md URLs and supports content negotiation, but there is no agent-facing directive on HTML pages pointing to llms.txt.
+
+**What it means**: Agents that send `Accept: text/markdown` (Claude Code, Cursor, OpenCode) get markdown automatically, but the majority of agents fetch HTML by default and have no signal that a markdown path exists.
+
+**What to do**: Add a directive near the top of each HTML page pointing to your llms.txt. If your site serves markdown, mention that in the directive too. The directive reaches all agents, not just the ones that request markdown by default.
 
 ### Truncated index
 

@@ -322,8 +322,8 @@ describe('computeTagScores', () => {
             { url: 'https://example.com/b', classification: 'soft-404' },
           ],
         }),
-        // llms-txt-directive: found near top -> pass, found deep -> warn, not found -> fail
-        makeResult('llms-txt-directive', 'content-discoverability', 'warn', {
+        // llms-txt-directive-html: found near top -> pass, found deep -> warn, not found -> fail
+        makeResult('llms-txt-directive-html', 'content-discoverability', 'warn', {
           pageResults: [
             { url: 'https://example.com/a', found: true, positionPercent: 5 },
             { url: 'https://example.com/b', found: true, positionPercent: 80 },
@@ -348,7 +348,7 @@ describe('computeTagScores', () => {
     const checkScores: Record<string, CheckScore> = {
       'markdown-url-support': makeCheckScore(7),
       'http-status-codes': makeCheckScore(7),
-      'llms-txt-directive': makeCheckScore(7),
+      'llms-txt-directive-html': makeCheckScore(7),
       'cache-header-hygiene': makeCheckScore(2),
     };
 
@@ -366,8 +366,8 @@ describe('computeTagScores', () => {
     const httpStatus = checks.find((c) => c.checkId === 'http-status-codes')!;
     expect(httpStatus.proportion).toBe(0.5);
 
-    // llms-txt-directive: 1 pass, 1 warn, 1 fail -> (1 + 0.6*1) / 3
-    const directive = checks.find((c) => c.checkId === 'llms-txt-directive')!;
+    // llms-txt-directive-html: 1 pass, 1 warn, 1 fail -> (1 + 0.6*1) / 3
+    const directive = checks.find((c) => c.checkId === 'llms-txt-directive-html')!;
     expect(directive.pages[0].status).toBe('pass');
     expect(directive.pages[1].status).toBe('warn');
     expect(directive.pages[2].status).toBe('fail');
@@ -407,8 +407,8 @@ describe('computeTagScores', () => {
         makeResult('http-status-codes', 'url-stability', 'pass', {
           pageResults: [{ url: 'https://example.com/a', classification: 'unknown-value' }],
         }),
-        // llms-txt-directive: error -> skip
-        makeResult('llms-txt-directive', 'content-discoverability', 'pass', {
+        // llms-txt-directive-html: error -> skip
+        makeResult('llms-txt-directive-html', 'content-discoverability', 'pass', {
           pageResults: [{ url: 'https://example.com/a', error: 'fetch failed' }],
         }),
         // section-header-quality: hasCrossGroupGeneric -> warn
@@ -430,7 +430,7 @@ describe('computeTagScores', () => {
       'redirect-behavior': makeCheckScore(4),
       'auth-gate-detection': makeCheckScore(10),
       'http-status-codes': makeCheckScore(7),
-      'llms-txt-directive': makeCheckScore(7),
+      'llms-txt-directive-html': makeCheckScore(7),
       'section-header-quality': makeCheckScore(2),
     };
 

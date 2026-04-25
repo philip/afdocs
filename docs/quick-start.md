@@ -12,7 +12,7 @@ No install needed. Point AFDocs at your documentation site:
 npx afdocs check https://docs.example.com --format scorecard
 ```
 
-This discovers pages from your site (via llms.txt, sitemap, or both), samples up to 50, runs all 22 checks, and produces a scorecard with your overall score, per-category breakdowns, and fix suggestions:
+This discovers pages from your site (via llms.txt, sitemap, or both), samples up to 50, runs all 23 checks, and produces a scorecard with your overall score, per-category breakdowns, and fix suggestions:
 
 ```
 Agent-Friendly Docs Scorecard
@@ -35,7 +35,7 @@ Agent-Friendly Docs Scorecard
     Content Discoverability
       PASS  llms-txt-exists        llms.txt found at /llms.txt
       WARN  llms-txt-size          llms.txt is 65,000 characters
-      FAIL  llms-txt-directive     No directive detected on any tested page
+      FAIL  llms-txt-directive-html No directive detected in HTML of any tested page
             Fix: Add a blockquote near the top of each page ...
 ```
 
@@ -71,7 +71,7 @@ npx afdocs check https://docs.example.com --format json --score
 
 ## Run specific checks
 
-If you're working on a particular issue, you don't need to run all 22 checks every time. Pass a comma-separated list of check IDs:
+If you're working on a particular issue, you don't need to run all 23 checks every time. Pass a comma-separated list of check IDs:
 
 ```bash
 npx afdocs check https://docs.example.com --checks llms-txt-exists,llms-txt-valid,llms-txt-size

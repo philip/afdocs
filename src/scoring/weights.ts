@@ -37,7 +37,8 @@ export const CHECK_WEIGHTS: Record<string, CheckWeight> = {
   'page-size-markdown': w('high', 0.5),
   'page-size-html': w('high', 0.5),
   'http-status-codes': w('high'),
-  'llms-txt-directive': w('high', 0.6),
+  'llms-txt-directive-html': w('high', 0.6),
+  'llms-txt-directive-md': w('medium', 0.6),
 
   // Medium
   'llms-txt-valid': w('medium', 0.75),

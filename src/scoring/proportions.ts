@@ -75,7 +75,8 @@ const PROPORTION_EXTRACTORS: Record<string, ProportionExtractor> = {
   'markdown-url-support': markdownUrlSupportExtractor,
   'content-negotiation': contentNegotiationExtractor,
   'http-status-codes': httpStatusCodesExtractor,
-  'llms-txt-directive': llmsTxtDirectiveExtractor,
+  'llms-txt-directive-html': llmsTxtDirectiveExtractor,
+  'llms-txt-directive-md': llmsTxtDirectiveExtractor,
 
   // --- Custom extractors for checks with non-standard detail shapes ---
   'rendering-strategy': renderingStrategyExtractor,

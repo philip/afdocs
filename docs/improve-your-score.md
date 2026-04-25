@@ -28,7 +28,7 @@ The scorecard tells you _what's wrong_. The verbose text output tells you _where
 
 ## Step 3: Work through fixes iteratively
 
-You don't need to run all 22 checks every time you make a change. Target just the check you're fixing for fast feedback:
+You don't need to run all 23 checks every time you make a change. Target just the check you're fixing for fast feedback:
 
 ```bash
 # Iterate on llms.txt
@@ -47,7 +47,8 @@ checks:
   - llms-txt-valid
   - llms-txt-size
   - llms-txt-links-resolve
-  - llms-txt-directive
+  - llms-txt-directive-html
+  - llms-txt-directive-md
   - rendering-strategy
   - page-size-html
   - content-start-position
@@ -87,9 +88,9 @@ At 50%+ gated pages, the score is [capped at D](/agent-score-calculation#score-c
 
 If `markdown-url-support` fails, agents are stuck with HTML. Many docs platforms support this natively (VitePress, for example, serves markdown at `.md` URLs out of the box). Others need a server configuration change.
 
-**Add an llms.txt directive to pages**
+**Add an llms.txt directive to HTML pages**
 
-If `llms-txt-directive` fails, agents visiting individual pages have no way to discover your llms.txt. Add a blockquote directive near the top of each page, typically through your docs platform's page template or layout component.
+If `llms-txt-directive-html` fails, agents visiting individual pages have no way to discover your llms.txt. Add a visually-hidden element near the top of each page pointing to your llms.txt. If your site serves markdown, mention that in the directive too so agents know to request it.
 
 **Fix broken llms.txt links**
 
@@ -107,6 +108,7 @@ If `llms-txt-size` warns or fails, agents are seeing a truncated version of your
 
 These are worth addressing but won't move the score as dramatically:
 
+- **llms.txt directive in markdown** (`llms-txt-directive-md`): Add a blockquote near the top of each markdown page pointing to your llms.txt.
 - **Content negotiation** (`content-negotiation`): Return markdown when agents send `Accept: text/markdown`. Requires server-side support.
 - **Content start position** (`content-start-position`): Reduce boilerplate (inline CSS/JS, navigation markup) before the main content. Move styles and scripts to external files.
 - **Tabbed content** (`tabbed-content-serialization`): If tabbed UI components create oversized output, consider restructuring into separate pages or using query params to retrieve only specific tab versions.
