@@ -35,7 +35,7 @@ export interface CheckContext {
   /**
    * The actual origin where content lives, when the baseUrl origin redirects
    * cross-host. Set by llms-txt-exists when it detects a cross-host redirect.
-   * Checks that need ground-truth data (e.g. sitemap for freshness) should
+   * Checks that need ground-truth data (e.g. sitemap for coverage) should
    * use this over `origin`; checks that test agent experience should use `origin`.
    */
   effectiveOrigin?: string;
@@ -84,6 +84,12 @@ export interface CheckOptions {
   preferredVersion?: string;
   /** Canonical origin to rewrite in fetched content (for preview/staging testing). */
   canonicalOrigin?: string;
+  /** Pass threshold for llms-txt-coverage (0–100). Default 95. */
+  coveragePassThreshold?: number;
+  /** Warn threshold for llms-txt-coverage (0–100). Default 80. */
+  coverageWarnThreshold?: number;
+  /** Glob patterns to exclude from the sitemap before calculating coverage. */
+  coverageExclusions?: string[];
   /**
    * Explicit URL to use as the canonical llms.txt for downstream sampling and
    * analysis. When set, the standard candidate-discovery heuristic is bypassed

@@ -119,7 +119,7 @@ const SINGLE_RESOURCE_CHECKS = new Set([
   'llms-txt-size',
   'llms-txt-links-resolve',
   'llms-txt-links-markdown',
-  'llms-txt-freshness',
+  'llms-txt-coverage',
 ]);
 
 /**

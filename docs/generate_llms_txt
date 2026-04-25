@@ -44,7 +44,7 @@ echo "- [Markdown Availability](${BASE_URL}/checks/markdown-availability.md): .m
 echo "- [Page Size](${BASE_URL}/checks/page-size.md): rendering strategy, HTML/markdown size, content start position" >> "$OUTPUT"
 echo "- [Content Structure](${BASE_URL}/checks/content-structure.md): tabbed content serialization, header quality, code fence validity" >> "$OUTPUT"
 echo "- [URL Stability](${BASE_URL}/checks/url-stability.md): HTTP status codes, redirect behavior" >> "$OUTPUT"
-echo "- [Observability](${BASE_URL}/checks/observability.md): llms.txt freshness, markdown content parity, cache headers" >> "$OUTPUT"
+echo "- [Observability](${BASE_URL}/checks/observability.md): llms.txt coverage, markdown content parity, cache headers" >> "$OUTPUT"
 echo "- [Authentication](${BASE_URL}/checks/authentication.md): auth gate detection, alternative access paths" >> "$OUTPUT"
 
 cat >> "$OUTPUT" << 'SECTION'

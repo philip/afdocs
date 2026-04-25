@@ -1,11 +1,16 @@
 import { registerCheck } from '../registry.js';
 import {
-  getUrlsFromCachedLlmsTxt,
+  getUrlsFromCachedLlmsTxtWithOmitted,
   getUrlsFromSitemap,
   parseSitemapUrls,
 } from '../../helpers/get-page-urls.js';
 import { isNonPageUrl } from '../../helpers/to-md-urls.js';
 import { isLocaleSegment, hasStructuralDuplication } from '../../helpers/locale-codes.js';
+import {
+  DEFAULT_COVERAGE_PASS_THRESHOLD,
+  DEFAULT_COVERAGE_WARN_THRESHOLD,
+} from '../../constants.js';
+import picomatch from 'picomatch';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 /**
@@ -41,8 +46,6 @@ export function normalizeUrlPath(url: string): string {
  */
 const EXCLUDED_PATH_PATTERNS = [
   /^\/blog(\/|$)/i,
-  /^\/changelog(\/|$)/i,
-  /^\/releases?(\/|$)/i,
   /^\/pricing(\/|$)/i,
   /^\/about(\/|$)/i,
   /^\/careers?(\/|$)/i,
@@ -51,8 +54,6 @@ const EXCLUDED_PATH_PATTERNS = [
   /^\/legal(\/|$)/i,
   /^\/privacy(\/|$)/i,
   /^\/terms(\/|$)/i,
-  /^\/security(\/|$)/i,
-  /^\/status(\/|$)/i,
   /^\/login(\/|$)/i,
   /^\/signup(\/|$)/i,
   /^\/sign-up(\/|$)/i,
@@ -74,6 +75,50 @@ export function isExcludedPath(normalizedPath: string, baseUrlPath?: string): bo
     }
   }
   return false;
+}
+
+/**
+ * Compile an array of glob patterns into a single picomatch matcher.
+ * Returns a function that tests a URL path against all patterns.
+ */
+export function compileExclusionMatcher(patterns: string[]): (path: string) => boolean {
+  if (patterns.length === 0) return () => false;
+  return picomatch(patterns, { nocase: true });
+}
+
+/**
+ * Test whether a normalized path matches any of the user-supplied exclusion globs.
+ * Patterns are tested against both the absolute path and the path relative to baseUrlPath.
+ */
+export function matchesUserExclusion(
+  normalizedPath: string,
+  matcher: (path: string) => boolean,
+  baseUrlPath?: string,
+): boolean {
+  if (matcher(normalizedPath)) return true;
+  if (baseUrlPath && baseUrlPath !== '/' && normalizedPath.startsWith(baseUrlPath)) {
+    const relative = normalizedPath.slice(baseUrlPath.length) || '/';
+    if (matcher(relative)) return true;
+  }
+  return false;
+}
+
+/**
+ * Extract path prefixes from omitted .txt URLs.
+ * e.g. /docs/chains/ethereum/llms.txt → /docs/chains/ethereum
+ */
+export function extractOmittedPrefixes(omittedTxtUrls: string[]): string[] {
+  const prefixes: string[] = [];
+  for (const url of omittedTxtUrls) {
+    try {
+      const parsed = new URL(url);
+      const dir = parsed.pathname.replace(/\/[^/]+$/, '');
+      if (dir) prefixes.push(dir.toLowerCase());
+    } catch {
+      continue;
+    }
+  }
+  return prefixes;
 }
 
 /**
@@ -197,18 +242,14 @@ export function filterToUnprefixedLocale(urls: string[], position: number): stri
   return urls.filter((url) => !hasLocaleCodeAt(url, position));
 }
 
-/** Coverage thresholds */
-const COVERAGE_PASS = 0.95;
-const COVERAGE_WARN = 0.8;
-
 /**
- * Maximum sitemap URLs to collect for freshness comparison.
+ * Maximum sitemap URLs to collect for coverage comparison.
  * Higher than the default MAX_SITEMAP_URLS (500) used for page sampling,
- * because freshness needs the full sitemap to produce meaningful coverage
+ * because coverage needs the full sitemap to produce meaningful coverage
  * percentages. Enterprise docs sites (Stripe, MongoDB) can have thousands
  * of pages.
  */
-const MAX_FRESHNESS_SITEMAP_URLS = 50_000;
+const MAX_COVERAGE_SITEMAP_URLS = 50_000;
 
 /**
  * Try to fetch a docs-specific sitemap at {baseUrl}/sitemap.xml.
@@ -271,11 +312,31 @@ function scopeUrls(urls: string[], origin: string, baseUrlPath: string): string[
 }
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
-  const id = 'llms-txt-freshness';
+  const id = 'llms-txt-coverage';
   const category = 'observability';
 
-  // 1. Get llms.txt page URLs (with progressive disclosure walking)
-  const llmsTxtUrls = await getUrlsFromCachedLlmsTxt(ctx);
+  // Resolve thresholds: CLI/config overrides → defaults, clamped to [0, 100]
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const rawPass = ctx.options.coveragePassThreshold ?? DEFAULT_COVERAGE_PASS_THRESHOLD;
+  const rawWarn = ctx.options.coverageWarnThreshold ?? DEFAULT_COVERAGE_WARN_THRESHOLD;
+  const passThreshold = clamp(rawPass) / 100;
+  const warnThreshold = clamp(rawWarn) / 100;
+  const thresholdWarnings: string[] = [];
+  if (passThreshold < warnThreshold) {
+    thresholdWarnings.push(
+      `coveragePassThreshold (${clamp(rawPass)}) is lower than ` +
+        `coverageWarnThreshold (${clamp(rawWarn)}); warn state is unreachable`,
+    );
+  }
+
+  // Compile user-supplied exclusion patterns
+  const userExclusionMatcher = compileExclusionMatcher(ctx.options.coverageExclusions ?? []);
+
+  // 1. Get llms.txt page URLs + omitted subtrees (progressive disclosure)
+  const walkResult = await getUrlsFromCachedLlmsTxtWithOmitted(ctx);
+  const llmsTxtUrls = walkResult.pageUrls;
+  const omittedPrefixes = extractOmittedPrefixes(walkResult.omittedTxtUrls);
+
   if (llmsTxtUrls.length === 0) {
     return {
       id,
@@ -291,7 +352,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const effectiveOrigin = ctx.effectiveOrigin ?? ctx.origin;
   const sitemapWarnings: string[] = [];
   let sitemapUrls = await getUrlsFromSitemap(ctx, sitemapWarnings, {
-    maxUrls: MAX_FRESHNESS_SITEMAP_URLS,
+    maxUrls: MAX_COVERAGE_SITEMAP_URLS,
     originOverride: effectiveOrigin,
     skipRefinement: true,
   });
@@ -317,7 +378,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       category,
       status: 'skip',
       message:
-        'No sitemap found; cannot assess llms.txt freshness without a sitemap as ground truth',
+        'No sitemap found; cannot assess llms.txt coverage without a sitemap as ground truth',
       details: { sitemapWarnings },
     };
   }
@@ -364,17 +425,30 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     }
   }
 
-  // 3. Normalize both sets for comparison
+  // 3. Normalize both sets for comparison, applying exclusions:
+  //    - Built-in non-doc path patterns (blog, changelog, etc.)
+  //    - User-supplied exclusion globs (--coverage-exclusions)
+  //    - Omitted subtree prefixes (nested llms.txt indexes not walked)
   const llmsNormalized = new Set(llmsTxtUrls.map(normalizeUrlPath));
   const sitemapNormalized = new Map<string, string>(); // normalized -> original URL
+  let omittedSubtreeCount = 0;
+  let userExcludedCount = 0;
   for (const url of scopedSitemapUrls) {
     const norm = normalizeUrlPath(url);
-    if (!isExcludedPath(norm, baseUrlPath)) {
-      sitemapNormalized.set(norm, url);
+    if (isExcludedPath(norm, baseUrlPath)) continue;
+    if (matchesUserExclusion(norm, userExclusionMatcher, baseUrlPath)) {
+      userExcludedCount++;
+      continue;
     }
+    if (omittedPrefixes.length > 0 && omittedPrefixes.some((p) => norm.startsWith(p))) {
+      omittedSubtreeCount++;
+      continue;
+    }
+    sitemapNormalized.set(norm, url);
   }
 
-  const excludedCount = scopedSitemapUrls.length - sitemapNormalized.size;
+  const excludedCount =
+    scopedSitemapUrls.length - sitemapNormalized.size - omittedSubtreeCount - userExcludedCount;
 
   // 4. Missing coverage: in sitemap but not in llms.txt
   const missingFromLlmsTxt: string[] = [];
@@ -424,12 +498,12 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const coveragePct = Math.round(coverageRate * 100);
   const unmatchedPct = Math.round(unmatchedRate * 100);
 
-  // 7. Determine status based on coverage only
+  // 7. Determine status based on coverage and configurable thresholds
   //    Unmatched links are informational (see note in step 5)
   let overallStatus: 'pass' | 'warn' | 'fail';
-  if (coverageRate >= COVERAGE_PASS) {
+  if (coverageRate >= passThreshold) {
     overallStatus = 'pass';
-  } else if (coverageRate >= COVERAGE_WARN) {
+  } else if (coverageRate >= warnThreshold) {
     overallStatus = 'warn';
   } else {
     overallStatus = 'fail';
@@ -442,6 +516,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   } else {
     parts.push(
       `llms.txt covers ${coveredCount}/${sitemapDocPages} sitemap doc pages (${coveragePct}%); ${missingFromLlmsTxt.length} missing`,
+    );
+  }
+  if (omittedSubtreeCount > 0) {
+    parts.push(
+      `${walkResult.omittedTxtUrls.length} nested indexes omitted (${omittedSubtreeCount} sitemap pages excluded)`,
     );
   }
   if (unmatchedLlmsTxtUrls.length > 0) {
@@ -464,23 +543,33 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       sitemapDocPages,
       sitemapSource,
       excludedNonDocPages: excludedCount,
+      ...(userExcludedCount > 0 ? { userExcludedPages: userExcludedCount } : {}),
+      ...(omittedSubtreeCount > 0
+        ? {
+            omittedSubtrees: walkResult.omittedTxtUrls.length,
+            omittedSubtreePages: omittedSubtreeCount,
+          }
+        : {}),
       ...(localeFiltered ? { localeFiltered: true, detectedLocale } : {}),
       baseUrlPath: baseUrlPath || '/',
       coverageRate: coveragePct,
+      coveragePassThreshold: Math.round(passThreshold * 100),
+      coverageWarnThreshold: Math.round(warnThreshold * 100),
       missingFromLlmsTxt: missingFromLlmsTxt.slice(0, 50),
       missingCount: missingFromLlmsTxt.length,
       unmatchedLlmsTxtUrls: unmatchedLlmsTxtUrls.slice(0, 50),
       unmatchedCount: unmatchedLlmsTxtUrls.length,
       unmatchedPct,
       sitemapWarnings,
+      ...(thresholdWarnings.length > 0 ? { thresholdWarnings } : {}),
     },
   };
 }
 
 registerCheck({
-  id: 'llms-txt-freshness',
+  id: 'llms-txt-coverage',
   category: 'observability',
-  description: 'Whether llms.txt reflects the current state of the site',
+  description: 'How much of the site is represented in llms.txt',
   dependsOn: ['llms-txt-exists'],
   run: check,
 });

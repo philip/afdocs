@@ -22,7 +22,7 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 **What to do**: Split into a root llms.txt that links to section-level llms.txt files, each under 50,000 characters. The [llms-txt-size check](/checks/content-discoverability#llms-txt-size) details the thresholds.
 
-**Score impact**: The index truncation coefficient scales down `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, and `llms-txt-links-markdown` proportionally. A file that's twice the limit counts those checks at roughly half weight.
+**Score impact**: The index truncation coefficient scales down `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, and `llms-txt-links-markdown` proportionally. A file that's twice the limit counts those checks at roughly half weight.
 
 ## SPA shells invalidate HTML path
 

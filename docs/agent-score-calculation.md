@@ -74,7 +74,7 @@ Every check is assigned a weight tier based on its observed impact on agent work
 
 | Check                     | Weight     |
 | ------------------------- | ---------- |
-| `llms-txt-freshness`      | Medium (4) |
+| `llms-txt-coverage`       | Medium (4) |
 | `markdown-content-parity` | Medium (4) |
 | `cache-header-hygiene`    | Low (2)    |
 
@@ -123,7 +123,7 @@ These checks test a single site-wide resource and produce one pass, warn, or fai
 | `llms-txt-size`           | Whether the llms.txt fits within agent context limits  |
 | `llms-txt-links-resolve`  | Whether links in the llms.txt return 200               |
 | `llms-txt-links-markdown` | Whether llms.txt links point to markdown content       |
-| `llms-txt-freshness`      | Whether the llms.txt reflects the current site state   |
+| `llms-txt-coverage`       | Whether the llms.txt reflects the current site state   |
 
 Note that the llms.txt link checks (`llms-txt-links-resolve`, `llms-txt-links-markdown`) do test multiple URLs, but they test the links _within_ the llms.txt file rather than sampling pages from the site. Their result is a single pass/warn/fail based on the overall resolution or markdown rate.
 
@@ -133,7 +133,7 @@ A warning is not a binary "half credit." Different warnings represent different 
 
 | Coefficient | Meaning                                  | Checks                                                                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-freshness`, `markdown-content-parity`                                                                                                                                                                     |
+| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-coverage`, `markdown-content-parity`                                                                                                                                                                      |
 | **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive`, `redirect-behavior`                                                                                                                                                                                                                                              |
 | **0.50**    | Genuine functional degradation           | `llms-txt-exists`, `llms-txt-size`, `rendering-strategy`, `markdown-url-support`, `page-size-markdown`, `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`, `cache-header-hygiene`, `auth-gate-detection`, `auth-alternative-access` |
 | **0.25**    | Actively steering agents to a worse path | `llms-txt-links-markdown` (markdown exists but llms.txt links to HTML)                                                                                                                                                                                                                 |
@@ -184,7 +184,7 @@ If pages are SPA shells, measuring HTML quality is meaningless. This coefficient
 
 ### Index truncation coefficient
 
-**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, `llms-txt-links-markdown`
+**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, `llms-txt-links-markdown`
 
 If your llms.txt is truncated, agents only see part of the index. Measuring the quality of the invisible portion doesn't reflect real agent experience.
 

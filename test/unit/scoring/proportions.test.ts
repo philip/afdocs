@@ -353,9 +353,9 @@ describe('proportions', () => {
       expect(result!.proportion).toBe(0.3);
     });
 
-    it('llms-txt-freshness: uses coverageRate', () => {
+    it('llms-txt-coverage: uses coverageRate', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-freshness', 'warn', {
+        makeResult('llms-txt-coverage', 'warn', {
           coverageRate: 88,
         }),
         makeWeight(4, 0.75),
@@ -386,9 +386,9 @@ describe('proportions', () => {
       expect(result!.proportion).toBe(0.0);
     });
 
-    it('llms-txt-freshness: falls back when no coverageRate', () => {
+    it('llms-txt-coverage: falls back when no coverageRate', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-freshness', 'warn', {}),
+        makeResult('llms-txt-coverage', 'warn', {}),
         makeWeight(4, 0.75),
       );
       expect(result!.proportion).toBe(0.75);

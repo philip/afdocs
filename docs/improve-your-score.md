@@ -67,7 +67,7 @@ Not all fixes are equal. Here are the highest-impact changes, ordered by the sco
 
 If `llms-txt-exists` fails, create an `llms.txt` at your site root listing your documentation pages with markdown links. See the [llms.txt specification](https://llmstxt.org/) for the format.
 
-This also unblocks five dependent checks (`llms-txt-valid`, `llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`, `llms-txt-freshness`) that are currently skipped.
+This also unblocks five dependent checks (`llms-txt-valid`, `llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`, `llms-txt-coverage`) that are currently skipped.
 
 **Enable server-side rendering**
 
@@ -112,7 +112,7 @@ These are worth addressing but won't move the score as dramatically:
 - **Tabbed content** (`tabbed-content-serialization`): If tabbed UI components create oversized output, consider restructuring into separate pages or using query params to retrieve only specific tab versions.
 - **Code fence validity** (`markdown-code-fence-validity`): Fix unclosed code fences in your markdown sources.
 - **Redirect behavior** (`redirect-behavior`): Replace JavaScript and cross-host redirects with standard HTTP redirects.
-- **llms.txt freshness** (`llms-txt-freshness`): Generate llms.txt at build time to keep it in sync with your site.
+- **llms.txt coverage** (`llms-txt-coverage`): Generate llms.txt at build time to keep it in sync with your site.
 - **Content parity** (`markdown-content-parity`): Ensure markdown and HTML versions of pages contain the same content.
 - **llms.txt validity** (`llms-txt-valid`): Follow the [llmstxt.org](https://llmstxt.org/) structure.
 

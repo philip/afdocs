@@ -61,7 +61,7 @@ and the empirical evidence sections in each check definition.
 | `content-start-position`       | Medium   | 4      | Boilerplate preamble on HTML path wastes truncation budget.                                                                                           |
 | `tabbed-content-serialization` | Medium   | 4      | Tabbed content can be catastrophic but only affects pages that use it.                                                                                |
 | `markdown-code-fence-validity` | Medium   | 4      | Unclosed fences corrupt all content after the break point.                                                                                            |
-| `llms-txt-freshness`           | Medium   | 4      | Stale index is a slow failure mode; broken links catch the acute version.                                                                             |
+| `llms-txt-coverage`            | Medium   | 4      | Stale index is a slow failure mode; broken links catch the acute version.                                                                             |
 | `markdown-content-parity`      | Medium   | 4      | Content drift between markdown and HTML leaves agents with outdated info.                                                                             |
 | `auth-alternative-access`      | Medium   | 4      | Partial mitigation for auth-gated sites.                                                                                                              |
 | `redirect-behavior`            | Medium   | 4      | Cross-host redirects are a known friction point for some agents.                                                                                      |
@@ -108,7 +108,7 @@ Each check has a specific warn coefficient rather than a uniform default.
 | `llms-txt-valid`                                             | 0.75       | Non-standard structure, but links are parseable. Missing a blockquote doesn't prevent navigation.                                                                                            |
 | `content-negotiation`                                        | 0.75       | Agent gets the markdown content; wrong Content-Type may prevent optimizations but the content itself is correct.                                                                             |
 | `llms-txt-links-resolve`                                     | 0.75       | >90% of links work. A few broken links is a maintenance issue, not a structural one.                                                                                                         |
-| `llms-txt-freshness`                                         | 0.75       | 80-95% of pages covered. Most of the site is represented in the index.                                                                                                                       |
+| `llms-txt-coverage`                                          | 0.75       | 80-95% of pages covered. Most of the site is represented in the index.                                                                                                                       |
 | `markdown-content-parity`                                    | 0.75       | Minor formatting differences, not substantive content drift.                                                                                                                                 |
 | **0.60: Partial coverage or platform-dependent**             |            |                                                                                                                                                                                              |
 | `llms-txt-directive`                                         | 0.60       | Present on some pages but not others. Agents that land on covered pages benefit; others get no guidance.                                                                                     |
@@ -172,7 +172,7 @@ Single-resource checks (no proportional scoring needed):
 | `llms-txt-size`           | Per-file average (see note below)                             |
 | `llms-txt-links-resolve`  | Uses resolve rate directly from details (`resolveRate` field) |
 | `llms-txt-links-markdown` | Percentage-based status                                       |
-| `llms-txt-freshness`      | Coverage percentage                                           |
+| `llms-txt-coverage`       | Coverage percentage                                           |
 | `auth-alternative-access` | Binary: alternative path exists or doesn't                    |
 
 For `llms-txt-links-resolve`, the `resolveRate` field in details (a 0-1 float)
@@ -317,7 +317,7 @@ of the HTML path as a whole).
 ### Index Truncation Coefficient
 
 **Applies to**: `llms-txt-links-resolve`, `llms-txt-valid`,
-`llms-txt-freshness`, `llms-txt-links-markdown`
+`llms-txt-coverage`, `llms-txt-links-markdown`
 
 If `llms-txt-size` fails, agents only see a fraction of the index. The quality
 of the invisible portion doesn't affect agent experience.

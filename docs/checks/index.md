@@ -33,7 +33,7 @@ Some checks depend on others. If a dependency doesn't pass, the dependent check 
 - `page-size-markdown` requires `markdown-url-support` or `content-negotiation`
 - `section-header-quality` requires `tabbed-content-serialization`
 - `markdown-code-fence-validity` requires `markdown-url-support` or `content-negotiation`
-- `llms-txt-freshness` requires `llms-txt-exists`
+- `llms-txt-coverage` requires `llms-txt-exists`
 - `markdown-content-parity` requires `markdown-url-support` or `content-negotiation`
 - `auth-alternative-access` requires `auth-gate-detection` (warn or fail)
 

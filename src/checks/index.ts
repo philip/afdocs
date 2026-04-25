@@ -28,7 +28,7 @@ import './url-stability/http-status-codes.js';
 import './url-stability/redirect-behavior.js';
 
 // Category 6: Observability
-import './observability/llms-txt-freshness.js';
+import './observability/llms-txt-coverage.js';
 import './observability/markdown-content-parity.js';
 import './observability/cache-header-hygiene.js';
 

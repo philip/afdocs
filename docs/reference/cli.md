@@ -198,6 +198,22 @@ These thresholds apply to `page-size-html`, `page-size-markdown`, and `tabbed-co
 
 The defaults (50K pass, 100K fail) reflect observed agent truncation limits. You generally don't need to change these unless you have specific knowledge of your users' agent platforms.
 
+### Coverage thresholds
+
+| Flag                               | Default | Description                                                   |
+| ---------------------------------- | ------- | ------------------------------------------------------------- |
+| `--coverage-pass-threshold <n>`    | `95`    | `llms-txt-coverage` pass threshold (percentage, 0-100)        |
+| `--coverage-warn-threshold <n>`    | `80`    | `llms-txt-coverage` warn threshold (percentage, 0-100)        |
+| `--coverage-exclusions <patterns>` |         | Comma-separated glob patterns to exclude from the denominator |
+
+These control the `llms-txt-coverage` check, which compares `llms.txt` page URLs against the sitemap. Set both thresholds to `0` to make the check informational: it still reports coverage percentage and missing pages, but doesn't warn or fail.
+
+Use exclusion patterns with glob syntax (`**` matches across path segments, `*` matches within one) to remove matching sitemap URLs from the denominator before calculating coverage. Exclude content like API reference pages or changelog archives that you omit intentionally from llms.txt:
+
+```bash
+afdocs check https://example.com --coverage-exclusions "/docs/reference/**,/docs/changelog/**"
+```
+
 ## Exit codes
 
 | Code | Meaning                     |

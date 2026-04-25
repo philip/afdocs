@@ -65,7 +65,7 @@ describe('computeScore', () => {
       makeResult('markdown-code-fence-validity', 'content-structure', 'pass'),
       makeResult('http-status-codes', 'url-stability', 'pass'),
       makeResult('redirect-behavior', 'url-stability', 'pass'),
-      makeResult('llms-txt-freshness', 'observability', 'pass'),
+      makeResult('llms-txt-coverage', 'observability', 'pass'),
       makeResult('markdown-content-parity', 'observability', 'pass'),
       makeResult('cache-header-hygiene', 'observability', 'pass'),
       makeResult('auth-gate-detection', 'authentication', 'pass'),
@@ -385,7 +385,7 @@ describe('computeScore', () => {
         makeResult('redirect-behavior', 'url-stability', 'pass'),
 
         // Observability
-        makeResult('llms-txt-freshness', 'observability', 'pass'),
+        makeResult('llms-txt-coverage', 'observability', 'pass'),
         makeResult('cache-header-hygiene', 'observability', 'pass'),
 
         // No auth issues

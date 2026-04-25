@@ -24,7 +24,7 @@
 - [Page Size](https://afdocs.dev/checks/page-size.md): rendering strategy, HTML/markdown size, content start position
 - [Content Structure](https://afdocs.dev/checks/content-structure.md): tabbed content serialization, header quality, code fence validity
 - [URL Stability](https://afdocs.dev/checks/url-stability.md): HTTP status codes, redirect behavior
-- [Observability](https://afdocs.dev/checks/observability.md): llms.txt freshness, markdown content parity, cache headers
+- [Observability](https://afdocs.dev/checks/observability.md): llms.txt coverage, markdown content parity, cache headers
 - [Authentication](https://afdocs.dev/checks/authentication.md): auth gate detection, alternative access paths
 
 ## API Reference
