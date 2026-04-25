@@ -5,6 +5,7 @@ import {
   parseSitemapUrls,
 } from '../../helpers/get-page-urls.js';
 import { isNonPageUrl } from '../../helpers/to-md-urls.js';
+import { isLocaleSegment, hasStructuralDuplication } from '../../helpers/locale-codes.js';
 import type { CheckContext, CheckResult } from '../../types.js';
 
 /**
@@ -95,7 +96,7 @@ export function detectLocalePosition(urls: string[]): number | null {
       const segments = new URL(url).pathname.split('/').filter(Boolean);
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i].toLowerCase();
-        if (/^[a-z]{2}(-[a-z]{2})?$/.test(seg)) {
+        if (isLocaleSegment(seg)) {
           if (!positionCounts.has(i)) positionCounts.set(i, new Map());
           const counts = positionCounts.get(i)!;
           counts.set(seg, (counts.get(seg) ?? 0) + 1);
@@ -107,10 +108,22 @@ export function detectLocalePosition(urls: string[]): number | null {
     }
   }
 
+  // First pass: ≥2 distinct locale codes covering >50% of URLs (strong signal)
   for (const [pos, counts] of positionCounts) {
     if (counts.size < 2) continue;
     const total = positionTotals.get(pos) ?? 0;
     if (total > urls.length * 0.5) {
+      return pos;
+    }
+  }
+
+  // Second pass: single locale code confirmed by structural duplication.
+  // With ISO 639-1 validation, a single code is meaningful when stripping it
+  // produces paths that match unprefixed URLs in the same set.
+  for (const [pos, counts] of positionCounts) {
+    if (counts.size !== 1) continue;
+    const [code] = counts.keys();
+    if (hasStructuralDuplication(urls, pos, code)) {
       return pos;
     }
   }
@@ -161,6 +174,27 @@ function filterByLocale(urls: string[], locale: string, position: number): strin
       return false;
     }
   });
+}
+
+/**
+ * Test whether a URL has a locale code at the given path position.
+ */
+export function hasLocaleCodeAt(url: string, position: number): boolean {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    return segments.length > position && isLocaleSegment(segments[position]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Filter URLs to only those that do NOT have a locale code at `position`.
+ * Used when llms.txt covers the unprefixed default locale and we need to
+ * exclude locale-prefixed sitemap variants from coverage comparison.
+ */
+export function filterToUnprefixedLocale(urls: string[], position: number): string[] {
+  return urls.filter((url) => !hasLocaleCodeAt(url, position));
 }
 
 /** Coverage thresholds */
@@ -316,6 +350,17 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       const before = scopedSitemapUrls.length;
       scopedSitemapUrls = filterByLocale(scopedSitemapUrls, llmsLocale, localePosition);
       localeFiltered = scopedSitemapUrls.length < before;
+    } else {
+      // llms.txt may cover the unprefixed default locale (no /en/, /de/, etc.).
+      // If most llms.txt URLs lack locale codes at the detected position,
+      // filter the sitemap to only unprefixed URLs.
+      const withLocale = llmsTxtUrls.filter((u) => hasLocaleCodeAt(u, localePosition!)).length;
+      if (withLocale < llmsTxtUrls.length * 0.5) {
+        const before = scopedSitemapUrls.length;
+        scopedSitemapUrls = filterToUnprefixedLocale(scopedSitemapUrls, localePosition);
+        localeFiltered = scopedSitemapUrls.length < before;
+        if (localeFiltered) detectedLocale = 'default';
+      }
     }
   }
 

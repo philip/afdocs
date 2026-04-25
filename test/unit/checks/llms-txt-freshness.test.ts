@@ -4,9 +4,10 @@ import { setupServer } from 'msw/node';
 import { getCheck } from '../../../src/checks/registry.js';
 import { createContext } from '../../../src/runner.js';
 import type { DiscoveredFile } from '../../../src/types.js';
-
-// Ensure the check is registered
-import '../../../src/checks/observability/llms-txt-freshness.js';
+import {
+  hasLocaleCodeAt,
+  filterToUnprefixedLocale,
+} from '../../../src/checks/observability/llms-txt-freshness.js';
 
 const server = setupServer();
 
@@ -603,6 +604,88 @@ describe('llms-txt-freshness', () => {
     expect(result.details?.sitemapDocPages).toBe(3);
   });
 
+  test('filters sitemap to unprefixed default locale when llms.txt has no locale prefix', async () => {
+    const host = 'unprefixed-locale.local';
+    // llms.txt covers the default (unprefixed) language
+    const llmsPages = [
+      `http://${host}/docs/getting-started`,
+      `http://${host}/docs/api-reference`,
+      `http://${host}/docs/guides`,
+    ];
+
+    // Sitemap has 3 unprefixed + 3 German + 3 Japanese = 9 pages
+    const sitemapPages = [
+      ...llmsPages,
+      `http://${host}/docs/de/getting-started`,
+      `http://${host}/docs/de/api-reference`,
+      `http://${host}/docs/de/guides`,
+      `http://${host}/docs/ja/getting-started`,
+      `http://${host}/docs/ja/api-reference`,
+      `http://${host}/docs/ja/guides`,
+    ];
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.sitemapDocPages).toBe(3);
+    expect(result.details?.localeFiltered).toBe(true);
+    expect(result.details?.detectedLocale).toBe('default');
+  });
+
+  test('detects single-locale site via structural duplication', async () => {
+    const host = 'single-locale.local';
+    // llms.txt covers the default (unprefixed) language
+    const llmsPages = [
+      `http://${host}/docs/getting-started`,
+      `http://${host}/docs/api-reference`,
+      `http://${host}/docs/guides`,
+    ];
+
+    // Sitemap has 3 unprefixed + 3 German (one locale only)
+    const sitemapPages = [
+      ...llmsPages,
+      `http://${host}/docs/de/getting-started`,
+      `http://${host}/docs/de/api-reference`,
+      `http://${host}/docs/de/guides`,
+    ];
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.sitemapDocPages).toBe(3);
+    expect(result.details?.localeFiltered).toBe(true);
+  });
+
   test('uses effectiveOrigin for sitemap discovery and scoping', async () => {
     const oldHost = 'old-host.local';
     const newHost = 'new-host.local';
@@ -670,5 +753,45 @@ describe('llms-txt-freshness', () => {
     // Only 2 doc pages remain after excluding /docs/changelog and /docs/blog
     expect(result.details?.sitemapDocPages).toBe(2);
     expect(result.details?.excludedNonDocPages).toBe(3);
+  });
+});
+
+describe('hasLocaleCodeAt', () => {
+  test('returns true for 2-letter locale codes at position', () => {
+    expect(hasLocaleCodeAt('http://x.com/docs/de/intro', 1)).toBe(true);
+    expect(hasLocaleCodeAt('http://x.com/docs/ja/intro', 1)).toBe(true);
+  });
+
+  test('returns true for region subtags', () => {
+    expect(hasLocaleCodeAt('http://x.com/docs/pt-br/intro', 1)).toBe(true);
+    expect(hasLocaleCodeAt('http://x.com/docs/zh-cn/intro', 1)).toBe(true);
+  });
+
+  test('returns false for non-locale segments', () => {
+    expect(hasLocaleCodeAt('http://x.com/docs/getting-started', 1)).toBe(false);
+    expect(hasLocaleCodeAt('http://x.com/docs/api', 1)).toBe(false);
+  });
+
+  test('returns false when URL is shorter than position', () => {
+    expect(hasLocaleCodeAt('http://x.com/docs', 1)).toBe(false);
+  });
+});
+
+describe('filterToUnprefixedLocale', () => {
+  test('removes URLs with locale codes at the given position', () => {
+    const urls = [
+      'http://x.com/docs/intro',
+      'http://x.com/docs/de/intro',
+      'http://x.com/docs/ja/intro',
+      'http://x.com/docs/guides',
+      'http://x.com/docs/fr/guides',
+    ];
+    const filtered = filterToUnprefixedLocale(urls, 1);
+    expect(filtered).toEqual(['http://x.com/docs/intro', 'http://x.com/docs/guides']);
+  });
+
+  test('keeps all URLs when none have locale codes', () => {
+    const urls = ['http://x.com/docs/intro', 'http://x.com/docs/guides'];
+    expect(filterToUnprefixedLocale(urls, 1)).toEqual(urls);
   });
 });

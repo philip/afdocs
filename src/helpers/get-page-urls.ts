@@ -2,6 +2,7 @@ import { extractMarkdownLinks } from '../checks/content-discoverability/llms-txt
 import { MAX_SITEMAP_URLS } from '../constants.js';
 import { getLlmsTxtFilesForAnalysis, selectCanonicalLlmsTxt } from './llms-txt.js';
 import { isNonPageUrl, isMdUrl, toHtmlUrl } from './to-md-urls.js';
+import { isLocaleSegment, hasStructuralDuplication } from './locale-codes.js';
 import type { CheckContext, DiscoveredFile } from '../types.js';
 
 /**
@@ -286,7 +287,7 @@ export function extractLocaleFromUrl(url: string): string | null {
     const segments = new URL(url).pathname.split('/').filter(Boolean);
     // Only check the first 3 segments to avoid matching content paths
     for (let i = 0; i < Math.min(segments.length, 3); i++) {
-      if (/^[a-z]{2}(-[a-z]{2})?$/i.test(segments[i])) {
+      if (isLocaleSegment(segments[i])) {
         return segments[i].toLowerCase();
       }
     }
@@ -325,7 +326,7 @@ export function filterLocaleSitemaps(
     const pathMatch = pathLocalePattern.exec(url);
     const match = filenameMatch ?? pathMatch;
 
-    if (match) {
+    if (match && isLocaleSegment(match[1])) {
       const locale = match[1].toLowerCase();
       if (!locales.has(locale)) locales.set(locale, []);
       locales.get(locale)!.push(url);
@@ -366,7 +367,7 @@ export function filterLocalizedUrls(urls: string[], preferredLocale?: string | n
       const segments = new URL(url).pathname.split('/').filter(Boolean);
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i].toLowerCase();
-        if (/^[a-z]{2}(-[a-z]{2})?$/.test(seg)) {
+        if (isLocaleSegment(seg)) {
           if (!positionCounts.has(i)) positionCounts.set(i, new Map());
           const counts = positionCounts.get(i)!;
           counts.set(seg, (counts.get(seg) ?? 0) + 1);
@@ -380,12 +381,24 @@ export function filterLocalizedUrls(urls: string[], preferredLocale?: string | n
 
   // Find the position that looks like a locale segment
   let localePosition: number | null = null;
+  // First pass: ≥2 distinct locale codes covering >50% of URLs
   for (const [pos, counts] of positionCounts) {
     if (counts.size < 2) continue;
     const total = positionTotals.get(pos) ?? 0;
     if (total > urls.length * 0.5) {
       localePosition = pos;
       break;
+    }
+  }
+  // Second pass: single locale code confirmed by structural duplication
+  if (localePosition === null) {
+    for (const [pos, counts] of positionCounts) {
+      if (counts.size !== 1) continue;
+      const [code] = counts.keys();
+      if (hasStructuralDuplication(urls, pos, code)) {
+        localePosition = pos;
+        break;
+      }
     }
   }
 
@@ -403,8 +416,22 @@ export function filterLocalizedUrls(urls: string[], preferredLocale?: string | n
     }
   });
 
-  // If filtering removed everything (target locale not present), return original
-  return filtered.length > 0 ? filtered : urls;
+  if (filtered.length > 0) return filtered;
+
+  // Target locale not found. The default language may use unprefixed paths
+  // (e.g. /docs/intro instead of /docs/en/intro). Filter to URLs that don't
+  // have any locale code at the detected position.
+  const unprefixed = urls.filter((url) => {
+    try {
+      const segments = new URL(url).pathname.split('/').filter(Boolean);
+      if (segments.length <= localePosition!) return true;
+      return !isLocaleSegment(segments[localePosition!]);
+    } catch {
+      return true;
+    }
+  });
+
+  return unprefixed.length > 0 ? unprefixed : urls;
 }
 
 /**
