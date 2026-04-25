@@ -73,3 +73,45 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 **What to do**: Either reduce HTML page sizes (break large pages into smaller ones, move inline CSS/JS to external files) or provide markdown versions and make them discoverable via content negotiation or llms.txt links. See [Page Size checks](/checks/page-size) for the specific thresholds.
 
 **Score impact**: No direct score cap, but the combination of failing page-size checks with no markdown alternative typically results in low category scores for both Page Size and Markdown Availability.
+
+## Single-page sample
+
+**Triggers when** automatic page discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
+
+**What it means**: Page-level category scores (Page Size, Content Structure, URL Stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score rather than showing potentially misleading numbers.
+
+**What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls` to test exactly the pages you care about.
+
+This diagnostic does not fire when you explicitly choose pages with `--urls`, `--sampling curated`, or `--sampling none`.
+
+**Score impact**: Page-level checks are excluded from the overall score and their categories show as N/A. Only site-level checks (llms.txt checks, coverage, auth-alternative-access) contribute to the score.
+
+## All llms.txt links are cross-origin
+
+**Triggers when** every link in your llms.txt points to a different origin than the one being tested.
+
+**What it means**: This typically happens when testing a preview or staging deployment whose llms.txt still references the production domain. The tool filters cross-origin links during page discovery, so it falls back to testing a single page. You'll usually see this alongside the [single-page sample](#single-page-sample) diagnostic.
+
+**What to do**: Use `--canonical-origin <production-origin>` to rewrite cross-origin links during testing. For example: `npx afdocs check https://preview.example.com --canonical-origin https://docs.example.com`.
+
+**Score impact**: Indirect. By reducing discovered pages to one, it triggers the single-page sample behavior described above.
+
+## Gzipped sitemap skipped
+
+**Triggers when** a gzipped sitemap (e.g. `sitemap.xml.gz`) was encountered during URL discovery and skipped because gzipped sitemaps are not yet supported.
+
+**What it means**: If the gzipped sitemap is the only sitemap source, URL discovery may have found fewer pages than expected. This can reduce the representativeness of page-level check results.
+
+**What to do**: Provide an uncompressed `sitemap.xml` alongside the gzipped version, or supply specific pages via `--urls` for targeted testing.
+
+**Score impact**: No direct score impact, but fewer discovered pages may reduce the representativeness of results.
+
+## Severe rate limiting
+
+**Triggers when** more than 20% of tested URLs returned HTTP 429 (Too Many Requests) across all checks that make HTTP requests.
+
+**What it means**: The target site is rate-limiting requests from the tool. Check results may be unreliable because rate-limited requests are not retried indefinitely, so some pages may not have been fully tested.
+
+**What to do**: Increase `--request-delay` to slow down requests (the default is 200ms), or contact the site operator to allowlist your IP or user-agent for testing.
+
+**Score impact**: No direct score impact, but rate-limited requests may cause checks to report incomplete data, leading to scores that don't reflect the site's actual state.

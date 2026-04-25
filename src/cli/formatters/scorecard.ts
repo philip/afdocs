@@ -45,10 +45,13 @@ function formatLocalTime(iso: string): string {
   return d.toLocaleString();
 }
 
-function formatCategoryLine(name: string, score: number, grade: string): string {
+function formatCategoryLine(name: string, score: number | null, grade: string | null): string {
   const paddedName = name.padEnd(36);
+  if (score === null) {
+    return `    ${paddedName} ${chalk.dim('–'.padStart(9))} ${chalk.dim('(N/A)')}`;
+  }
   const scoreStr = `${score} / 100`;
-  const coloredGrade = gradeColor(grade)(`(${grade})`);
+  const coloredGrade = gradeColor(grade!)(`(${grade})`);
   return `    ${paddedName} ${scoreStr.padStart(9)} ${coloredGrade}`;
 }
 

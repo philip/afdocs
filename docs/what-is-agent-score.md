@@ -79,7 +79,7 @@ Agent-Friendly Docs Scorecard
             Fix: Add a blockquote near the top of each page ...
 ```
 
-The [Interaction Diagnostics](/interaction-diagnostics) section covers amplification effects between checks. When some check failures compound, the agent impact is more pronounced than individual check failures imply. This includes things like having markdown support that agents can't discover, or page sizes that exceed limits with no alternate format available.
+The [Interaction Diagnostics](/interaction-diagnostics) section covers amplification effects between checks. When some check failures compound, the agent impact is more pronounced than individual check failures imply. This includes things like having markdown support that agents can't discover, page sizes that exceed limits with no alternate format available, or the tool discovering only a single page to test (which causes page-level categories to display as N/A rather than showing potentially misleading scores).
 
 ## What to do with your score
 

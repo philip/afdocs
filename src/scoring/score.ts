@@ -1,12 +1,31 @@
 import type { CheckResult, ReportResult } from '../types.js';
-import { CATEGORIES } from '../constants.js';
-import type { CheckScore, Grade, ScoreCap, ScoreResult } from './types.js';
+import { CATEGORIES, MIN_PAGES_FOR_SCORING } from '../constants.js';
+import type { CategoryScore, CheckScore, Grade, ScoreCap, ScoreResult } from './types.js';
 import { getCheckWeight } from './weights.js';
 import { getCheckProportion } from './proportions.js';
 import { getCoefficient } from './coefficients.js';
 import { evaluateDiagnostics } from './diagnostics.js';
 import { getResolution } from './resolutions.js';
 import { computeTagScores } from './tag-scores.js';
+
+const PAGE_LEVEL_CHECKS = new Set([
+  'llms-txt-directive-html',
+  'llms-txt-directive-md',
+  'markdown-url-support',
+  'content-negotiation',
+  'markdown-code-fence-validity',
+  'page-size-markdown',
+  'page-size-html',
+  'markdown-content-parity',
+  'content-start-position',
+  'tabbed-content-serialization',
+  'section-header-quality',
+  'http-status-codes',
+  'redirect-behavior',
+  'rendering-strategy',
+  'auth-gate-detection',
+  'cache-header-hygiene',
+]);
 
 /**
  * Compute a score from a report result.
@@ -19,6 +38,14 @@ export function computeScore(report: ReportResult): ScoreResult {
   for (const r of report.results) {
     resultMap.set(r.id, r);
   }
+
+  // Determine if page-level scores lack meaningful data
+  const isDiscoveryBased =
+    report.samplingStrategy === 'random' || report.samplingStrategy === 'deterministic';
+  const insufficientData =
+    isDiscoveryBased &&
+    report.testedPages !== undefined &&
+    report.testedPages < MIN_PAGES_FOR_SCORING;
 
   // Compute per-check scores
   const checkScores: Record<string, CheckScore> = {};
@@ -36,6 +63,7 @@ export function computeScore(report: ReportResult): ScoreResult {
     const coefficient = getCoefficient(result.id, resultMap);
     const effectiveWeight = weight.weight * coefficient;
     const earnedScore = proportionResult.proportion * effectiveWeight;
+    const isNotApplicable = insufficientData && PAGE_LEVEL_CHECKS.has(result.id);
 
     checkScores[result.id] = {
       baseWeight: weight.weight,
@@ -44,14 +72,16 @@ export function computeScore(report: ReportResult): ScoreResult {
       proportion: proportionResult.proportion,
       earnedScore,
       maxScore: effectiveWeight,
+      scoreDisplayMode: isNotApplicable ? 'notApplicable' : 'numeric',
     };
   }
 
-  // Overall score
+  // Overall score (exclude notApplicable checks)
   let totalEarned = 0;
   let totalMax = 0;
 
   for (const cs of Object.values(checkScores)) {
+    if (cs.scoreDisplayMode === 'notApplicable') continue;
     totalEarned += cs.earnedScore;
     totalMax += cs.maxScore;
   }
@@ -59,7 +89,7 @@ export function computeScore(report: ReportResult): ScoreResult {
   const rawScore = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
 
   // Diagnostics (evaluated before caps so no-viable-path can trigger a cap)
-  const diagnostics = evaluateDiagnostics(resultMap);
+  const diagnostics = evaluateDiagnostics(resultMap, report);
   const triggeredDiagnostics = new Set(diagnostics.map((d) => d.id));
 
   // Apply critical check caps
@@ -67,24 +97,33 @@ export function computeScore(report: ReportResult): ScoreResult {
   const overall = Math.round(cap ? Math.min(rawScore, cap.cap) : rawScore);
 
   // Category scores
-  const categoryScores: Record<string, { score: number; grade: Grade }> = {};
+  const categoryScores: Record<string, CategoryScore> = {};
 
   for (const cat of CATEGORIES) {
     let catEarned = 0;
     let catMax = 0;
+    let hasNumericCheck = false;
+    let hasScoredCheck = false;
 
     for (const result of report.results) {
       if (result.category !== cat.id) continue;
       const cs = checkScores[result.id];
       if (!cs) continue;
+      hasScoredCheck = true;
+      if (cs.scoreDisplayMode === 'notApplicable') continue;
+      hasNumericCheck = true;
       catEarned += cs.earnedScore;
       catMax += cs.maxScore;
     }
 
-    categoryScores[cat.id] = {
-      score: catMax > 0 ? Math.round((catEarned / catMax) * 100) : 0,
-      grade: toGrade(catMax > 0 ? Math.round((catEarned / catMax) * 100) : 0),
-    };
+    if (hasScoredCheck && !hasNumericCheck) {
+      categoryScores[cat.id] = { score: null, grade: null };
+    } else {
+      categoryScores[cat.id] = {
+        score: catMax > 0 ? Math.round((catEarned / catMax) * 100) : 0,
+        grade: toGrade(catMax > 0 ? Math.round((catEarned / catMax) * 100) : 0),
+      };
+    }
   }
 
   // Resolutions
@@ -139,9 +178,10 @@ function computeCap(
   }
 
   // Multi-page critical checks: rendering-strategy, auth-gate-detection
+  // Skip N/A checks — insufficient data to justify a cap.
   for (const checkId of ['rendering-strategy', 'auth-gate-detection']) {
     const cs = checkScores[checkId];
-    if (!cs) continue;
+    if (!cs || cs.scoreDisplayMode === 'notApplicable') continue;
 
     if (cs.proportion <= 0.25) {
       caps.push({

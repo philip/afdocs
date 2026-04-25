@@ -121,7 +121,23 @@ For checks that test multiple pages (like `page-size-html` or `rendering-strateg
 score = (sum of check scores) / (sum of weights for non-skipped checks) × 100
 ```
 
-Rounded to the nearest integer.
+Rounded to the nearest integer. Checks marked as `notApplicable` (see below) are excluded from both numerator and denominator.
+
+### Insufficient-data handling (scoreDisplayMode)
+
+When automatic discovery (`random` or `deterministic` sampling) finds fewer than 5 pages, page-level check scores are unreliable because they represent a handful of pages out of potentially thousands. In this case:
+
+- **Page-level checks** get `scoreDisplayMode: "notApplicable"` and are excluded from the overall score calculation.
+- **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) remain `scoreDisplayMode: "numeric"` and are scored normally.
+- **Category scores** where all checks are `notApplicable` become `null` and render as a dash in the scorecard.
+- **Categories with a mix** of page-level and site-level checks score based on the site-level checks only.
+
+This follows the Lighthouse convention: don't present a number when the data behind it isn't meaningful.
+
+This behavior does **not** apply when:
+
+- `--sampling curated` or `--urls`: the user explicitly chose pages to test.
+- `--sampling none`: the user opted out of sampling entirely.
 
 ### Warn coefficients
 
@@ -154,6 +170,8 @@ Some problems are severe enough that no amount of other good behavior should com
 | `no-viable-path` diagnostic fires (see below)      | 39 (F) | Agents have no effective way to access content at all.                         |
 
 When multiple caps apply, the lowest one wins.
+
+The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check has `scoreDisplayMode: "notApplicable"` (insufficient data). If we don't trust the data enough to include it in the score, we don't trust it enough to cap the score either.
 
 ## Interaction diagnostics
 
@@ -216,6 +234,38 @@ Some problems only become visible when you look at multiple checks together. The
 **What it means**: Agents will silently receive truncated content on oversized pages, with no alternative path to the full content.
 
 **What to do**: Either reduce HTML page sizes (break large pages, reduce inline CSS/JS) or provide markdown versions and make them discoverable.
+
+### Single-page sample
+
+**Triggers when** automatic discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
+
+**What it means**: Page-level category scores (page size, content structure, URL stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score.
+
+**What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls`.
+
+### All llms.txt links are cross-origin
+
+**Triggers when** every link in your llms.txt points to a different origin than the one being tested.
+
+**What it means**: This typically happens when testing a preview or staging deployment whose llms.txt still references the production domain. The tool filters cross-origin links during page discovery, so it falls back to testing a single page.
+
+**What to do**: Use `--canonical-origin <production-origin>` to rewrite cross-origin links during testing.
+
+### Gzipped sitemap skipped
+
+**Triggers when** a gzipped sitemap (e.g. `sitemap.xml.gz`) was encountered during URL discovery and skipped because gzipped sitemaps are not yet supported.
+
+**What it means**: If the gzipped sitemap is the only sitemap source, URL discovery may have found fewer pages than expected.
+
+**What to do**: Provide an uncompressed `sitemap.xml` alongside the gzipped version, or supply specific pages via `--urls`.
+
+### Severe rate limiting
+
+**Triggers when** more than 20% of tested URLs returned HTTP 429 (Too Many Requests).
+
+**What it means**: The target site is rate-limiting requests from the tool. Check results may be unreliable because rate-limited requests are not retried indefinitely.
+
+**What to do**: Increase `--request-delay` to slow down requests, or contact the site operator to allowlist your IP or user-agent for testing.
 
 ## Cluster coefficients
 

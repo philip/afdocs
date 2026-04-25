@@ -1,12 +1,21 @@
-import type { CheckResult } from '../types.js';
+import type { CheckResult, ReportResult } from '../types.js';
 import type { Diagnostic, DiagnosticSeverity } from './types.js';
+import { MIN_PAGES_FOR_SCORING } from '../constants.js';
 
 interface DiagnosticDefinition {
   id: string;
   severity: DiagnosticSeverity;
   /** Evaluated in dependency order. Can reference prior diagnostic results. */
-  triggers: (results: Map<string, CheckResult>, triggered: Set<string>) => boolean;
-  message: (results: Map<string, CheckResult>, triggered: Set<string>) => string;
+  triggers: (
+    results: Map<string, CheckResult>,
+    triggered: Set<string>,
+    report: ReportResult,
+  ) => boolean;
+  message: (
+    results: Map<string, CheckResult>,
+    triggered: Set<string>,
+    report: ReportResult,
+  ) => string;
   resolution: string;
 }
 
@@ -245,23 +254,166 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
       'CSS/JS), or provide markdown versions and ensure agents can discover ' +
       'them via content negotiation or an llms.txt directive.',
   },
+
+  // --- run-level diagnostics (don't depend on other diagnostics) ---
+
+  {
+    id: 'single-page-sample',
+    severity: 'warning',
+    triggers: (_results, _triggered, report) => {
+      const isDiscoveryBased =
+        report.samplingStrategy === 'random' || report.samplingStrategy === 'deterministic';
+      return (
+        isDiscoveryBased &&
+        report.testedPages !== undefined &&
+        report.testedPages < MIN_PAGES_FOR_SCORING
+      );
+    },
+    message: (_results, _triggered, report) => {
+      const n = report.testedPages ?? 0;
+      const pageWord = n === 1 ? 'page was' : 'pages were';
+      return (
+        `Only ${n} ${pageWord} discovered and tested (minimum ${MIN_PAGES_FOR_SCORING} ` +
+        'needed for reliable scoring). Page-level category scores (page size, ' +
+        'content structure, URL stability, etc.) may not represent the site. ' +
+        'These categories are marked as N/A in the score.'
+      );
+    },
+    resolution:
+      'If your site has an llms.txt, ensure it contains working links so ' +
+      'the tool can discover more pages. If testing a preview deployment, ' +
+      'use --canonical-origin to rewrite cross-origin llms.txt links. You ' +
+      'can also provide specific pages with --urls.',
+  },
+
+  {
+    id: 'cross-origin-llms-txt',
+    severity: 'warning',
+    triggers: (results) => {
+      const linkResolve = results.get('llms-txt-links-resolve');
+      if (!linkResolve || linkResolve.status === 'skip') return false;
+      const d = linkResolve.details;
+      if (!d) return false;
+      const sameOrigin = d.sameOrigin as { total?: number } | undefined;
+      const crossOrigin = d.crossOrigin as { total?: number } | undefined;
+      return (sameOrigin?.total ?? 0) === 0 && (crossOrigin?.total ?? 0) > 0;
+    },
+    message: (results) => {
+      const d = results.get('llms-txt-links-resolve')?.details;
+      const crossOrigin = d?.crossOrigin as { total?: number; dominantOrigin?: string } | undefined;
+      const total = crossOrigin?.total ?? 0;
+      const dominant = crossOrigin?.dominantOrigin ?? 'an external origin';
+      return (
+        `All ${total} links in your llms.txt point to ${dominant}, not ` +
+        'the origin being tested. This typically happens when testing a ' +
+        'preview or staging deployment whose llms.txt still references the ' +
+        'production domain. Page discovery falls back to a single page.'
+      );
+    },
+    resolution:
+      'Use --canonical-origin <production-origin> to rewrite cross-origin ' +
+      'links during testing. For example: --canonical-origin https://docs.example.com',
+  },
+
+  {
+    id: 'gzipped-sitemap-skipped',
+    severity: 'info',
+    triggers: (results) => {
+      for (const result of results.values()) {
+        const warnings = result.details?.discoveryWarnings as string[] | undefined;
+        if (warnings?.some((w) => w.includes('gzipped sitemap'))) return true;
+      }
+      return false;
+    },
+    message: (results) => {
+      const urls: string[] = [];
+      for (const result of results.values()) {
+        const warnings = result.details?.discoveryWarnings as string[] | undefined;
+        if (!warnings) continue;
+        for (const w of warnings) {
+          if (w.includes('gzipped sitemap')) {
+            const match = w.match(/:\s*(.+)$/);
+            if (match) urls.push(match[1]);
+          }
+        }
+      }
+      const urlNote = urls.length > 0 ? ` (${urls.join(', ')})` : '';
+      return (
+        `A gzipped sitemap was skipped during URL discovery${urlNote}. ` +
+        'If this is the only sitemap source, it may have reduced the number ' +
+        'of pages discovered for testing.'
+      );
+    },
+    resolution:
+      'Provide an uncompressed sitemap.xml alongside the gzipped version, ' +
+      'or supply specific pages via --urls for targeted testing.',
+  },
+
+  {
+    id: 'rate-limiting-severe',
+    severity: 'warning',
+    triggers: (results) => {
+      let totalTested = 0;
+      let totalRateLimited = 0;
+      for (const result of results.values()) {
+        const d = result.details;
+        if (!d) continue;
+        const rl = d.rateLimited as number | undefined;
+        if (rl === undefined) continue;
+
+        const pageResults = d.pageResults as unknown[] | undefined;
+        const testedLinks = d.testedLinks as number | undefined;
+        const tested = testedLinks ?? pageResults?.length ?? 0;
+
+        totalTested += tested;
+        totalRateLimited += rl;
+      }
+      return totalTested > 0 && totalRateLimited / totalTested > 0.2;
+    },
+    message: (results) => {
+      let totalTested = 0;
+      let totalRateLimited = 0;
+      for (const result of results.values()) {
+        const d = result.details;
+        if (!d) continue;
+        const rl = d.rateLimited as number | undefined;
+        if (rl === undefined) continue;
+        const pageResults = d.pageResults as unknown[] | undefined;
+        const testedLinks = d.testedLinks as number | undefined;
+        totalTested += testedLinks ?? pageResults?.length ?? 0;
+        totalRateLimited += rl;
+      }
+      const pct = totalTested > 0 ? Math.round((totalRateLimited / totalTested) * 100) : 0;
+      return (
+        `${pct}% of tested URLs returned HTTP 429 (rate limited). Check ` +
+        'results may be unreliable because rate-limited requests are not ' +
+        'retried indefinitely.'
+      );
+    },
+    resolution:
+      'Increase --request-delay to slow down requests, or contact the site ' +
+      'operator to allowlist your IP or user-agent for testing.',
+  },
 ];
 
 /**
  * Evaluate all interaction diagnostics against a set of check results.
  * Returns triggered diagnostics in evaluation order.
  */
-export function evaluateDiagnostics(results: Map<string, CheckResult>): Diagnostic[] {
+export function evaluateDiagnostics(
+  results: Map<string, CheckResult>,
+  report: ReportResult,
+): Diagnostic[] {
   const triggered = new Set<string>();
   const diagnostics: Diagnostic[] = [];
 
   for (const def of DIAGNOSTIC_DEFINITIONS) {
-    if (def.triggers(results, triggered)) {
+    if (def.triggers(results, triggered, report)) {
       triggered.add(def.id);
       diagnostics.push({
         id: def.id,
         severity: def.severity,
-        message: def.message(results, triggered),
+        message: def.message(results, triggered, report),
         resolution: def.resolution,
       });
     }

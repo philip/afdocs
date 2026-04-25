@@ -176,6 +176,10 @@ export interface ReportResult {
   urlTags?: Record<string, string>;
   /** Which discovery methods contributed to the page URL set. */
   discoverySources?: DiscoverySource[];
+  /** Number of pages tested by page-level checks. */
+  testedPages?: number;
+  /** The sampling strategy used for this run. */
+  samplingStrategy?: SamplingStrategy;
 }
 
 export interface AgentDocsConfig {

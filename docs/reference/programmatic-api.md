@@ -23,6 +23,8 @@ for (const result of report.results) {
 - `timestamp` — when the check ran
 - `results` — array of `CheckResult` objects (one per check)
 - `summary` — counts by status (pass, warn, fail, skip, error)
+- `testedPages` — number of pages tested by page-level checks (present when page discovery ran)
+- `samplingStrategy` — the sampling strategy used (`random`, `deterministic`, `curated`, or `none`)
 
 ## Run with options
 
@@ -104,6 +106,7 @@ import type {
   ReportResult,
   RunnerOptions,
   CheckOptions,
+  SamplingStrategy, // 'random' | 'deterministic' | 'curated' | 'none'
   AgentDocsConfig,
   CuratedPageEntry,
   PageConfigEntry,
