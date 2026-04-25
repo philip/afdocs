@@ -376,6 +376,43 @@ describe('filterLocalizedUrls', () => {
     expect(result).toEqual(urls);
   });
 
+  it('filters to unprefixed default locale when target locale not found', () => {
+    // Default language has no prefix; other languages do
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/api',
+      'https://example.com/docs/de/intro',
+      'https://example.com/docs/de/guide',
+      'https://example.com/docs/de/api',
+      'https://example.com/docs/ja/intro',
+      'https://example.com/docs/ja/guide',
+      'https://example.com/docs/ja/api',
+    ];
+    // Default preferred locale is 'en', which doesn't exist as a prefix
+    const result = filterLocalizedUrls(urls);
+    expect(result).toEqual([
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/api',
+    ]);
+  });
+
+  it('filters to unprefixed default locale with explicit preferred locale not found', () => {
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/de/intro',
+      'https://example.com/docs/de/guide',
+      'https://example.com/docs/fr/intro',
+      'https://example.com/docs/fr/guide',
+    ];
+    // Requesting 'es' which doesn't exist, and 'en' doesn't exist either —
+    // should fall back to unprefixed
+    const result = filterLocalizedUrls(urls, 'es');
+    expect(result).toEqual(['https://example.com/docs/intro', 'https://example.com/docs/guide']);
+  });
+
   it('keeps URLs with fewer segments than the locale position', () => {
     // Locale at position 1 (docs/{locale}/...), so a URL with only 1 segment
     // doesn't reach the locale position and should be kept, not dropped.
@@ -391,6 +428,39 @@ describe('filterLocalizedUrls', () => {
     expect(result).toContain('https://example.com/docs/en/guide');
     expect(result).toContain('https://example.com/docs'); // kept, not dropped
     expect(result).not.toContain('https://example.com/docs/fr/intro');
+  });
+
+  it('detects single-locale site via structural duplication and filters to unprefixed', () => {
+    const urls = [
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/api',
+      'https://example.com/docs/de/intro',
+      'https://example.com/docs/de/guide',
+      'https://example.com/docs/de/api',
+    ];
+    const result = filterLocalizedUrls(urls);
+    // 'en' not found as prefix → falls back to unprefixed
+    expect(result).toEqual([
+      'https://example.com/docs/intro',
+      'https://example.com/docs/guide',
+      'https://example.com/docs/api',
+    ]);
+  });
+
+  it('does not false-detect topic paths as single-locale', () => {
+    // "hr" is a valid ISO 639-1 code (Croatian) but used here as a topic
+    const urls = [
+      'https://example.com/docs/hr/onboarding',
+      'https://example.com/docs/hr/policies',
+      'https://example.com/docs/hr/benefits',
+      'https://example.com/docs/engineering/onboarding',
+      'https://example.com/docs/engineering/policies',
+      'https://example.com/docs/engineering/benefits',
+    ];
+    const result = filterLocalizedUrls(urls);
+    // No structural duplication (stripped paths don't match) → no filtering
+    expect(result).toEqual(urls);
   });
 });
 
