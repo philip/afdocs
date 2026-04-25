@@ -36,8 +36,8 @@ The check supports three use cases through configurable thresholds and exclusion
 
 **CLI flags:**
 
-- `--coverage-pass-threshold <n>` — Pass threshold (0-100, default 95)
-- `--coverage-warn-threshold <n>` — Warn threshold (0-100, default 80)
+- `--coverage-pass-threshold <n>` — Minimum coverage % to pass (0-100, default 95; higher = stricter)
+- `--coverage-warn-threshold <n>` — Minimum coverage % to avoid failure (0-100, default 80; higher = stricter)
 - `--coverage-exclusions <patterns>` — Comma-separated glob patterns to exclude from the sitemap before calculating coverage (e.g. `"/docs/reference/**,/docs/changelog/**"`)
 
 These can also be set in `agent-docs.config.yml` under `options`:
@@ -108,21 +108,66 @@ Whether markdown and HTML versions of pages contain the same content.
 
 When markdown is generated separately from HTML (not served directly from source), the two can drift. A site updates its HTML but forgets to regenerate the markdown, leaving agents with outdated instructions or code examples. Or a build pipeline that generates markdown misses some of the content. This is particularly insidious because agents receiving the markdown version have no signal that content is missing or outdated, and humans typically don't look at both page formats to spot discrepancies.
 
+However, content divergence is sometimes intentional. Some sites serve different content to different audiences: agent-optimized markdown alongside human-optimized HTML. In those cases, divergence is a feature, not a bug. The check supports this through audience-segmentation markers and configurable thresholds.
+
 ### Results
 
-Based on the percentage of HTML content segments missing from the markdown version, after normalization:
+Based on the percentage of HTML content segments missing from the markdown version, after normalization. Thresholds are configurable.
 
-| Result | Condition                                                                                     |
-| ------ | --------------------------------------------------------------------------------------------- |
-| Pass   | Under 5% of content segments missing                                                          |
-| Warn   | 5-20% missing (minor differences like formatting or navigation elements)                      |
-| Fail   | 20% or more missing (substantive differences like missing sections or outdated code examples) |
+| Result | Condition                                                     |
+| ------ | ------------------------------------------------------------- |
+| Pass   | Under pass threshold (default 5%) of content segments missing |
+| Warn   | Between pass and warn thresholds (default 5-20% missing)      |
+| Fail   | Above warn threshold (default 20% or more missing)            |
+
+### Audience segmentation
+
+Some documentation platforms let site owners serve different content to different audiences. For example, a page might show UI-oriented instructions ("Click the gear icon...") in HTML but API-oriented instructions ("Call `POST /v1/settings`...") in markdown. The check accounts for this in two ways:
+
+**`data-markdown-ignore` attribute.** Add this attribute to HTML elements that contain human-only content (content intentionally excluded from markdown). The check strips these elements before comparing, so they don't count as "missing."
+
+```html
+<div data-markdown-ignore>
+  <p>Click the gear icon in the top-right corner to open settings.</p>
+</div>
+```
+
+This is the recommended convention for platforms that render HTML server-side. If your documentation platform controls the HTML output, adding `data-markdown-ignore` to human-only wrapper elements lets the parity check handle segmentation automatically with no user configuration.
+
+**Configurable thresholds.** For platforms that process segmentation tags server-side (like Fern and Mintlify, where the tags never appear in the rendered HTML), adjust thresholds to match your expected divergence level.
+
+### Configuring parity
+
+The check supports three use cases, matching the same mirrored-to-curated spectrum as `llms-txt-coverage`:
+
+- **Mirrored** (default): Markdown should match HTML. Default thresholds (5/20) apply.
+- **Segmented**: The site uses `data-markdown-ignore` to mark human-only HTML content. The check strips tagged content before comparing; remaining shared content is held to default thresholds.
+- **Curated**: The site intentionally serves different content with no tag-level signal. Set thresholds to 0 (`--parity-pass-threshold 0 --parity-warn-threshold 0`) to make the check informational. It still reports the missing percentage, but does not warn or fail.
+
+**CLI flags:**
+
+- `--parity-pass-threshold <n>` — Maximum missing % to pass (0-100, default 5; lower = stricter). Set to 0 to disable warnings.
+- `--parity-warn-threshold <n>` — Maximum missing % to avoid failure (0-100, default 20; lower = stricter). Set to 0 to disable failures.
+- `--parity-exclusions <selectors>` — Comma-separated CSS selectors to strip from HTML before comparison, for platform-specific conventions beyond `data-markdown-ignore` (e.g. `".human-only,[data-audience='humans']"`)
+
+These can also be set in `agent-docs.config.yml` under `options`:
+
+```yaml
+options:
+  parityPassThreshold: 10
+  parityWarnThreshold: 30
+  parityExclusions:
+    - .human-only-content
+    - '[data-audience="humans"]' # quote selectors starting with [ (YAML treats unquoted [] as arrays)
+```
+
+Note: `data-markdown-ignore` is built in and does not need to be listed in `parityExclusions`. The exclusions option is only for additional platform-specific conventions.
 
 ### How to fix
 
-**If this check warns**, review the differences for formatting variations. Minor parity issues (navigation elements present in one format but not the other) may be acceptable.
+**If this check warns**, review the differences. If they reflect intentional audience segmentation, either add `data-markdown-ignore` to the human-only HTML elements or adjust thresholds. If they reflect formatting variations, minor parity issues (navigation elements present in one format but not the other) may be acceptable.
 
-**If this check fails**, your markdown and HTML versions have substantive content differences. Regenerate markdown from source, or fix the build pipeline to keep both formats in sync. The most reliable approach is serving markdown directly from the same source files used to generate HTML, rather than maintaining two separate outputs.
+**If this check fails**, your markdown and HTML versions have substantive content differences. If unintentional, regenerate markdown from source or fix the build pipeline. The most reliable approach is serving markdown directly from the same source files used to generate HTML. If intentional (audience segmentation), add `data-markdown-ignore` to human-only HTML elements, use `--parity-exclusions` for custom conventions, or set thresholds to 0 for informational mode.
 
 ---
 

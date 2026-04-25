@@ -40,6 +40,12 @@ export const DEFAULT_COVERAGE_PASS_THRESHOLD = 95;
 /** Default llms-txt-coverage warn threshold (percentage). */
 export const DEFAULT_COVERAGE_WARN_THRESHOLD = 80;
 
+/** Default markdown-content-parity pass threshold (percentage of missing segments). */
+export const DEFAULT_PARITY_PASS_THRESHOLD = 5;
+
+/** Default markdown-content-parity warn threshold (percentage of missing segments). */
+export const DEFAULT_PARITY_WARN_THRESHOLD = 20;
+
 /** Minimum discovered pages before page-level scores are considered meaningful. */
 export const MIN_PAGES_FOR_SCORING = 5;
 

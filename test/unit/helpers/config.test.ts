@@ -254,4 +254,88 @@ describe('findConfig', () => {
 
     await expect(findConfig(configPath)).rejects.toThrow('"pages" must be an array');
   });
+
+  it('accepts properly quoted parityExclusions', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'parity-ok.yml');
+    await writeFile(
+      configPath,
+      [
+        'url: https://example.com',
+        'options:',
+        '  parityExclusions:',
+        '    - .human-only',
+        '    - \'[data-audience="humans"]\'',
+        '',
+      ].join('\n'),
+    );
+
+    const config = await findConfig(configPath);
+    expect(config?.options?.parityExclusions).toEqual(['.human-only', '[data-audience="humans"]']);
+  });
+
+  it('throws when parityExclusions contains unquoted bracket selector', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'parity-bad.yml');
+    // Unquoted [data-foo] is parsed by YAML as a nested array, not a string
+    await writeFile(
+      configPath,
+      ['url: https://example.com', 'options:', '  parityExclusions:', '    - [data-foo]', ''].join(
+        '\n',
+      ),
+    );
+
+    await expect(findConfig(configPath)).rejects.toThrow('parityExclusions[0] must be a string');
+  });
+
+  it('throws when coverageExclusions contains a non-string entry', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    const configPath = resolve(TMP_DIR, 'coverage-bad.yml');
+    await writeFile(
+      configPath,
+      [
+        'url: https://example.com',
+        'options:',
+        '  coverageExclusions:',
+        '    - [nested-array]',
+        '',
+      ].join('\n'),
+    );
+
+    await expect(findConfig(configPath)).rejects.toThrow('coverageExclusions[0] must be a string');
+  });
+
+  it('validates exclusions in auto-discovered config', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      [
+        'url: https://example.com',
+        'options:',
+        '  parityExclusions:',
+        '    - [bad-selector]',
+        '',
+      ].join('\n'),
+    );
+
+    await expect(findConfig(undefined, TMP_DIR)).rejects.toThrow(
+      'parityExclusions[0] must be a string',
+    );
+  });
+
+  it('validates exclusions in loadConfig', async () => {
+    await mkdir(TMP_DIR, { recursive: true });
+    await writeFile(
+      resolve(TMP_DIR, 'agent-docs.config.yml'),
+      [
+        'url: https://example.com',
+        'options:',
+        '  parityExclusions:',
+        '    - [bad-selector]',
+        '',
+      ].join('\n'),
+    );
+
+    await expect(loadConfig(TMP_DIR)).rejects.toThrow('parityExclusions[0] must be a string');
+  });
 });

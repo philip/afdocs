@@ -314,7 +314,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const warnCount = (d.warnBucket as number) ?? 0;
       return (
         `${warnCount} pages have minor content differences between their ` +
-        'markdown and HTML versions. Review for formatting variations.'
+        'markdown and HTML versions. If this is intentional audience ' +
+        'segmentation, adjust --parity-pass-threshold and ' +
+        '--parity-warn-threshold (set both to 0 for informational mode).'
       );
     },
     fail: (d) => {
@@ -323,9 +325,11 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `${failCount} pages have substantive content differences between ` +
         `markdown and HTML (avg ${Math.round(avgMissing)}% missing). ` +
-        'Agents receiving the markdown version are getting outdated or ' +
-        'incomplete content. Regenerate markdown from source or fix the ' +
-        'build pipeline.'
+        'If unintentional, agents are getting outdated content; ' +
+        'regenerate markdown from source or fix the build pipeline. ' +
+        'If intentional (audience segmentation), add ' +
+        'data-markdown-ignore to human-only HTML elements, or adjust ' +
+        'thresholds with --parity-pass-threshold/--parity-warn-threshold.'
       );
     },
   },

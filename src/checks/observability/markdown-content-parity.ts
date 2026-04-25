@@ -2,11 +2,8 @@ import { parse } from 'node-html-parser';
 import { registerCheck } from '../registry.js';
 import { fetchPage } from '../../helpers/fetch-page.js';
 import { toHtmlUrl } from '../../helpers/to-md-urls.js';
+import { DEFAULT_PARITY_PASS_THRESHOLD, DEFAULT_PARITY_WARN_THRESHOLD } from '../../constants.js';
 import type { CheckContext, CheckResult, CheckStatus } from '../../types.js';
-
-/** Thresholds for the percentage of HTML segments not found in markdown. */
-const WARN_THRESHOLD = 5;
-const FAIL_THRESHOLD = 20;
 
 /** Minimum character length for a text segment to be considered meaningful. */
 const MIN_SEGMENT_LENGTH = 20;
@@ -268,7 +265,12 @@ const CONTENT_SELECTORS = [
   '.prose',
 ];
 
-function extractHtmlText(html: string): string {
+interface HtmlExtractionResult {
+  text: string;
+  segmentationStripped: number;
+}
+
+function extractHtmlText(html: string, parityExclusions?: string[]): HtmlExtractionResult {
   const root = parse(html);
 
   // Prefer the tightest content container available.
@@ -298,7 +300,32 @@ function extractHtmlText(html: string): string {
   }
 
   if (!content) content = root.querySelector('body');
-  if (!content) return root.text;
+  if (!content) return { text: root.text, segmentationStripped: 0 };
+
+  // Strip audience-segmentation elements before comparison.
+  // data-markdown-ignore marks content intended only for human readers;
+  // it is expected to be absent from the markdown version.
+  let segmentationStripped = 0;
+  for (const el of content.querySelectorAll('[data-markdown-ignore]')) {
+    el.remove();
+    segmentationStripped++;
+  }
+
+  // Strip user-provided CSS selectors (additional platform conventions)
+  if (parityExclusions?.length) {
+    for (const selector of parityExclusions) {
+      try {
+        for (const el of content.querySelectorAll(selector)) {
+          el.remove();
+        }
+      } catch {
+        throw new Error(
+          `Invalid CSS selector in parityExclusions: "${selector}". ` +
+            'If the selector contains [ or ], wrap it in quotes in your YAML config.',
+        );
+      }
+    }
+  }
 
   // Remove non-content elements by tag
   for (const tag of STRIP_TAGS) {
@@ -345,24 +372,18 @@ function extractHtmlText(html: string): string {
   // Expressive Code / Shiki use <div class="ec-line"> inside <pre>),
   // then strip HTML tags while preserving angle-bracket placeholders
   // like <YOUR_API_KEY> or <clusterName> (decoded from &lt;...&gt; entities).
-  return content.text
+  const text = content.text
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<div[\s>]/gi, '\n<div ')
     .replace(/<\/[^>\s]+>/g, '')
     .replace(/<([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g, (_match, tag, rest) => {
       const lower = tag.toLowerCase();
-      // Tags already removed at the DOM level can't appear as real elements
-      // in .text output — they must be entity-decoded text (e.g., prose
-      // discussing <nav> elements). Keep the tag name as text content.
       if (DOM_STRIPPED_TAGS.has(lower)) return tag;
-      // Other known tags (span, div, code, etc.) appear in <pre> block
-      // text output from syntax highlighting — strip them entirely.
       if (HTML_TAG_NAMES.has(lower)) return '';
-      // Unknown "tags" are angle-bracket placeholders like <YOUR_API_KEY>
-      // decoded from entities — keep the full content.
       return tag + rest;
     });
+  return { text, segmentationStripped };
 }
 
 /**
@@ -512,6 +533,8 @@ function toSegments(text: string): string[] {
 function computeParity(
   htmlText: string,
   markdownText: string,
+  warnThreshold: number,
+  failThreshold: number,
 ): Omit<PageParityResult, 'url' | 'markdownSource' | 'error'> {
   // Deduplicate segments so repeated chrome (breadcrumbs, nav titles) or
   // repeated content is only counted once when checking for presence.
@@ -565,13 +588,18 @@ function computeParity(
   const missingPercent =
     htmlSegments.length > 0 ? Math.round((missingCount / htmlSegments.length) * 100) : 0;
 
+  // A threshold of 0 means "disabled" (informational mode per spec).
+  // This naturally falls out: `0 > 0` is false, so the guard prevents
+  // the threshold from firing, and the check passes.
+  const shouldFail = failThreshold > 0 && missingPercent >= failThreshold;
+  const shouldWarn = warnThreshold > 0 && missingPercent >= warnThreshold;
   let status: CheckStatus;
-  if (missingPercent < WARN_THRESHOLD) {
-    status = 'pass';
-  } else if (missingPercent < FAIL_THRESHOLD) {
+  if (shouldFail) {
+    status = 'fail';
+  } else if (shouldWarn) {
     status = 'warn';
   } else {
-    status = 'fail';
+    status = 'pass';
   }
 
   return {
@@ -619,8 +647,25 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
     };
   }
 
+  const warnThreshold = ctx.options.parityPassThreshold ?? DEFAULT_PARITY_PASS_THRESHOLD;
+  const failThreshold = ctx.options.parityWarnThreshold ?? DEFAULT_PARITY_WARN_THRESHOLD;
+  const parityExclusions = ctx.options.parityExclusions;
+
+  if (warnThreshold > failThreshold && failThreshold > 0) {
+    return {
+      id,
+      category,
+      status: 'error',
+      message:
+        `parityPassThreshold (${warnThreshold}) is greater than ` +
+        `parityWarnThreshold (${failThreshold}). The pass threshold must be ` +
+        'less than or equal to the warn threshold.',
+    };
+  }
+
   const results: PageParityResult[] = [];
   const concurrency = ctx.options.maxConcurrency;
+  let totalSegmentationStripped = 0;
 
   for (let i = 0; i < pagesToCompare.length; i += concurrency) {
     const batch = pagesToCompare.slice(i, i + concurrency);
@@ -658,8 +703,12 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
             };
           }
 
-          const htmlText = extractHtmlText(page.body);
-          const parity = computeParity(htmlText, markdownContent);
+          const { text: htmlText, segmentationStripped } = extractHtmlText(
+            page.body,
+            parityExclusions,
+          );
+          totalSegmentationStripped += segmentationStripped;
+          const parity = computeParity(htmlText, markdownContent, warnThreshold, failThreshold);
 
           return { url, markdownSource, ...parity };
         } catch (err) {
@@ -727,6 +776,15 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       failBucket,
       fetchErrors,
       avgMissingPercent,
+      ...(totalSegmentationStripped > 0 && {
+        segmentationElementsStripped: totalSegmentationStripped,
+      }),
+      ...(ctx.options.parityPassThreshold != null && {
+        parityPassThreshold: warnThreshold,
+      }),
+      ...(ctx.options.parityWarnThreshold != null && {
+        parityWarnThreshold: failThreshold,
+      }),
       pageResults: results,
     },
   };
