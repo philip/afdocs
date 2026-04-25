@@ -6,13 +6,23 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 ## Markdown support is undiscoverable
 
-**Triggers when** your site serves markdown at `.md` URLs, but none of the discovery mechanisms exist: no content negotiation, no llms.txt directive on pages, and no `.md` links in llms.txt.
+**Triggers when** your site serves markdown at `.md` URLs, but there is no agent-facing directive on HTML pages pointing to llms.txt and the server does not support content negotiation.
 
 **What it means**: You've done the work to support markdown, but agents have no way to find out. They'll default to the HTML path every time. In observed agent behavior, agents do not independently discover `.md` URL variants; they need to be told.
 
-**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive) on your docs pages pointing to llms.txt, or implement [content negotiation](/checks/markdown-availability#content-negotiation) for `Accept: text/markdown`. Either change makes your existing markdown support visible to agents.
+**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive-html) on your docs pages pointing to llms.txt, and implement [content negotiation](/checks/markdown-availability#content-negotiation) for `Accept: text/markdown`. The directive is the primary discovery mechanism because it reaches all agents; content negotiation provides a fast path for agents that request markdown by default. Both are recommended.
 
 **Score impact**: Markdown quality checks (`page-size-markdown`, `markdown-code-fence-validity`, `markdown-content-parity`) are excluded from the score entirely when this diagnostic fires, because their results don't reflect real agent experience.
+
+## Markdown support is only partially discoverable
+
+**Triggers when** your site serves markdown at `.md` URLs and supports content negotiation, but there is no agent-facing directive on HTML pages pointing to llms.txt.
+
+**What it means**: Agents that send `Accept: text/markdown` (Claude Code, Cursor, OpenCode) get markdown automatically, but the majority of agents fetch HTML by default and have no signal that a markdown path exists. Your markdown support benefits a subset of agents but not most of them.
+
+**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive-html) near the top of each HTML page pointing to your llms.txt. If your site serves markdown, mention that in the directive too. The directive reaches all agents, not just the ones that request markdown by default.
+
+**Score impact**: Same as the undiscoverable case: markdown quality checks are excluded from the score because most agents still can't find the markdown path.
 
 ## Truncated index
 

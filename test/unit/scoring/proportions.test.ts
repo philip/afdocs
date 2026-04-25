@@ -170,10 +170,10 @@ describe('proportions', () => {
     });
   });
 
-  describe('llms-txt-directive', () => {
+  describe('llms-txt-directive-html', () => {
     it('maps found boolean and position to pass/warn/fail', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-directive', 'warn', {
+        makeResult('llms-txt-directive-html', 'warn', {
           pageResults: [
             { url: '/a', found: true, positionPercent: 5 },
             { url: '/b', found: true, positionPercent: 60 },
@@ -189,7 +189,7 @@ describe('proportions', () => {
 
     it('excludes pages with errors', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-directive', 'pass', {
+        makeResult('llms-txt-directive-html', 'pass', {
           pageResults: [
             { url: '/a', found: true, positionPercent: 5 },
             { url: '/b', error: 'fetch failed' },

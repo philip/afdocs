@@ -16,37 +16,80 @@ function resultsMap(...results: CheckResult[]): Map<string, CheckResult> {
 
 describe('diagnostics', () => {
   describe('markdown-undiscoverable', () => {
-    it('triggers when markdown supported but not discoverable', () => {
+    it('triggers when markdown supported but no directive and no content negotiation', () => {
       const results = resultsMap(
         r('markdown-url-support', 'pass'),
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
-        r('llms-txt-links-markdown', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
       );
       const diags = evaluateDiagnostics(results);
       expect(diags.find((d) => d.id === 'markdown-undiscoverable')).toBeDefined();
     });
 
-    it('does not trigger when content-negotiation passes', () => {
+    it('does not trigger when directive-html passes', () => {
       const results = resultsMap(
         r('markdown-url-support', 'pass'),
-        r('content-negotiation', 'pass'),
-        r('llms-txt-directive', 'fail'),
-        r('llms-txt-links-markdown', 'fail'),
+        r('content-negotiation', 'fail'),
+        r('llms-txt-directive-html', 'pass'),
       );
       const diags = evaluateDiagnostics(results);
       expect(diags.find((d) => d.id === 'markdown-undiscoverable')).toBeUndefined();
+    });
+
+    it('does not trigger when content-negotiation passes (partially-discoverable fires instead)', () => {
+      const results = resultsMap(
+        r('markdown-url-support', 'pass'),
+        r('content-negotiation', 'pass'),
+        r('llms-txt-directive-html', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'markdown-undiscoverable')).toBeUndefined();
+      expect(diags.find((d) => d.id === 'markdown-partially-discoverable')).toBeDefined();
     });
 
     it('does not trigger when markdown-url-support fails', () => {
       const results = resultsMap(
         r('markdown-url-support', 'fail'),
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
-        r('llms-txt-links-markdown', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
       );
       const diags = evaluateDiagnostics(results);
       expect(diags.find((d) => d.id === 'markdown-undiscoverable')).toBeUndefined();
+    });
+  });
+
+  describe('markdown-partially-discoverable', () => {
+    it('triggers when content negotiation passes but no HTML directive', () => {
+      const results = resultsMap(
+        r('markdown-url-support', 'pass'),
+        r('content-negotiation', 'pass'),
+        r('llms-txt-directive-html', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      const diag = diags.find((d) => d.id === 'markdown-partially-discoverable');
+      expect(diag).toBeDefined();
+      expect(diag!.severity).toBe('warning');
+    });
+
+    it('does not trigger when HTML directive passes', () => {
+      const results = resultsMap(
+        r('markdown-url-support', 'pass'),
+        r('content-negotiation', 'pass'),
+        r('llms-txt-directive-html', 'pass'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'markdown-partially-discoverable')).toBeUndefined();
+    });
+
+    it('does not trigger when content negotiation fails (undiscoverable fires instead)', () => {
+      const results = resultsMap(
+        r('markdown-url-support', 'pass'),
+        r('content-negotiation', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'markdown-partially-discoverable')).toBeUndefined();
+      expect(diags.find((d) => d.id === 'markdown-undiscoverable')).toBeDefined();
     });
   });
 
@@ -123,7 +166,8 @@ describe('diagnostics', () => {
         }),
         r('markdown-url-support', 'pass'),
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
+        r('llms-txt-directive-md', 'fail'),
         r('llms-txt-links-markdown', 'fail'),
       );
       const diags = evaluateDiagnostics(results);
@@ -167,6 +211,23 @@ describe('diagnostics', () => {
       const diag = diags.find((d) => d.id === 'no-viable-path');
       expect(diag).toBeDefined();
       expect(diag!.message).toContain('0% of links resolve');
+    });
+
+    it('triggers when markdown is only partially discoverable', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'fail'),
+        r('rendering-strategy', 'fail', {
+          serverRendered: 0,
+          sparseContent: 0,
+          spaShells: 20,
+        }),
+        r('markdown-url-support', 'pass'),
+        r('content-negotiation', 'pass'),
+        r('llms-txt-directive-html', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'markdown-partially-discoverable')).toBeDefined();
+      expect(diags.find((d) => d.id === 'no-viable-path')).toBeDefined();
     });
 
     it('does not trigger when llms.txt links resolve at 10%+', () => {
@@ -220,18 +281,30 @@ describe('diagnostics', () => {
         r('page-size-html', 'fail', { failBucket: 5 }),
         r('markdown-url-support', 'pass'),
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
+        r('llms-txt-directive-md', 'fail'),
         r('llms-txt-links-markdown', 'fail'),
       );
       const diags = evaluateDiagnostics(results);
       expect(diags.find((d) => d.id === 'page-size-no-markdown-escape')).toBeDefined();
     });
 
-    it('does not trigger when markdown is discoverable', () => {
+    it('triggers when markdown is only partially discoverable (content negotiation but no directive)', () => {
       const results = resultsMap(
         r('page-size-html', 'fail', { failBucket: 5 }),
         r('markdown-url-support', 'pass'),
         r('content-negotiation', 'pass'),
+        r('llms-txt-directive-html', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results);
+      expect(diags.find((d) => d.id === 'page-size-no-markdown-escape')).toBeDefined();
+    });
+
+    it('does not trigger when markdown is discoverable via directive', () => {
+      const results = resultsMap(
+        r('page-size-html', 'fail', { failBucket: 5 }),
+        r('markdown-url-support', 'pass'),
+        r('llms-txt-directive-html', 'pass'),
       );
       const diags = evaluateDiagnostics(results);
       expect(diags.find((d) => d.id === 'page-size-no-markdown-escape')).toBeUndefined();

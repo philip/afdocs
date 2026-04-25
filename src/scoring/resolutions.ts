@@ -79,16 +79,28 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       'variants so agents receive markdown instead of converted HTML.',
   },
 
-  'llms-txt-directive': {
+  'llms-txt-directive-html': {
     warn: () =>
-      'An llms.txt directive was found on some pages but is missing from ' +
-      'others, or is buried deep in the page. Ensure the directive appears ' +
-      'near the top of every documentation page.',
+      'An llms.txt directive was found in the HTML of some pages but is ' +
+      'missing from others, or is buried deep in the page. Ensure the ' +
+      'directive appears near the top of every documentation page.',
     fail: () =>
-      'No agent-facing directive pointing to llms.txt was detected on any ' +
-      'tested page. Add a blockquote near the top of each page (e.g., ' +
-      '"> For the complete documentation index, see [llms.txt](/llms.txt)"). ' +
-      'This can be visually hidden with CSS while remaining accessible to agents.',
+      'No agent-facing directive pointing to llms.txt was detected in the ' +
+      'HTML of any tested page. Add a visually-hidden element near the top ' +
+      'of each page (e.g., a div with CSS clip-rect) containing a link to ' +
+      'your llms.txt. If your site serves markdown versions of pages, ' +
+      'mention that in the directive too so agents know to request it.',
+  },
+
+  'llms-txt-directive-md': {
+    warn: () =>
+      'An llms.txt directive was found in the markdown of some pages but is ' +
+      'missing from others, or is buried deep in the page. Ensure the ' +
+      'directive appears near the top of every markdown page.',
+    fail: () =>
+      'No llms.txt directive was detected in the markdown of any tested ' +
+      'page. Add a blockquote near the top of each markdown page (e.g., ' +
+      '"> For the complete documentation index, see [llms.txt](/llms.txt)").',
   },
 
   'markdown-url-support': {

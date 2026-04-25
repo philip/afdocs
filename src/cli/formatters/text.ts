@@ -194,7 +194,21 @@ const DETAIL_FORMATTERS: Record<string, DetailFormatter> = {
       });
   },
 
-  'llms-txt-directive': (details) => {
+  'llms-txt-directive-html': (details) => {
+    const pages = details.pageResults as
+      | Array<{ url: string; found: boolean; positionPercent?: number; error?: string }>
+      | undefined;
+    if (!pages) return [];
+    return pages
+      .filter((p) => !p.found || (p.positionPercent != null && p.positionPercent > 10))
+      .map((p) => {
+        if (p.error) return formatDetailLine('fail', p.url, p.error);
+        if (!p.found) return formatDetailLine('fail', p.url, 'no directive found');
+        return formatDetailLine('warn', p.url, `directive at ${p.positionPercent}% of page`);
+      });
+  },
+
+  'llms-txt-directive-md': (details) => {
     const pages = details.pageResults as
       | Array<{ url: string; found: boolean; positionPercent?: number; error?: string }>
       | undefined;

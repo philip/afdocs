@@ -40,8 +40,9 @@ function getDiscoveryCoefficient(results: Map<string, CheckResult>): number {
   const cn = results.get('content-negotiation');
   if (cn?.status === 'pass') return 1.0;
 
-  const directive = results.get('llms-txt-directive');
-  if (directive?.status === 'pass') return 0.8;
+  const directiveHtml = results.get('llms-txt-directive-html');
+  const directiveMd = results.get('llms-txt-directive-md');
+  if (directiveHtml?.status === 'pass' || directiveMd?.status === 'pass') return 0.8;
 
   const linksMd = results.get('llms-txt-links-markdown');
   if (linksMd?.status === 'pass') return 0.5;

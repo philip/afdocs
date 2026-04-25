@@ -49,7 +49,8 @@ describe('computeScore', () => {
       makeResult('llms-txt-size', 'content-discoverability', 'pass'),
       makeResult('llms-txt-links-resolve', 'content-discoverability', 'pass'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'pass'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'pass'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'pass'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'pass'),
       makeResult('markdown-url-support', 'markdown-availability', 'pass'),
       makeResult('content-negotiation', 'markdown-availability', 'pass'),
       makeResult('rendering-strategy', 'page-size', 'pass', {
@@ -228,7 +229,8 @@ describe('computeScore', () => {
     // is not discoverable
     const results: CheckResult[] = [
       makeResult('content-negotiation', 'markdown-availability', 'fail'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'fail'),
       makeResult('page-size-markdown', 'page-size', 'pass'),
     ];
@@ -279,7 +281,8 @@ describe('computeScore', () => {
     const results: CheckResult[] = [
       makeResult('markdown-url-support', 'markdown-availability', 'pass'),
       makeResult('content-negotiation', 'markdown-availability', 'fail'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'fail'),
     ];
     const score = computeScore(makeReport(results));
@@ -356,7 +359,8 @@ describe('computeScore', () => {
           markdownRate: 0,
           testedLinks: 20,
         }),
-        makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+        makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+        makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
 
         // No markdown
         makeResult('markdown-url-support', 'markdown-availability', 'fail'),
@@ -405,7 +409,7 @@ describe('computeScore', () => {
 
       // Should have resolutions for failing checks
       expect(score.resolutions['llms-txt-links-markdown']).toBeDefined();
-      expect(score.resolutions['llms-txt-directive']).toBeDefined();
+      expect(score.resolutions['llms-txt-directive-html']).toBeDefined();
       expect(score.resolutions['markdown-url-support']).toBeDefined();
     });
   });

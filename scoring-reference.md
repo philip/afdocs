@@ -55,7 +55,8 @@ and the empirical evidence sections in each check definition.
 | `page-size-markdown`           | High     | 7      | Direct truncation risk on the best-case content path.                                                                                                 |
 | `page-size-html`               | High     | 7      | Affects the majority of agents, which receive HTML.                                                                                                   |
 | `http-status-codes`            | High     | 7      | Soft 404s actively mislead agents into extracting info from error pages.                                                                              |
-| `llms-txt-directive`           | High     | 7      | Discoverability multiplier. Amplifies value of llms.txt and markdown support.                                                                         |
+| `llms-txt-directive-html`      | High     | 7      | Discoverability multiplier for HTML path. Tells agents about llms.txt.                                                                                |
+| `llms-txt-directive-md`        | Medium   | 4      | Discoverability multiplier for markdown path. Tells agents about llms.txt.                                                                            |
 | `llms-txt-valid`               | Medium   | 4      | Structure helps parsing, but even non-standard llms.txt with links is useful.                                                                         |
 | `content-negotiation`          | Medium   | 4      | Only some agents send Accept: text/markdown. Valuable but not universal.                                                                              |
 | `content-start-position`       | Medium   | 4      | Boilerplate preamble on HTML path wastes truncation budget.                                                                                           |
@@ -111,7 +112,8 @@ Each check has a specific warn coefficient rather than a uniform default.
 | `llms-txt-coverage`                                          | 0.75       | 80-95% of pages covered. Most of the site is represented in the index.                                                                                                                       |
 | `markdown-content-parity`                                    | 0.75       | Minor formatting differences, not substantive content drift.                                                                                                                                 |
 | **0.60: Partial coverage or platform-dependent**             |            |                                                                                                                                                                                              |
-| `llms-txt-directive`                                         | 0.60       | Present on some pages but not others. Agents that land on covered pages benefit; others get no guidance.                                                                                     |
+| `llms-txt-directive-html`                                    | 0.60       | Present in HTML of some pages but not others. Agents that land on covered pages benefit; others get no guidance.                                                                             |
+| `llms-txt-directive-md`                                      | 0.60       | Present in markdown of some pages but not others.                                                                                                                                            |
 | `redirect-behavior`                                          | 0.60       | Cross-host HTTP redirects: some agents follow them, some don't. Platform-dependent outcome.                                                                                                  |
 | **0.25: Actively steering agents away from the better path** |            |                                                                                                                                                                                              |
 | `llms-txt-links-markdown`                                    | 0.25       | Markdown variants exist but llms.txt links to HTML. The one place you control agent navigation actively directs agents away from markdown. Agents don't independently discover .md variants. |
@@ -158,7 +160,8 @@ these fields from `details`:
 | `section-header-quality`       | `pageResults` array, count per-status                                     |
 | `http-status-codes`            | `pageResults` array, count per-status                                     |
 | `redirect-behavior`            | `pageResults` array, count per-status                                     |
-| `llms-txt-directive`           | `pageResults` array, count per-status                                     |
+| `llms-txt-directive-html`      | `pageResults` array, count per-status                                     |
+| `llms-txt-directive-md`        | `pageResults` array, count per-status                                     |
 | `cache-header-hygiene`         | `passBucket`, `warnBucket`, `failBucket`                                  |
 | `markdown-content-parity`      | `passBucket`, `warnBucket`, `failBucket`                                  |
 | `auth-gate-detection`          | `pageResults` array, count per-status                                     |
@@ -276,15 +279,16 @@ markdown delivers zero value to agents today.
 
 `markdown-url-support` is excluded from this coefficient because it measures
 whether the capability exists, not the quality of an established path. A site
-should get credit for serving markdown (and the `markdown-undiscoverable`
-diagnostic tells them to make it discoverable), but the downstream quality
+should get credit for serving markdown (and the `markdown-undiscoverable` or
+`markdown-partially-discoverable` diagnostic tells them to make it
+discoverable), but the downstream quality
 checks only matter if agents actually reach the markdown.
 
 ```
 discovery_coefficient:
   content-negotiation pass      -> 1.0  (mechanical; no agent decision involved)
-  llms-txt-directive pass       -> 0.8  (effective but agents sometimes ignore
-                                         the directive even when present)
+  llms-txt-directive-html pass  -> 0.8  (effective but agents sometimes ignore
+  OR llms-txt-directive-md pass          the directive even when present)
   llms-txt-links-markdown pass  -> 0.5  (requires finding llms.txt first,
                                          then following .md links from it)
   none of the above             -> 0.0  (agents won't find the markdown path)
@@ -393,26 +397,43 @@ Each diagnostic has:
 - **Resolution**: What to do about it
 
 Some diagnostics reference the trigger state of other diagnostics (e.g.,
-`page-size-no-markdown-escape` references whether markdown is undiscoverable).
-The implementation must evaluate diagnostics in dependency order:
-`markdown-undiscoverable` first, then diagnostics that reference it.
+`page-size-no-markdown-escape` references whether markdown is undiscoverable
+or only partially discoverable). The implementation must evaluate diagnostics
+in dependency order: `markdown-undiscoverable` and
+`markdown-partially-discoverable` first, then diagnostics that reference them.
 
 ### Diagnostic Definitions
 
 #### `markdown-undiscoverable`
 
 - **Severity**: warning
-- **Triggers when**: `markdown-url-support` passes, AND all of
-  (`content-negotiation`, `llms-txt-directive`, `llms-txt-links-markdown`)
-  are not pass.
+- **Triggers when**: `markdown-url-support` passes, AND
+  `content-negotiation` does not pass, AND `llms-txt-directive-html` does
+  not pass.
 - **Message**: Your site serves markdown at .md URLs, but agents have no way
-  to discover this. Without content negotiation, an llms.txt directive on your
-  pages, or .md links in your llms.txt, most agents will default to the HTML
-  path. Your markdown support is not being utilized.
-- **Resolution**: Add a blockquote directive near the top of each docs page
-  pointing to your llms.txt, or implement content negotiation for
-  `Accept: text/markdown`. Either change makes your existing markdown support
-  discoverable.
+  to discover this. No agent-facing directive points to your llms.txt, and
+  the server does not support content negotiation. Most agents will default
+  to the HTML path and never benefit from your markdown support.
+- **Resolution**: Add a directive near the top of each docs page pointing to
+  your llms.txt, and implement content negotiation for `Accept: text/markdown`.
+  The directive is the primary discovery mechanism (it reaches all agents);
+  content negotiation provides a fast path for agents that request markdown
+  by default.
+
+#### `markdown-partially-discoverable`
+
+- **Severity**: warning
+- **Triggers when**: `markdown-url-support` passes, AND
+  `content-negotiation` passes, AND `llms-txt-directive-html` does not pass.
+- **Message**: Your site serves markdown and supports content negotiation,
+  but has no agent-facing directive on HTML pages pointing to llms.txt.
+  Agents that send Accept: text/markdown (Claude Code, Cursor, OpenCode) get
+  markdown automatically, but the majority of agents fetch HTML by default
+  and have no signal to try the markdown path.
+- **Resolution**: Add a directive near the top of each docs page pointing to
+  your llms.txt. If your site serves markdown, mention that in the directive
+  too. The directive reaches all agents, not just the ones that request
+  markdown by default.
 
 #### `truncated-index`
 
@@ -448,8 +469,8 @@ The implementation must evaluate diagnostics in dependency order:
 - **Triggers when**: (`llms-txt-exists` fails OR (`llms-txt-exists` passes
   AND `llms-txt-links-resolve` resolveRate < 10%)) AND
   (`rendering-strategy` fails OR `rendering-strategy` not run) AND
-  (`markdown-url-support` fails OR markdown is undiscoverable per
-  `markdown-undiscoverable` trigger).
+  (`markdown-url-support` fails OR `markdown-undiscoverable` triggered OR
+  `markdown-partially-discoverable` triggered).
 
   The expanded llms.txt condition recognizes that an llms.txt where <10% of
   links resolve is functionally equivalent to having no llms.txt: agents
@@ -485,7 +506,8 @@ The implementation must evaluate diagnostics in dependency order:
 
 - **Severity**: warning
 - **Triggers when**: `page-size-html` fails AND (`markdown-url-support` fails
-  OR markdown is undiscoverable).
+  OR `markdown-undiscoverable` triggered OR
+  `markdown-partially-discoverable` triggered).
 - **Message**: {n} pages exceed agent truncation limits on the HTML path, and
   there is no discoverable markdown path for agents to get smaller
   representations. Agents will silently receive truncated content on these
@@ -529,9 +551,9 @@ Agent-Friendly Docs Scorecard
   Interaction Diagnostics:
     [!] Markdown support is undiscoverable
         Your site serves markdown at .md URLs, but agents have no way to
-        discover this. Without content negotiation, an llms.txt directive
-        on your pages, or .md links in your llms.txt, most agents will
-        default to the HTML path.
+        discover this. No agent-facing directive points to your llms.txt,
+        and the server does not support content negotiation. Most agents
+        will default to the HTML path.
 
         Fix: Add a blockquote directive near the top of each docs page
         pointing to your llms.txt, or implement content negotiation for
@@ -553,8 +575,8 @@ Agent-Friendly Docs Scorecard
       PASS  llms-txt-links-resolve All links resolve
       FAIL  llms-txt-links-markdown Links point to HTML, not markdown
             Fix: Update links to use .md URL variants ...
-      FAIL  llms-txt-directive     No directive detected on any tested page
-            Fix: Add a blockquote near the top of each page pointing to ...
+      FAIL  llms-txt-directive-html No directive detected in HTML of any tested page
+            Fix: Add a visually-hidden element near the top of each page ...
 
     ...
 ```

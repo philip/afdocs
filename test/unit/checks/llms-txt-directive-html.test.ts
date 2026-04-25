@@ -14,8 +14,8 @@ beforeAll(() => {
   return () => server.close();
 });
 
-describe('llms-txt-directive', () => {
-  const check = getCheck('llms-txt-directive')!;
+describe('llms-txt-directive-html', () => {
+  const check = getCheck('llms-txt-directive-html')!;
 
   function makeCtx(llmsTxtContent?: string) {
     const ctx = createContext('http://test.local', { requestDelay: 0 });
@@ -72,23 +72,6 @@ describe('llms-txt-directive', () => {
     expect(result.message).toContain('near the top');
   });
 
-  it('passes when llms.txt is mentioned as text near the top', async () => {
-    server.use(
-      http.get(
-        'http://test.local/docs/page1',
-        () =>
-          new HttpResponse(
-            '<html><body><p>See our llms.txt for a full documentation index.</p><h1>Docs</h1><p>Content...</p></body></html>',
-            { status: 200, headers: { 'Content-Type': 'text/html' } },
-          ),
-      ),
-    );
-
-    const result = await check.run(makeCtx(llms('/docs/page1')));
-    expect(result.status).toBe('pass');
-    expect(result.details?.foundCount).toBe(1);
-  });
-
   it('passes with visually hidden directive using sr-only', async () => {
     server.use(
       http.get(
@@ -104,6 +87,64 @@ describe('llms-txt-directive', () => {
     const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
+  });
+
+  it('passes with full URL link to llms.txt', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><a href="https://example.com/llms.txt">Documentation Index</a><p>Content</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.foundCount).toBe(1);
+  });
+
+  it('excludes nav elements from search (fixes sidebar false positive)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body>' +
+              '<nav><ul><li id="/ai/llmstxt" data-title="llms.txt"><a href="/docs/ai/llmstxt"><span>llms.txt</span></a></li></ul></nav>' +
+              '<h1>Docs</h1><p>Documentation content here.</p>' +
+              '</body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
+  });
+
+  it('excludes script and style elements from search', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body>' +
+              '<script type="application/ld+json">{"name": "llms.txt guide"}</script>' +
+              '<style>/* llms.txt styling */</style>' +
+              '<h1>Docs</h1><p>Documentation content here.</p>' +
+              '</body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
   });
 
   it('warns when directive is buried deep in the page', async () => {
@@ -190,24 +231,7 @@ describe('llms-txt-directive', () => {
     expect(result.details?.fetchErrors).toBe(1);
   });
 
-  it('detects full URL links to llms.txt', async () => {
-    server.use(
-      http.get(
-        'http://test.local/docs/page1',
-        () =>
-          new HttpResponse(
-            '<html><body><a href="https://example.com/llms.txt">Documentation Index</a><p>Content</p></body></html>',
-            { status: 200, headers: { 'Content-Type': 'text/html' } },
-          ),
-      ),
-    );
-
-    const result = await check.run(makeCtx(llms('/docs/page1')));
-    expect(result.status).toBe('pass');
-    expect(result.details?.foundCount).toBe(1);
-  });
-
-  it('ignores pages without body tags', async () => {
+  it('handles pages without body tags by searching full HTML', async () => {
     server.use(
       http.get(
         'http://test.local/docs/page1',
@@ -219,14 +243,29 @@ describe('llms-txt-directive', () => {
       ),
     );
 
-    // Should still work by falling back to full HTML
     const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
   });
 
+  it('ignores non-HTML responses', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1/',
+        () =>
+          new HttpResponse(
+            'For AI agents: see [documentation index](/llms.txt) for navigation.\n\n# Welcome',
+            { status: 200, headers: { 'Content-Type': 'text/markdown' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
+  });
+
   it('strips .md from URLs and fetches HTML version', async () => {
-    // llms.txt links to .md URLs, but directive is in the HTML version
     const content = '<p>Documentation content.</p>'.repeat(10);
     server.use(
       http.get(
@@ -244,57 +283,20 @@ describe('llms-txt-directive', () => {
     expect(result.details?.foundCount).toBe(1);
   });
 
-  it('finds directive in markdown content when HTML is not available', async () => {
-    // HTML URL returns the markdown directly (some sites do this)
+  it('detects text mention of llms.txt in content area (outside nav)', async () => {
     server.use(
       http.get(
-        'http://test.local/docs/page1/',
+        'http://test.local/docs/page1',
         () =>
           new HttpResponse(
-            'For AI agents: see [documentation index](/llms.txt) for navigation.\n\n# Welcome\n\nContent here.',
-            { status: 200, headers: { 'Content-Type': 'text/markdown' } },
+            '<html><body><p>See our llms.txt for a full documentation index.</p><h1>Docs</h1><p>Content...</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
           ),
       ),
     );
 
-    const result = await check.run(makeCtx(llms('/docs/page1/index.md')));
+    const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
-    const pages = result.details?.pageResults as Array<{ source?: string }>;
-    expect(pages[0].source).toBe('markdown');
-  });
-
-  it('falls back to .md URL when HTML version has no directive', async () => {
-    // Curated pages bypass discovery, so .md URLs reach the check directly.
-    // The check should try the HTML version first, then fall back to the .md URL.
-    server.use(
-      http.get(
-        'http://test.local/docs/page1/',
-        () =>
-          new HttpResponse('<html><body><h1>Docs</h1><p>No directive here</p></body></html>', {
-            status: 200,
-            headers: { 'Content-Type': 'text/html' },
-          }),
-      ),
-      http.get(
-        'http://test.local/docs/page1/index.md',
-        () =>
-          new HttpResponse(
-            'For AI agents: see /llms.txt for a documentation index.\n\n# Docs\n\nContent.',
-            { status: 200, headers: { 'Content-Type': 'text/markdown' } },
-          ),
-      ),
-    );
-
-    const ctx = createContext('http://test.local', {
-      requestDelay: 0,
-      samplingStrategy: 'curated',
-      curatedPages: ['http://test.local/docs/page1/index.md'],
-    });
-    const result = await check.run(ctx);
-    expect(result.status).toBe('pass');
-    expect(result.details?.foundCount).toBe(1);
-    const pages = result.details?.pageResults as Array<{ source?: string }>;
-    expect(pages[0].source).toBe('markdown');
   });
 });

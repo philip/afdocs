@@ -14,7 +14,7 @@ console.log(score.overall); // 72
 console.log(score.grade); // 'C'
 console.log(score.categoryScores); // { 'content-discoverability': { score: 80, grade: 'B' }, ... }
 console.log(score.diagnostics); // [{ id: 'markdown-undiscoverable', severity: 'warning', ... }]
-console.log(score.resolutions); // { 'llms-txt-directive': 'Add a blockquote near the top...' }
+console.log(score.resolutions); // { 'llms-txt-directive-html': 'Add a visually-hidden element...' }
 ```
 
 `computeScore` is a pure function. It does not modify the report or make any network requests. Composition is the consumer's responsibility: the CLI formatters compose `runChecks` and `computeScore`; external consumers call them separately.

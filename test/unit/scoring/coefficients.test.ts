@@ -29,15 +29,27 @@ describe('coefficients', () => {
       }
     });
 
-    it('returns 0.8 when llms-txt-directive passes (no content-negotiation)', () => {
-      const results = resultsMap(r('content-negotiation', 'fail'), r('llms-txt-directive', 'pass'));
+    it('returns 0.8 when llms-txt-directive-html passes (no content-negotiation)', () => {
+      const results = resultsMap(
+        r('content-negotiation', 'fail'),
+        r('llms-txt-directive-html', 'pass'),
+      );
+      expect(getCoefficient('page-size-markdown', results)).toBe(0.8);
+    });
+
+    it('returns 0.8 when llms-txt-directive-md passes (no content-negotiation)', () => {
+      const results = resultsMap(
+        r('content-negotiation', 'fail'),
+        r('llms-txt-directive-md', 'pass'),
+      );
       expect(getCoefficient('page-size-markdown', results)).toBe(0.8);
     });
 
     it('returns 0.5 when only llms-txt-links-markdown passes', () => {
       const results = resultsMap(
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
+        r('llms-txt-directive-md', 'fail'),
         r('llms-txt-links-markdown', 'pass'),
       );
       expect(getCoefficient('page-size-markdown', results)).toBe(0.5);
@@ -46,7 +58,8 @@ describe('coefficients', () => {
     it('returns 0.0 when nothing passes', () => {
       const results = resultsMap(
         r('content-negotiation', 'fail'),
-        r('llms-txt-directive', 'fail'),
+        r('llms-txt-directive-html', 'fail'),
+        r('llms-txt-directive-md', 'fail'),
         r('llms-txt-links-markdown', 'fail'),
       );
       expect(getCoefficient('page-size-markdown', results)).toBe(0.0);
@@ -60,7 +73,8 @@ describe('coefficients', () => {
     it('uses highest coefficient when multiple pass', () => {
       const results = resultsMap(
         r('content-negotiation', 'pass'),
-        r('llms-txt-directive', 'pass'),
+        r('llms-txt-directive-html', 'pass'),
+        r('llms-txt-directive-md', 'pass'),
         r('llms-txt-links-markdown', 'pass'),
       );
       expect(getCoefficient('page-size-markdown', results)).toBe(1.0);

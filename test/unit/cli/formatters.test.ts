@@ -620,11 +620,11 @@ describe('formatText', () => {
       expect(output).not.toContain('https://example.com/docs/public');
     });
 
-    it('shows missing directives for llms-txt-directive', () => {
+    it('shows missing directives for llms-txt-directive-html', () => {
       const report = makeReport({
         results: [
           {
-            id: 'llms-txt-directive',
+            id: 'llms-txt-directive-html',
             category: 'content-discoverability',
             status: 'fail',
             message: 'No directives found',

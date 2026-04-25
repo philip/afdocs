@@ -1,6 +1,6 @@
 # What Is the Agent Score?
 
-The Agent Score is a 0–100 rating of how well AI coding agents can discover, navigate, and consume your documentation site. You can get your score with [AFDocs](https://www.npmjs.com/package/afdocs), which runs 22 automated checks based on the [Agent-Friendly Documentation Spec](https://agentdocsspec.com) and maps the results to a letter grade.
+The Agent Score is a 0–100 rating of how well AI coding agents can discover, navigate, and consume your documentation site. You can get your score with [AFDocs](https://www.npmjs.com/package/afdocs), which runs 23 automated checks based on the [Agent-Friendly Documentation Spec](https://agentdocsspec.com) and maps the results to a letter grade.
 
 The AI coding agents that regularly consume your documentation while helping developers perform tasks include:
 
@@ -25,7 +25,7 @@ For the full business case, including how agents fail on documentation, the conc
 
 ## What the score measures
 
-The 22 checks cover seven categories:
+The 23 checks cover seven categories:
 
 | Category                                                   | What it tests                                                                                      |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -75,7 +75,7 @@ Agent-Friendly Docs Scorecard
     Content Discoverability
       PASS  llms-txt-exists        llms.txt found at /llms.txt
       WARN  llms-txt-size          llms.txt is 65,000 characters
-      FAIL  llms-txt-directive     No directive detected on any tested page
+      FAIL  llms-txt-directive-html No directive detected in HTML of any tested page
             Fix: Add a blockquote near the top of each page ...
 ```
 

@@ -6,7 +6,8 @@ import './content-discoverability/llms-txt-valid.js';
 import './content-discoverability/llms-txt-size.js';
 import './content-discoverability/llms-txt-links-resolve.js';
 import './content-discoverability/llms-txt-links-markdown.js';
-import './content-discoverability/llms-txt-directive.js';
+import './content-discoverability/llms-txt-directive-html.js';
+import './content-discoverability/llms-txt-directive-md.js';
 
 // Category 2: Markdown Availability
 import './markdown-availability/markdown-url-support.js';
