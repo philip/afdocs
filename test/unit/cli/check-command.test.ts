@@ -576,6 +576,106 @@ describe('check command config integration', () => {
     stderrSpy.mockRestore();
   });
 
+  it('accepts --llms-txt-url and uses it as canonical', async () => {
+    const customLlmsTxt = `# Custom\n\n> Custom docs.\n\n## Links\n\n- [Page](http://cmd-llms-url.local/x): X\n`;
+    server.use(
+      // The discovery heuristic would normally fall back to /llms.txt, but the
+      // explicit URL should be the only thing probed.
+      http.get('http://cmd-llms-url.local/custom/llms.txt', () => HttpResponse.text(customLlmsTxt)),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-llms-url.local',
+      '--checks',
+      'llms-txt-exists',
+      '--format',
+      'json',
+      '--llms-txt-url',
+      'http://cmd-llms-url.local/custom/llms.txt',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.results[0].status).toBe('pass');
+    expect(parsed.results[0].details.canonicalUrl).toBe(
+      'http://cmd-llms-url.local/custom/llms.txt',
+    );
+    expect(parsed.results[0].details.canonicalSource).toBe('explicit');
+
+    writeSpy.mockRestore();
+  });
+
+  it('rejects invalid --llms-txt-url', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-llms-url-bad.local',
+      '--llms-txt-url',
+      ':::not-a-url:::',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Invalid --llms-txt-url');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('warns when --llms-txt-url origin differs from target origin', async () => {
+    const customLlmsTxt = `# Other\n\n> Other.\n\n## Links\n\n- [P](http://other.local/x): X\n`;
+    server.use(
+      http.get('http://other.local/custom/llms.txt', () => HttpResponse.text(customLlmsTxt)),
+    );
+
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-llms-url-cross.local',
+      '--checks',
+      'llms-txt-exists',
+      '--format',
+      'json',
+      '--llms-txt-url',
+      'http://other.local/custom/llms.txt',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const stderr = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(stderr).toContain('--llms-txt-url origin');
+    expect(stderr).toContain('differs from target origin');
+
+    // Check still runs and uses the explicit URL
+    const stdout = stdoutSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.results[0].details.canonicalUrl).toBe('http://other.local/custom/llms.txt');
+
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
   it('infers base URL from config pages when url field is omitted', async () => {
     server.use(
       http.get('http://cfg-infer.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),

@@ -1,5 +1,6 @@
 import { registerCheck } from '../registry.js';
-import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
+import { getLlmsTxtFilesForAnalysis } from '../../helpers/llms-txt.js';
+import type { CheckContext, CheckResult } from '../../types.js';
 
 interface ValidationResult {
   url: string;
@@ -48,7 +49,7 @@ function validateLlmsTxt(content: string, url: string): ValidationResult {
 
 async function checkLlmsTxtValid(ctx: CheckContext): Promise<CheckResult> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
+  const discovered = getLlmsTxtFilesForAnalysis(existsResult);
 
   if (discovered.length === 0) {
     return {

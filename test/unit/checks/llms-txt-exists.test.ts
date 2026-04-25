@@ -233,4 +233,109 @@ describe('llms-txt-exists', () => {
     expect(report.results[0].details?.rateLimited).toBe(1);
     expect(report.results[0].message).toContain('rate-limited (HTTP 429)');
   });
+
+  describe('canonical selection', () => {
+    const APEX_LLMS_TXT = `# Apex marketing\n\n> Apex.\n\n## Links\n\n- [Blog](http://canon.local/blog/post): Blog\n`;
+    const DOCS_LLMS_TXT = `# Docs\n\n> Docs index.\n\n## Links\n\n- [Guide](http://canon.local/docs/guide): Guide\n`;
+
+    it('picks /docs/llms.txt as canonical when baseUrl is the docs path', async () => {
+      server.use(
+        http.get('http://canon.local/llms.txt', () => HttpResponse.text(APEX_LLMS_TXT)),
+        http.get('http://canon.local/docs/llms.txt', () => HttpResponse.text(DOCS_LLMS_TXT)),
+      );
+
+      const report = await runChecks('http://canon.local/docs', {
+        checkIds: ['llms-txt-exists'],
+        requestDelay: 0,
+      });
+
+      expect(report.results[0].status).toBe('pass');
+      expect(report.results[0].details?.canonicalUrl).toBe('http://canon.local/docs/llms.txt');
+      expect(report.results[0].details?.canonicalSource).toBe('heuristic');
+      expect(report.results[0].message).toContain('using http://canon.local/docs/llms.txt');
+    });
+
+    it('picks the apex llms.txt as canonical when baseUrl is the origin', async () => {
+      server.use(
+        http.get('http://canon-apex.local/llms.txt', () => HttpResponse.text(APEX_LLMS_TXT)),
+        http.get('http://canon-apex.local/docs/llms.txt', () => HttpResponse.text(DOCS_LLMS_TXT)),
+      );
+
+      const report = await runChecks('http://canon-apex.local', {
+        checkIds: ['llms-txt-exists'],
+        requestDelay: 0,
+      });
+
+      expect(report.results[0].status).toBe('pass');
+      expect(report.results[0].details?.canonicalUrl).toBe('http://canon-apex.local/llms.txt');
+    });
+
+    it('omits canonicalSource when only one file is discovered', async () => {
+      server.use(
+        http.get('http://canon-single.local/llms.txt', () => HttpResponse.text(APEX_LLMS_TXT)),
+        http.get(
+          'http://canon-single.local/docs/llms.txt',
+          () => new HttpResponse(null, { status: 404 }),
+        ),
+      );
+
+      const report = await runChecks('http://canon-single.local', {
+        checkIds: ['llms-txt-exists'],
+        requestDelay: 0,
+      });
+
+      expect(report.results[0].status).toBe('pass');
+      expect(report.results[0].details?.canonicalUrl).toBe('http://canon-single.local/llms.txt');
+      expect(report.results[0].details?.canonicalSource).toBeUndefined();
+      expect(report.results[0].message).toBe(
+        'llms.txt found at http://canon-single.local/llms.txt',
+      );
+    });
+  });
+
+  describe('--llms-txt-url override', () => {
+    const VALID = `# Override\n\n> Override docs.\n\n## Links\n\n- [Page](http://override.local/x): X\n`;
+
+    it('probes only the explicit URL and uses it as canonical', async () => {
+      server.use(
+        // The discovery heuristic would normally hit /llms.txt and /docs/llms.txt,
+        // but with the override only the explicit URL is probed.
+        http.get('http://override.local/custom/llms.txt', () => HttpResponse.text(VALID)),
+      );
+
+      const report = await runChecks('http://override.local', {
+        checkIds: ['llms-txt-exists'],
+        requestDelay: 0,
+        llmsTxtUrl: 'http://override.local/custom/llms.txt',
+      });
+
+      expect(report.results[0].status).toBe('pass');
+      expect(report.results[0].details?.canonicalUrl).toBe('http://override.local/custom/llms.txt');
+      expect(report.results[0].details?.canonicalSource).toBe('explicit');
+      expect(report.results[0].message).toContain('specified via --llms-txt-url');
+      // candidateUrls should only include the explicit URL
+      const candidates = report.results[0].details?.candidateUrls as Array<{ url: string }>;
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].url).toBe('http://override.local/custom/llms.txt');
+    });
+
+    it('reports an explicit-URL-aware failure when the override 404s', async () => {
+      server.use(
+        http.get(
+          'http://override-missing.local/custom/llms.txt',
+          () => new HttpResponse(null, { status: 404 }),
+        ),
+      );
+
+      const report = await runChecks('http://override-missing.local', {
+        checkIds: ['llms-txt-exists'],
+        requestDelay: 0,
+        llmsTxtUrl: 'http://override-missing.local/custom/llms.txt',
+      });
+
+      expect(report.results[0].status).toBe('fail');
+      expect(report.results[0].message).toContain('--llms-txt-url');
+      expect(report.results[0].message).toContain('http://override-missing.local/custom/llms.txt');
+    });
+  });
 });

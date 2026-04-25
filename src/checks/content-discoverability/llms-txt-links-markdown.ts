@@ -1,9 +1,10 @@
 import { registerCheck } from '../registry.js';
 import { extractMarkdownLinks } from './llms-txt-valid.js';
 import { filterByPathPrefix, getPathFilterBase } from '../../helpers/get-page-urls.js';
+import { getLlmsTxtFilesForAnalysis } from '../../helpers/llms-txt.js';
 import { toMdUrls } from '../../helpers/to-md-urls.js';
 import { looksLikeMarkdown } from '../../helpers/detect-markdown.js';
-import type { CheckContext, CheckResult, DiscoveredFile } from '../../types.js';
+import type { CheckContext, CheckResult } from '../../types.js';
 
 interface LinkMarkdownResult {
   url: string;
@@ -25,7 +26,7 @@ function hasMarkdownExtension(url: string): boolean {
 
 async function checkLlmsTxtLinksMarkdown(ctx: CheckContext): Promise<CheckResult> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
-  const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
+  const discovered = getLlmsTxtFilesForAnalysis(existsResult);
 
   if (discovered.length === 0) {
     return {

@@ -166,6 +166,27 @@ Use `--canonical-origin` when your site's URLs in `sitemap.xml` and `llms.txt` d
 afdocs check https://preview-xyz-example.app/docs --canonical-origin https://example.com
 ```
 
+### llms.txt selection
+
+| Flag                   | Default | Description                                                              |
+| ---------------------- | ------- | ------------------------------------------------------------------------ |
+| `--llms-txt-url <url>` |         | Explicit llms.txt URL to use as canonical (bypasses discovery heuristic) |
+
+By default, `afdocs` discovers llms.txt at three candidate locations: `{baseUrl}/llms.txt`, `{origin}/llms.txt`, and `{origin}/docs/llms.txt`. When more than one of these returns a file, the most-specific one — the one whose directory is the longest prefix of the URL you passed — is used as canonical. Downstream checks (size, validity, link sampling) all operate on the canonical file.
+
+For most sites this heuristic does the right thing. Use `--llms-txt-url` to override it when:
+
+- The canonical llms.txt lives at a non-standard path (e.g. `/docs/v3/llms.txt`)
+- A monorepo serves multiple docs surfaces at one origin and you want to score one specifically
+- You want to verify a specific file before publishing
+
+```bash
+# Score a docs section explicitly, ignoring an apex /llms.txt
+afdocs check https://example.com/docs --llms-txt-url https://example.com/docs/llms.txt
+```
+
+When the override is set, `llms-txt-exists` probes only that URL and reports failure if it isn't reachable. The cross-host redirect fallback is skipped.
+
 ### Size thresholds
 
 | Flag                   | Default  | Description                            |

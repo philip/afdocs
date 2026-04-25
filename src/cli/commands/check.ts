@@ -42,6 +42,10 @@ export function registerCheckCommand(program: Command): void {
       '--canonical-origin <url>',
       'The production domain your content links to (for preview/staging testing)',
     )
+    .option(
+      '--llms-txt-url <url>',
+      'Explicit llms.txt URL to use as canonical (bypasses discovery heuristic)',
+    )
     .action(async (rawUrl: string | undefined, opts: Record<string, unknown>) => {
       // Load config: explicit path or auto-discover
       let config;
@@ -199,6 +203,24 @@ export function registerCheckCommand(program: Command): void {
         }
       }
 
+      let llmsTxtUrl: string | undefined;
+      const rawLlmsTxtUrl = (opts.llmsTxtUrl as string | undefined) ?? config?.options?.llmsTxtUrl;
+      if (rawLlmsTxtUrl) {
+        try {
+          llmsTxtUrl = new URL(normalizeUrl(rawLlmsTxtUrl)).toString();
+        } catch {
+          process.stderr.write(`Error: Invalid --llms-txt-url "${rawLlmsTxtUrl}".\n`);
+          process.exitCode = 1;
+          return;
+        }
+        const targetOrigin = new URL(url).origin;
+        if (new URL(llmsTxtUrl).origin !== targetOrigin) {
+          process.stderr.write(
+            `Warning: --llms-txt-url origin (${new URL(llmsTxtUrl).origin}) differs from target origin (${targetOrigin}). The flag will still be used as canonical.\n`,
+          );
+        }
+      }
+
       const report = await runChecks(url, {
         checkIds,
         skipCheckIds,
@@ -214,6 +236,7 @@ export function registerCheckCommand(program: Command): void {
         ...(preferredLocale && { preferredLocale }),
         ...(preferredVersion && { preferredVersion }),
         ...(canonicalOrigin && { canonicalOrigin }),
+        ...(llmsTxtUrl && { llmsTxtUrl }),
       });
 
       let output: string;

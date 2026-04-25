@@ -118,7 +118,9 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   // Collect URLs to check: llms.txt files + sampled page URLs
   const urlsToCheck: string[] = [];
 
-  // llms.txt URLs
+  // llms.txt URLs — intentionally checks ALL discovered files (not just the
+  // canonical) so that multiple llms.txt locations (apex + docs) are each
+  // expected to have appropriate cache headers.
   const existsResult = ctx.previousResults.get('llms-txt-exists');
   const discovered = (existsResult?.details?.discoveredFiles ?? []) as DiscoveredFile[];
   for (const file of discovered) {

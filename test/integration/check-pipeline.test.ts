@@ -1086,6 +1086,101 @@ describe('check pipeline: markdown-content-parity reads from pageCache', () => {
   });
 });
 
+describe('check pipeline: canonical llms.txt selection', () => {
+  it('docs llms.txt drives downstream sampling when both apex and docs exist', async () => {
+    // Mirrors the scenario from issue #53: an apex llms.txt full of marketing
+    // links and a small docs llms.txt with the actual documentation links.
+    // When the user passes a docs URL, the docs llms.txt should be canonical
+    // and downstream checks should sample from its links — not the apex's.
+    const apexContent = `# Marketing\n\n> Apex marketing page.\n\n## Links\n\n${Array.from(
+      { length: 20 },
+      (_, i) => `- [Marketing ${i}](http://canon-pipe.local/blog/post-${i}): Blog post ${i}`,
+    ).join('\n')}\n`;
+    const docsContent =
+      '# Docs\n\n> Docs index.\n\n## Links\n\n- [Guide](http://canon-pipe.local/docs/guide): Guide\n';
+
+    server.use(
+      http.get('http://canon-pipe.local/llms.txt', () => HttpResponse.text(apexContent)),
+      http.get('http://canon-pipe.local/docs/llms.txt', () => HttpResponse.text(docsContent)),
+      http.get(
+        'http://canon-pipe.local/docs/guide',
+        () =>
+          new HttpResponse('<html><body><h1>Guide</h1></body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.head(
+        'http://canon-pipe.local/docs/guide',
+        () => new HttpResponse(null, { status: 200 }),
+      ),
+    );
+    mockSitemapNotFound(server, 'http://canon-pipe.local/docs');
+
+    const report = await runChecks('http://canon-pipe.local/docs', {
+      checkIds: ['llms-txt-exists', 'llms-txt-size', 'llms-txt-valid', 'llms-txt-links-resolve'],
+      requestDelay: 0,
+    });
+
+    const existsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
+    const sizeResult = report.results.find((r) => r.id === 'llms-txt-size')!;
+    const validResult = report.results.find((r) => r.id === 'llms-txt-valid')!;
+    const resolveResult = report.results.find((r) => r.id === 'llms-txt-links-resolve')!;
+
+    // llms-txt-exists picks the docs file as canonical
+    expect(existsResult.status).toBe('pass');
+    expect(existsResult.details?.canonicalUrl).toBe('http://canon-pipe.local/docs/llms.txt');
+
+    // Downstream checks should report on the docs file only, not the apex.
+    // size: docs file is small, so it passes — the apex (with 20 inline links)
+    // would not influence the result.
+    expect(sizeResult.status).toBe('pass');
+    const sizes = sizeResult.details?.sizes as Array<{ url: string; characters: number }>;
+    expect(sizes).toHaveLength(1);
+    expect(sizes[0].url).toBe('http://canon-pipe.local/docs/llms.txt');
+
+    // valid: validates the docs file (which has H1, blockquote, sections, links)
+    expect(validResult.status).toBe('pass');
+
+    // links-resolve: only tests the single docs link, not the 20 marketing links
+    expect(resolveResult.status).toBe('pass');
+    expect(resolveResult.details?.totalLinks).toBe(1);
+  });
+
+  it('--llms-txt-url forces a specific file even when others would be discovered', async () => {
+    const apexContent =
+      '# Apex\n\n> Apex.\n\n## Links\n\n- [Blog](http://override-pipe.local/blog): Blog\n';
+    const explicitContent =
+      '# Explicit\n\n> Explicit.\n\n## Links\n\n- [Guide](http://override-pipe.local/docs/guide): Guide\n';
+
+    server.use(
+      http.get('http://override-pipe.local/llms.txt', () => HttpResponse.text(apexContent)),
+      http.get('http://override-pipe.local/custom/llms.txt', () =>
+        HttpResponse.text(explicitContent),
+      ),
+      http.get(
+        'http://override-pipe.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const report = await runChecks('http://override-pipe.local', {
+      checkIds: ['llms-txt-exists', 'llms-txt-valid'],
+      requestDelay: 0,
+      llmsTxtUrl: 'http://override-pipe.local/custom/llms.txt',
+    });
+
+    const existsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
+    expect(existsResult.details?.canonicalUrl).toBe('http://override-pipe.local/custom/llms.txt');
+
+    const validResult = report.results.find((r) => r.id === 'llms-txt-valid')!;
+    const validations = validResult.details?.validations as Array<{ url: string }>;
+    // Only the explicit file should be validated, not the apex
+    expect(validations).toHaveLength(1);
+    expect(validations[0].url).toBe('http://override-pipe.local/custom/llms.txt');
+  });
+});
+
 describe('check pipeline: effectiveOrigin propagation', () => {
   it('llms-txt-exists sets effectiveOrigin which llms-txt-freshness uses', async () => {
     // llms.txt redirects cross-host; sitemap lives at the redirected host
