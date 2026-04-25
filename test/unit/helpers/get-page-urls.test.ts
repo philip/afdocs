@@ -8,6 +8,7 @@ import {
   parseSitemapUrls,
   parseSitemapDirectives,
   filterByPathPrefix,
+  getPathFilterBase,
   filterLocaleSitemaps,
   filterLocalizedUrls,
   deduplicateVersionedUrls,
@@ -152,6 +153,43 @@ describe('filterByPathPrefix', () => {
     const urls = ['not-a-url', 'https://example.com/docs/page'];
     const result = filterByPathPrefix(urls, 'https://example.com/docs');
     expect(result).toEqual(['not-a-url', 'https://example.com/docs/page']);
+  });
+});
+
+describe('getPathFilterBase', () => {
+  it('returns baseUrl when no effectiveOrigin is set', () => {
+    const ctx = createContext('https://example.com/docs', { requestDelay: 0 });
+    expect(getPathFilterBase(ctx)).toBe('https://example.com/docs');
+  });
+
+  it('returns baseUrl when effectiveOrigin matches origin', () => {
+    const ctx = createContext('https://example.com/docs', { requestDelay: 0 });
+    ctx.effectiveOrigin = 'https://example.com';
+    expect(getPathFilterBase(ctx)).toBe('https://example.com/docs');
+  });
+
+  it('preserves subpath for www-canonicalization redirects', () => {
+    const ctx = createContext('https://alchemy.com/docs', { requestDelay: 0 });
+    ctx.effectiveOrigin = 'https://www.alchemy.com';
+    expect(getPathFilterBase(ctx)).toBe('https://www.alchemy.com/docs');
+  });
+
+  it('preserves subpath when www is on the original origin', () => {
+    const ctx = createContext('https://www.example.com/docs', { requestDelay: 0 });
+    ctx.effectiveOrigin = 'https://example.com';
+    expect(getPathFilterBase(ctx)).toBe('https://example.com/docs');
+  });
+
+  it('returns root effectiveOrigin for true cross-host redirects', () => {
+    const ctx = createContext('https://example.com/docs', { requestDelay: 0 });
+    ctx.effectiveOrigin = 'https://docs.example.com';
+    expect(getPathFilterBase(ctx)).toBe('https://docs.example.com');
+  });
+
+  it('returns root effectiveOrigin for www redirect with root baseUrl', () => {
+    const ctx = createContext('https://alchemy.com', { requestDelay: 0 });
+    ctx.effectiveOrigin = 'https://www.alchemy.com';
+    expect(getPathFilterBase(ctx)).toBe('https://www.alchemy.com');
   });
 });
 
