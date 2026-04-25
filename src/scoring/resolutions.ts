@@ -275,15 +275,22 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
   'llms-txt-coverage': {
     warn: (d) => {
       const missing = (d.missingCount as number) ?? 0;
+      const coverage = (d.coverageRate as number) ?? 0;
+      const warnThreshold = (d.coverageWarnThreshold as number) ?? 80;
+      const passThreshold = (d.coveragePassThreshold as number) ?? 95;
       return (
-        `Your llms.txt covers 80-95% of your site's pages. ${missing} live ` +
+        `Your llms.txt covers ${coverage}% of your site's pages ` +
+        `(${warnThreshold}-${passThreshold}% is warn). ${missing} live ` +
         'pages are not represented in the index.'
       );
     },
     fail: (d) => {
       const missing = (d.missingCount as number) ?? 0;
+      const coverage = (d.coverageRate as number) ?? 0;
+      const warnThreshold = (d.coverageWarnThreshold as number) ?? 80;
       return (
-        `Your llms.txt covers less than 80% of your site's pages. ` +
+        `Your llms.txt covers ${coverage}% of your site's pages ` +
+        `(below ${warnThreshold}% threshold). ` +
         `${missing} live pages are missing from the index. Regenerate ` +
         'llms.txt from your sitemap or build pipeline.'
       );

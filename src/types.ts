@@ -84,6 +84,12 @@ export interface CheckOptions {
   preferredVersion?: string;
   /** Canonical origin to rewrite in fetched content (for preview/staging testing). */
   canonicalOrigin?: string;
+  /** Pass threshold for llms-txt-coverage (0–100). Default 95. */
+  coveragePassThreshold?: number;
+  /** Warn threshold for llms-txt-coverage (0–100). Default 80. */
+  coverageWarnThreshold?: number;
+  /** Glob patterns to exclude from the sitemap before calculating coverage. */
+  coverageExclusions?: string[];
   /**
    * Explicit URL to use as the canonical llms.txt for downstream sampling and
    * analysis. When set, the standard candidate-discovery heuristic is bypassed

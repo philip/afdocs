@@ -38,6 +38,12 @@ export function registerCheckCommand(program: Command): void {
     .option('-v, --verbose', 'Show per-page details for checks with issues')
     .option('--fixes', 'Show fix suggestions for warn/fail checks')
     .option('--score', 'Include scoring data in JSON output')
+    .option('--coverage-pass-threshold <n>', 'llms-txt-coverage pass threshold (0-100, default 95)')
+    .option('--coverage-warn-threshold <n>', 'llms-txt-coverage warn threshold (0-100, default 80)')
+    .option(
+      '--coverage-exclusions <patterns>',
+      'Comma-separated glob patterns to exclude from coverage denominator',
+    )
     .option(
       '--canonical-origin <url>',
       'The production domain your content links to (for preview/staging testing)',
@@ -221,6 +227,23 @@ export function registerCheckCommand(program: Command): void {
         }
       }
 
+      const coveragePassThreshold =
+        opts.coveragePassThreshold != null
+          ? parseInt(String(opts.coveragePassThreshold), 10)
+          : (config?.options?.coveragePassThreshold ?? undefined);
+      const coverageWarnThreshold =
+        opts.coverageWarnThreshold != null
+          ? parseInt(String(opts.coverageWarnThreshold), 10)
+          : (config?.options?.coverageWarnThreshold ?? undefined);
+
+      const coverageExclusions =
+        opts.coverageExclusions != null
+          ? (opts.coverageExclusions as string)
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : (config?.options?.coverageExclusions ?? undefined);
+
       const report = await runChecks(url, {
         checkIds,
         skipCheckIds,
@@ -237,6 +260,9 @@ export function registerCheckCommand(program: Command): void {
         ...(preferredVersion && { preferredVersion }),
         ...(canonicalOrigin && { canonicalOrigin }),
         ...(llmsTxtUrl && { llmsTxtUrl }),
+        ...(coveragePassThreshold != null && { coveragePassThreshold }),
+        ...(coverageWarnThreshold != null && { coverageWarnThreshold }),
+        ...(coverageExclusions && { coverageExclusions }),
       });
 
       let output: string;

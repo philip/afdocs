@@ -39,6 +39,13 @@ export function parseSitemapUrls(xml: string): { urls: string[]; sitemapIndexUrl
 }
 
 export async function getUrlsFromCachedLlmsTxt(ctx: CheckContext): Promise<string[]> {
+  const result = await getUrlsFromCachedLlmsTxtWithOmitted(ctx);
+  return result.pageUrls;
+}
+
+export async function getUrlsFromCachedLlmsTxtWithOmitted(
+  ctx: CheckContext,
+): Promise<AggregateWalkResult> {
   const existsResult = ctx.previousResults.get('llms-txt-exists');
   const discovered = getLlmsTxtFilesForAnalysis(existsResult);
 
@@ -85,9 +92,16 @@ function extractLinksFromLlmsTxtFiles(files: DiscoveredFile[]): string[] {
  * origin as the site being tested. This covers both sub-product llms.txt
  * files (Cloudflare) and aggregate content files (Supabase).
  */
-async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<string[]> {
+export interface AggregateWalkResult {
+  pageUrls: string[];
+  /** Same-origin .txt URLs found at depth 1 that the walker did not descend into. */
+  omittedTxtUrls: string[];
+}
+
+async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<AggregateWalkResult> {
   const pageUrls: string[] = [];
   const aggregateUrls: string[] = [];
+  const omittedTxtUrls: string[] = [];
 
   const siteOrigin = ctx.effectiveOrigin ?? ctx.origin;
 
@@ -110,7 +124,7 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
     }
   }
 
-  if (aggregateUrls.length === 0) return pageUrls;
+  if (aggregateUrls.length === 0) return { pageUrls, omittedTxtUrls };
 
   // Fetch aggregate files and extract their links
   for (const aggUrl of aggregateUrls) {
@@ -133,13 +147,15 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
       const subUrls = extractLinksFromLlmsTxtFiles([subFile]);
 
       for (const subUrl of subUrls) {
-        // Only keep same-origin page URLs (skip further .txt nesting)
         try {
           const parsed = new URL(subUrl);
-          if (
-            (parsed.origin === ctx.origin || parsed.origin === siteOrigin) &&
-            !isNonPageUrl(subUrl)
-          ) {
+          const isSameOrigin = parsed.origin === ctx.origin || parsed.origin === siteOrigin;
+          if (!isSameOrigin) continue;
+
+          if (/\.txt$/i.test(parsed.pathname)) {
+            // Depth-1 .txt link: record as omitted rather than descending
+            omittedTxtUrls.push(subUrl);
+          } else if (!isNonPageUrl(subUrl)) {
             pageUrls.push(subUrl);
           }
         } catch {
@@ -151,7 +167,7 @@ async function walkAggregateLinks(ctx: CheckContext, urls: string[]): Promise<st
     }
   }
 
-  return pageUrls;
+  return { pageUrls, omittedTxtUrls };
 }
 
 /**
@@ -198,7 +214,8 @@ async function fetchLlmsTxtUrls(ctx: CheckContext): Promise<string[]> {
   const canonical = selectCanonicalLlmsTxt(discovered, ctx.baseUrl);
   const filesForAnalysis = canonical ? [canonical] : [];
   const urls = extractLinksFromLlmsTxtFiles(filesForAnalysis);
-  return walkAggregateLinks(ctx, urls);
+  const result = await walkAggregateLinks(ctx, urls);
+  return result.pageUrls;
 }
 
 /**

@@ -7,6 +7,8 @@ import type { DiscoveredFile } from '../../../src/types.js';
 import {
   hasLocaleCodeAt,
   filterToUnprefixedLocale,
+  compileExclusionMatcher,
+  extractOmittedPrefixes,
 } from '../../../src/checks/observability/llms-txt-coverage.js';
 
 const server = setupServer();
@@ -360,13 +362,12 @@ describe('llms-txt-coverage', () => {
     expect(result.details?.coverageRate).toBe(100);
   });
 
-  test('excludes blog/changelog/pricing paths from sitemap comparison', async () => {
+  test('excludes blog/pricing/careers paths from sitemap comparison', async () => {
     const host = 'cov-exclude.local';
     const docPages = [`http://${host}/guide`];
     const sitemapPages = [
       `http://${host}/guide`,
       `http://${host}/blog/post-1`,
-      `http://${host}/changelog/v2`,
       `http://${host}/pricing`,
       `http://${host}/careers/engineer`,
     ];
@@ -392,7 +393,7 @@ describe('llms-txt-coverage', () => {
     const result = await check.run(ctx);
     // Only /guide should be in the doc pages set (others excluded)
     expect(result.details?.sitemapDocPages).toBe(1);
-    expect(result.details?.excludedNonDocPages).toBe(4);
+    expect(result.details?.excludedNonDocPages).toBe(3);
     expect(result.status).toBe('pass');
   });
 
@@ -724,12 +725,12 @@ describe('llms-txt-coverage', () => {
     const host = 'basepath-exclude.local';
     const pages = [`http://${host}/docs/getting-started`, `http://${host}/docs/api-reference`];
 
-    // Sitemap includes /docs/changelog pages that should be excluded
+    // Sitemap includes /docs/blog and /docs/pricing pages that should be excluded
     const sitemapPages = [
       ...pages,
-      `http://${host}/docs/changelog/2024-01-01`,
-      `http://${host}/docs/changelog/2024-02-01`,
       `http://${host}/docs/blog/post-1`,
+      `http://${host}/docs/blog/post-2`,
+      `http://${host}/docs/pricing`,
     ];
 
     const ctx = makeCtx(host, pages, '/docs');
@@ -750,7 +751,7 @@ describe('llms-txt-coverage', () => {
 
     const result = await check.run(ctx);
     expect(result.status).toBe('pass');
-    // Only 2 doc pages remain after excluding /docs/changelog and /docs/blog
+    // Only 2 doc pages remain after excluding /docs/blog and /docs/pricing
     expect(result.details?.sitemapDocPages).toBe(2);
     expect(result.details?.excludedNonDocPages).toBe(3);
   });
@@ -793,5 +794,314 @@ describe('filterToUnprefixedLocale', () => {
   test('keeps all URLs when none have locale codes', () => {
     const urls = ['http://x.com/docs/intro', 'http://x.com/docs/guides'];
     expect(filterToUnprefixedLocale(urls, 1)).toEqual(urls);
+  });
+});
+
+describe('configurable thresholds', () => {
+  test('uses custom pass threshold', async () => {
+    const host = 'cov-custom-pass.local';
+    // 9 of 10 pages = 90% coverage. Default would warn, but pass=80 makes it pass.
+    const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
+    const llmsPages = allPages.slice(0, 9);
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+    ctx.options.coveragePassThreshold = 80;
+    ctx.options.coverageWarnThreshold = 50;
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(allPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.coverageRate).toBe(90);
+    expect(result.details?.coveragePassThreshold).toBe(80);
+    expect(result.details?.coverageWarnThreshold).toBe(50);
+  });
+
+  test('threshold of 0 makes check informational (always passes)', async () => {
+    const host = 'cov-informational.local';
+    // Only 2 of 10 pages = 20% coverage. With thresholds at 0, this passes.
+    const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
+    const llmsPages = allPages.slice(0, 2);
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+    ctx.options.coveragePassThreshold = 0;
+    ctx.options.coverageWarnThreshold = 0;
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(allPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.coverageRate).toBe(20);
+  });
+});
+
+describe('coverage exclusions', () => {
+  test('user exclusion patterns remove matching sitemap URLs from denominator', async () => {
+    const host = 'cov-exclusions.local';
+    const docPages = [`http://${host}/docs/guide`, `http://${host}/docs/api`];
+    const sitemapPages = [
+      ...docPages,
+      `http://${host}/docs/reference/v1/endpoint-a`,
+      `http://${host}/docs/reference/v1/endpoint-b`,
+      `http://${host}/docs/reference/v2/endpoint-a`,
+    ];
+
+    const ctx = makeCtx(host, docPages, '/docs');
+    ctx.options.coverageExclusions = ['/docs/reference/**'];
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.sitemapDocPages).toBe(2);
+    expect(result.details?.userExcludedPages).toBe(3);
+    expect(result.details?.coverageRate).toBe(100);
+  });
+
+  test('exclusion patterns work relative to base path', async () => {
+    const host = 'cov-exclusions-rel.local';
+    const docPages = [`http://${host}/docs/guide`];
+    const sitemapPages = [...docPages, `http://${host}/docs/archive/old-page`];
+
+    const ctx = makeCtx(host, docPages, '/docs');
+    ctx.options.coverageExclusions = ['/archive/**'];
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.sitemapDocPages).toBe(1);
+    expect(result.details?.userExcludedPages).toBe(1);
+  });
+});
+
+describe('omitted subtrees', () => {
+  test('excludes sitemap pages under omitted subtree prefixes', async () => {
+    const host = 'cov-omitted.local';
+    // Root llms.txt links to section indexes (depth 0)
+    const rootLlmsTxt = [
+      '# Docs\n',
+      `- [Chains](http://${host}/docs/chains/llms.txt)`,
+      `- [Intro](http://${host}/docs/intro)`,
+    ].join('\n');
+
+    // chains/llms.txt links to sub-section indexes (depth 1, omitted) + pages
+    const chainsLlmsTxt = [
+      '# Chains\n',
+      `- [Ethereum](http://${host}/docs/chains/ethereum/llms.txt)`,
+      `- [Solana](http://${host}/docs/chains/solana/llms.txt)`,
+      `- [Overview](http://${host}/docs/chains/overview)`,
+    ].join('\n');
+
+    // Sitemap has pages under the omitted subtrees
+    const sitemapPages = [
+      `http://${host}/docs/intro`,
+      `http://${host}/docs/chains/overview`,
+      `http://${host}/docs/chains/ethereum/method-a`,
+      `http://${host}/docs/chains/ethereum/method-b`,
+      `http://${host}/docs/chains/solana/method-a`,
+    ];
+
+    const baseUrl = `http://${host}/docs`;
+    const ctx = createContext(baseUrl, { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: `http://${host}/llms.txt`, content: rootLlmsTxt, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    server.use(
+      // Depth-0 aggregate fetch: chains/llms.txt
+      http.get(
+        `http://${host}/docs/chains/llms.txt`,
+        () =>
+          new HttpResponse(chainsLlmsTxt, {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    // Pages directly verified: /docs/intro, /docs/chains/overview = 2
+    // Omitted subtrees: /docs/chains/ethereum (2 pages), /docs/chains/solana (1 page) = 3 excluded
+    // Coverage: 2/2 = 100%
+    expect(result.status).toBe('pass');
+    expect(result.details?.sitemapDocPages).toBe(2);
+    expect(result.details?.omittedSubtrees).toBe(2);
+    expect(result.details?.omittedSubtreePages).toBe(3);
+    expect(result.details?.coverageRate).toBe(100);
+    expect(result.message).toContain('nested indexes omitted');
+  });
+
+  test('omitted subtrees without matching sitemap pages do not affect results', async () => {
+    const host = 'cov-omitted-empty.local';
+    const rootLlmsTxt = [
+      '# Docs\n',
+      `- [Section](http://${host}/docs/section/llms.txt)`,
+      `- [Guide](http://${host}/docs/guide)`,
+    ].join('\n');
+
+    const sectionLlmsTxt = [
+      '# Section\n',
+      `- [SubSection](http://${host}/docs/section/sub/llms.txt)`,
+      `- [Page](http://${host}/docs/section/page)`,
+    ].join('\n');
+
+    const sitemapPages = [`http://${host}/docs/guide`, `http://${host}/docs/section/page`];
+
+    const baseUrl = `http://${host}/docs`;
+    const ctx = createContext(baseUrl, { requestDelay: 0 });
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: {
+        discoveredFiles: [
+          { url: `http://${host}/llms.txt`, content: rootLlmsTxt, status: 200, redirected: false },
+        ],
+      },
+    });
+
+    server.use(
+      http.get(
+        `http://${host}/docs/section/llms.txt`,
+        () =>
+          new HttpResponse(sectionLlmsTxt, {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.coverageRate).toBe(100);
+    // Omitted subtree /docs/section/sub has no matching sitemap pages
+    expect(result.details?.omittedSubtreePages ?? 0).toBe(0);
+  });
+});
+
+describe('compileExclusionMatcher', () => {
+  test('matches ** across segments', () => {
+    const matcher = compileExclusionMatcher(['/docs/reference/**']);
+    expect(matcher('/docs/reference/v1/endpoint')).toBe(true);
+    expect(matcher('/docs/reference')).toBe(true);
+    expect(matcher('/docs/guide')).toBe(false);
+  });
+
+  test('matches * within a segment', () => {
+    const matcher = compileExclusionMatcher(['/docs/v*/api']);
+    expect(matcher('/docs/v1/api')).toBe(true);
+    expect(matcher('/docs/v2/api')).toBe(true);
+    expect(matcher('/docs/v1/guide')).toBe(false);
+  });
+
+  test('multiple patterns', () => {
+    const matcher = compileExclusionMatcher(['/docs/changelog/**', '/docs/blog/**']);
+    expect(matcher('/docs/changelog/v1')).toBe(true);
+    expect(matcher('/docs/blog/post-1')).toBe(true);
+    expect(matcher('/docs/guide')).toBe(false);
+  });
+
+  test('empty patterns never match', () => {
+    const matcher = compileExclusionMatcher([]);
+    expect(matcher('/docs/anything')).toBe(false);
+  });
+});
+
+describe('extractOmittedPrefixes', () => {
+  test('extracts directory from .txt URLs', () => {
+    const prefixes = extractOmittedPrefixes([
+      'http://example.com/docs/chains/ethereum/llms.txt',
+      'http://example.com/docs/chains/solana/llms.txt',
+    ]);
+    expect(prefixes).toEqual(['/docs/chains/ethereum', '/docs/chains/solana']);
+  });
+
+  test('returns empty for empty input', () => {
+    expect(extractOmittedPrefixes([])).toEqual([]);
   });
 });
