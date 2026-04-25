@@ -91,7 +91,7 @@ const PROPORTION_EXTRACTORS: Record<string, ProportionExtractor> = {
   'llms-txt-links-markdown': llmsTxtLinksMarkdownExtractor,
 
   // --- Percentage-based single-value checks ---
-  'llms-txt-freshness': llmsTxtFreshnessExtractor,
+  'llms-txt-coverage': llmsTxtCoverageExtractor,
 };
 
 // ---------------------------------------------------------------------------
@@ -450,7 +450,7 @@ function llmsTxtLinksMarkdownExtractor(result: CheckResult): ProportionResult | 
   };
 }
 
-function llmsTxtFreshnessExtractor(result: CheckResult): ProportionResult | undefined {
+function llmsTxtCoverageExtractor(result: CheckResult): ProportionResult | undefined {
   const d = result.details;
   if (!d) return undefined;
 

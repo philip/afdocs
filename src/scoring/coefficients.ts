@@ -88,7 +88,7 @@ function getHtmlPathCoefficient(results: Map<string, CheckResult>): number {
 const INDEX_TRUNCATION_CHECKS = new Set([
   'llms-txt-links-resolve',
   'llms-txt-valid',
-  'llms-txt-freshness',
+  'llms-txt-coverage',
   'llms-txt-links-markdown',
 ]);
 

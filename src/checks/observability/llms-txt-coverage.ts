@@ -202,13 +202,13 @@ const COVERAGE_PASS = 0.95;
 const COVERAGE_WARN = 0.8;
 
 /**
- * Maximum sitemap URLs to collect for freshness comparison.
+ * Maximum sitemap URLs to collect for coverage comparison.
  * Higher than the default MAX_SITEMAP_URLS (500) used for page sampling,
- * because freshness needs the full sitemap to produce meaningful coverage
+ * because coverage needs the full sitemap to produce meaningful coverage
  * percentages. Enterprise docs sites (Stripe, MongoDB) can have thousands
  * of pages.
  */
-const MAX_FRESHNESS_SITEMAP_URLS = 50_000;
+const MAX_COVERAGE_SITEMAP_URLS = 50_000;
 
 /**
  * Try to fetch a docs-specific sitemap at {baseUrl}/sitemap.xml.
@@ -271,7 +271,7 @@ function scopeUrls(urls: string[], origin: string, baseUrlPath: string): string[
 }
 
 async function check(ctx: CheckContext): Promise<CheckResult> {
-  const id = 'llms-txt-freshness';
+  const id = 'llms-txt-coverage';
   const category = 'observability';
 
   // 1. Get llms.txt page URLs (with progressive disclosure walking)
@@ -291,7 +291,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const effectiveOrigin = ctx.effectiveOrigin ?? ctx.origin;
   const sitemapWarnings: string[] = [];
   let sitemapUrls = await getUrlsFromSitemap(ctx, sitemapWarnings, {
-    maxUrls: MAX_FRESHNESS_SITEMAP_URLS,
+    maxUrls: MAX_COVERAGE_SITEMAP_URLS,
     originOverride: effectiveOrigin,
     skipRefinement: true,
   });
@@ -317,7 +317,7 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       category,
       status: 'skip',
       message:
-        'No sitemap found; cannot assess llms.txt freshness without a sitemap as ground truth',
+        'No sitemap found; cannot assess llms.txt coverage without a sitemap as ground truth',
       details: { sitemapWarnings },
     };
   }
@@ -478,9 +478,9 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 }
 
 registerCheck({
-  id: 'llms-txt-freshness',
+  id: 'llms-txt-coverage',
   category: 'observability',
-  description: 'Whether llms.txt reflects the current state of the site',
+  description: 'How much of the site is represented in llms.txt',
   dependsOn: ['llms-txt-exists'],
   run: check,
 });

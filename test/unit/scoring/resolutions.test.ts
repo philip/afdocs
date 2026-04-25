@@ -82,7 +82,7 @@ describe('resolutions', () => {
       'markdown-code-fence-validity',
       'http-status-codes',
       'redirect-behavior',
-      'llms-txt-freshness',
+      'llms-txt-coverage',
       'markdown-content-parity',
       'cache-header-hygiene',
       'auth-gate-detection',

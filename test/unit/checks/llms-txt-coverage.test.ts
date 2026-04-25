@@ -7,7 +7,7 @@ import type { DiscoveredFile } from '../../../src/types.js';
 import {
   hasLocaleCodeAt,
   filterToUnprefixedLocale,
-} from '../../../src/checks/observability/llms-txt-freshness.js';
+} from '../../../src/checks/observability/llms-txt-coverage.js';
 
 const server = setupServer();
 
@@ -16,7 +16,7 @@ beforeAll(() => {
   return () => server.close();
 });
 
-const check = getCheck('llms-txt-freshness');
+const check = getCheck('llms-txt-coverage');
 
 /**
  * Build a minimal llms.txt content string from an array of URLs.
@@ -61,9 +61,9 @@ function makeCtx(host: string, llmsTxtUrls: string[], basePath = '') {
   return ctx;
 }
 
-describe('llms-txt-freshness', () => {
+describe('llms-txt-coverage', () => {
   test('passes when llms.txt fully covers sitemap', async () => {
-    const host = 'fresh-pass.local';
+    const host = 'cov-pass.local';
     const pages = [
       `http://${host}/docs/getting-started`,
       `http://${host}/docs/api-reference`,
@@ -94,7 +94,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('passes when llms.txt uses .md URLs matching sitemap HTML URLs', async () => {
-    const host = 'fresh-md.local';
+    const host = 'cov-md.local';
     const llmsUrls = [
       `http://${host}/docs/getting-started.md`,
       `http://${host}/docs/api-reference.md`,
@@ -127,7 +127,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('passes with trailing slash differences', async () => {
-    const host = 'fresh-slash.local';
+    const host = 'cov-slash.local';
     const llmsUrls = [`http://${host}/docs/guide`];
     const sitemapUrls = [`http://${host}/docs/guide/`];
 
@@ -154,7 +154,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('warns when coverage is between 80% and 95%', async () => {
-    const host = 'fresh-warn.local';
+    const host = 'cov-warn.local';
     // llms.txt has 9 of 10 pages (90% coverage)
     const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
     const llmsPages = allPages.slice(0, 9);
@@ -183,7 +183,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('fails when coverage is below 80%', async () => {
-    const host = 'fresh-fail.local';
+    const host = 'cov-fail.local';
     // llms.txt has 5 of 10 pages (50% coverage)
     const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
     const llmsPages = allPages.slice(0, 5);
@@ -212,7 +212,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('reports unmatched llms.txt links not in sitemap', async () => {
-    const host = 'fresh-unmatched.local';
+    const host = 'cov-unmatched.local';
     const sitemapPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
     // llms.txt has all sitemap pages plus 3 extras not in sitemap
     const llmsPages = [
@@ -247,7 +247,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('unmatched links do not affect overall status', async () => {
-    const host = 'fresh-unmatched-pass.local';
+    const host = 'cov-unmatched-pass.local';
     // Coverage is fine (100%) but many unmatched llms.txt links
     const sitemapPages = Array.from({ length: 5 }, (_, i) => `http://${host}/docs/page-${i}`);
     const llmsPages = [
@@ -283,7 +283,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('skips when no sitemap is available', async () => {
-    const host = 'fresh-no-sitemap.local';
+    const host = 'cov-no-sitemap.local';
     const ctx = makeCtx(host, [`http://${host}/docs/page`], '/docs');
 
     server.use(
@@ -302,7 +302,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('skips when no page URLs in llms.txt', async () => {
-    const host = 'fresh-no-pages.local';
+    const host = 'cov-no-pages.local';
     const ctx = createContext(`http://${host}/docs`, { requestDelay: 0 });
     ctx.previousResults.set('llms-txt-exists', {
       id: 'llms-txt-exists',
@@ -327,7 +327,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('scopes sitemap URLs to baseUrl path prefix', async () => {
-    const host = 'fresh-scope.local';
+    const host = 'cov-scope.local';
     const docPages = [`http://${host}/docs/guide`, `http://${host}/docs/api`];
     const allSitemapPages = [
       ...docPages,
@@ -361,7 +361,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('excludes blog/changelog/pricing paths from sitemap comparison', async () => {
-    const host = 'fresh-exclude.local';
+    const host = 'cov-exclude.local';
     const docPages = [`http://${host}/guide`];
     const sitemapPages = [
       `http://${host}/guide`,
@@ -397,7 +397,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('handles index.md normalization', async () => {
-    const host = 'fresh-index.local';
+    const host = 'cov-index.local';
     const llmsUrls = [`http://${host}/docs/guide/index.md`];
     const sitemapUrls = [`http://${host}/docs/guide/`];
 
@@ -424,7 +424,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('skips when sitemap has no URLs under docs path prefix', async () => {
-    const host = 'fresh-no-scope.local';
+    const host = 'cov-no-scope.local';
     const ctx = makeCtx(host, [`http://${host}/docs/page`], '/docs');
     const sitemapPages = [`http://${host}/marketing/page1`, `http://${host}/marketing/page2`];
 
@@ -450,7 +450,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('does not count cross-origin llms.txt URLs as unmatched', async () => {
-    const host = 'fresh-cross.local';
+    const host = 'cov-cross.local';
     const sitemapPages = [`http://${host}/docs/page`];
     // llms.txt links to a page on a different host — should not be flagged
     const llmsPages = [`http://${host}/docs/page`, `http://other-host.local/docs/external`];
@@ -478,7 +478,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('falls back to docs-specific sitemap when main sitemap has no docs URLs', async () => {
-    const host = 'fresh-docs-sitemap.local';
+    const host = 'cov-docs-sitemap.local';
     const docPages = [`http://${host}/docs/guide`, `http://${host}/docs/api`];
     const marketingPages = [`http://${host}/about`, `http://${host}/pricing`];
 
@@ -517,7 +517,7 @@ describe('llms-txt-freshness', () => {
   });
 
   test('follows docs-specific sitemap index one level deep', async () => {
-    const host = 'fresh-docs-index.local';
+    const host = 'cov-docs-index.local';
     const docPages = [
       `http://${host}/docs/guide`,
       `http://${host}/docs/api`,
@@ -557,7 +557,7 @@ describe('llms-txt-freshness', () => {
     expect(result.status).toBe('pass');
     expect(result.details?.sitemapDocPages).toBe(3);
     // getUrlsFromSitemap now discovers the docs sitemap via subpath fallback,
-    // so the freshness check's own fetchDocsSitemap fallback doesn't fire.
+    // so the coverage check's own fetchDocsSitemap fallback doesn't fire.
     expect(result.details?.sitemapSource).toBe('robots.txt/sitemap.xml');
   });
 
@@ -599,7 +599,7 @@ describe('llms-txt-freshness', () => {
 
     const result = await check.run(ctx);
     expect(result.status).toBe('pass');
-    // Locale filtering now happens inside getUrlsFromSitemap, so the freshness
+    // Locale filtering now happens inside getUrlsFromSitemap, so the coverage
     // check receives only English URLs and its own locale detection is a no-op.
     expect(result.details?.sitemapDocPages).toBe(3);
   });

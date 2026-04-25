@@ -45,7 +45,7 @@ export const CHECK_WEIGHTS: Record<string, CheckWeight> = {
   'content-start-position': w('medium', 0.5),
   'tabbed-content-serialization': w('medium', 0.5),
   'markdown-code-fence-validity': w('medium'),
-  'llms-txt-freshness': w('medium', 0.75),
+  'llms-txt-coverage': w('medium', 0.75),
   'markdown-content-parity': w('medium', 0.75),
   'auth-alternative-access': w('medium', 0.5),
   'redirect-behavior': w('medium', 0.6),

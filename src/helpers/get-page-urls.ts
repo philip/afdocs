@@ -625,7 +625,7 @@ export interface SitemapOptions {
   maxUrls?: number;
   originOverride?: string;
   pathFilterBase?: string;
-  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. freshness coverage). */
+  /** Skip URL-level locale/version refinement. Use when the caller needs raw URLs (e.g. coverage check). */
   skipRefinement?: boolean;
 }
 

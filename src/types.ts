@@ -35,7 +35,7 @@ export interface CheckContext {
   /**
    * The actual origin where content lives, when the baseUrl origin redirects
    * cross-host. Set by llms-txt-exists when it detects a cross-host redirect.
-   * Checks that need ground-truth data (e.g. sitemap for freshness) should
+   * Checks that need ground-truth data (e.g. sitemap for coverage) should
    * use this over `origin`; checks that test agent experience should use `origin`.
    */
   effectiveOrigin?: string;

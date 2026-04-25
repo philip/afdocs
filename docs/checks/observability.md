@@ -2,15 +2,15 @@
 
 Whether agent-facing resources stay accurate over time. Getting `llms.txt` and markdown support working is the hard part; keeping them working is a different problem. These checks catch the silent failures: a stale index, drifting content between formats, and cache headers that delay updates.
 
-## llms-txt-freshness
+## llms-txt-coverage
 
 Whether your `llms.txt` reflects the current state of your documentation site.
 
-|                |                                                                          |
-| -------------- | ------------------------------------------------------------------------ |
-| **Weight**     | Medium (4)                                                               |
-| **Depends on** | `llms-txt-exists`                                                        |
-| **Spec**       | [llms-txt-freshness](https://agentdocsspec.com/spec/#llms-txt-freshness) |
+|                |                                                                        |
+| -------------- | ---------------------------------------------------------------------- |
+| **Weight**     | Medium (4)                                                             |
+| **Depends on** | `llms-txt-exists`                                                      |
+| **Spec**       | [llms-txt-coverage](https://agentdocsspec.com/spec/#llms-txt-coverage) |
 
 ### Why it matters
 

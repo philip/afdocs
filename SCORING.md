@@ -88,7 +88,7 @@ Whether agent-facing resources stay accurate over time.
 
 | Check                                                                              | Weight     | What it measures                                                                                           |
 | ---------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| [llms-txt-freshness](https://agentdocsspec.com/spec/#llms-txt-freshness)           | Medium (4) | Whether your llms.txt reflects your current site. A stale index sends agents to outdated or missing pages. |
+| [llms-txt-coverage](https://agentdocsspec.com/spec/#llms-txt-coverage)             | Medium (4) | Whether your llms.txt reflects your current site. A stale index sends agents to outdated or missing pages. |
 | [markdown-content-parity](https://agentdocsspec.com/spec/#markdown-content-parity) | Medium (4) | Whether markdown and HTML versions of pages contain the same content.                                      |
 | [cache-header-hygiene](https://agentdocsspec.com/spec/#cache-header-hygiene)       | Low (2)    | Whether cache lifetimes allow content updates to reach agents in a reasonable timeframe.                   |
 
@@ -128,7 +128,7 @@ Not all warnings represent the same degree of degradation. A warning on `llms-tx
 
 | Coefficient | Meaning                                  | Checks                                                                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-freshness`, `markdown-content-parity`                                                                                                                                                                     |
+| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-coverage`, `markdown-content-parity`                                                                                                                                                                      |
 | **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive`, `redirect-behavior`                                                                                                                                                                                                                                              |
 | **0.50**    | Genuine functional degradation           | `llms-txt-exists`, `llms-txt-size`, `rendering-strategy`, `markdown-url-support`, `page-size-markdown`, `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`, `cache-header-hygiene`, `auth-gate-detection`, `auth-alternative-access` |
 | **0.25**    | Actively steering agents to a worse path | `llms-txt-links-markdown` (markdown exists but llms.txt links to HTML; agents don't discover .md variants on their own)                                                                                                                                                                |
@@ -237,7 +237,7 @@ If pages are SPA shells, measuring HTML quality is meaningless. This coefficient
 
 ### Index truncation coefficient
 
-**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, `llms-txt-links-markdown`
+**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, `llms-txt-links-markdown`
 
 If your llms.txt is truncated, agents only see part of the index. Measuring the quality of the invisible portion doesn't reflect agent experience.
 

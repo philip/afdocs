@@ -272,7 +272,7 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
     },
   },
 
-  'llms-txt-freshness': {
+  'llms-txt-coverage': {
     warn: (d) => {
       const missing = (d.missingCount as number) ?? 0;
       return (

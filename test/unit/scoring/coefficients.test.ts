@@ -122,7 +122,7 @@ describe('coefficients', () => {
     const affectedChecks = [
       'llms-txt-links-resolve',
       'llms-txt-valid',
-      'llms-txt-freshness',
+      'llms-txt-coverage',
       'llms-txt-links-markdown',
     ];
 

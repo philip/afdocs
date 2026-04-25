@@ -43,7 +43,7 @@ If your `llms.txt` lives at a location not covered by these candidates, AFDocs w
 
 ### Canonical selection
 
-When more than one candidate returns a file (e.g. an apex `llms.txt` for the marketing site _and_ a `/docs/llms.txt` for the docs section), AFDocs picks one as **canonical**. The canonical file is the single source of truth for downstream checks: link sampling, size, validation, freshness, and link-resolution all operate on it alone. Other discovered files still appear in `details.discoveredFiles` for visibility, and `cache-header-hygiene` still verifies headers on every llms.txt found.
+When more than one candidate returns a file (e.g. an apex `llms.txt` for the marketing site _and_ a `/docs/llms.txt` for the docs section), AFDocs picks one as **canonical**. The canonical file is the single source of truth for downstream checks: link sampling, size, validation, coverage, and link-resolution all operate on it alone. Other discovered files still appear in `details.discoveredFiles` for visibility, and `cache-header-hygiene` still verifies headers on every llms.txt found.
 
 The selection rule is _most-specific-to-the-baseUrl wins_. AFDocs picks the file whose directory is the longest prefix of the URL you passed. For example:
 

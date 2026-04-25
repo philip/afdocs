@@ -1182,7 +1182,7 @@ describe('check pipeline: canonical llms.txt selection', () => {
 });
 
 describe('check pipeline: effectiveOrigin propagation', () => {
-  it('llms-txt-exists sets effectiveOrigin which llms-txt-freshness uses', async () => {
+  it('llms-txt-exists sets effectiveOrigin which llms-txt-coverage uses', async () => {
     // llms.txt redirects cross-host; sitemap lives at the redirected host
     const redirectedHost = 'pipe-effective-docs.local';
     const llmsContent = `# Docs\n## Links\n- [Guide](http://${redirectedHost}/docs/guide): Guide\n`;
@@ -1224,18 +1224,18 @@ describe('check pipeline: effectiveOrigin propagation', () => {
     );
 
     const report = await runChecks('http://pipe-effective.local', {
-      checkIds: ['llms-txt-exists', 'llms-txt-freshness'],
+      checkIds: ['llms-txt-exists', 'llms-txt-coverage'],
       requestDelay: 0,
     });
 
     const existsResult = report.results.find((r) => r.id === 'llms-txt-exists')!;
-    const freshnessResult = report.results.find((r) => r.id === 'llms-txt-freshness')!;
+    const coverageResult = report.results.find((r) => r.id === 'llms-txt-coverage')!;
 
     // Cross-host redirect produces 'warn' (agents may not follow it)
     expect(existsResult.status).toBe('warn');
-    // Freshness should not skip — it should use the effectiveOrigin to find the sitemap
+    // Coverage should not skip — it should use the effectiveOrigin to find the sitemap
     // at the redirected host and match URLs there
-    expect(freshnessResult.status).not.toBe('skip');
-    expect(freshnessResult.message).not.toContain('No sitemap found');
+    expect(coverageResult.status).not.toBe('skip');
+    expect(coverageResult.message).not.toContain('No sitemap found');
   });
 });
