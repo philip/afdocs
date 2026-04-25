@@ -11,6 +11,7 @@ export type {
   AgentDocsConfig,
   DiscoveredFile,
   SizeThresholds,
+  SamplingStrategy,
   CuratedPageEntry,
   PageConfigEntry,
 } from './types.js';
@@ -32,4 +33,5 @@ export type {
   Diagnostic,
   DiagnosticSeverity,
   Grade,
+  ScoreDisplayMode,
 } from './scoring/types.js';

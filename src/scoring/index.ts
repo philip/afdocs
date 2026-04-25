@@ -17,4 +17,5 @@ export type {
   Diagnostic,
   DiagnosticSeverity,
   Grade,
+  ScoreDisplayMode,
 } from './types.js';

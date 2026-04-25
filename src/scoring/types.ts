@@ -2,6 +2,8 @@ export type Grade = 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
 
 export type DiagnosticSeverity = 'critical' | 'warning' | 'info';
 
+export type ScoreDisplayMode = 'numeric' | 'notApplicable';
+
 export interface CheckScore {
   /** Base weight from the tier assignment. */
   baseWeight: number;
@@ -15,11 +17,13 @@ export interface CheckScore {
   earnedScore: number;
   /** effectiveWeight (the maximum this check could earn). */
   maxScore: number;
+  /** Whether this score is meaningful. 'notApplicable' when insufficient data. */
+  scoreDisplayMode: ScoreDisplayMode;
 }
 
 export interface CategoryScore {
-  score: number;
-  grade: Grade;
+  score: number | null;
+  grade: Grade | null;
 }
 
 export interface TagCheckBreakdown {

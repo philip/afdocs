@@ -48,6 +48,7 @@ function makeScoreResult(overrides?: Partial<ScoreResult>): ScoreResult {
         proportion: 1,
         earnedScore: 10,
         maxScore: 10,
+        scoreDisplayMode: 'numeric',
       },
       'llms-txt-valid': {
         baseWeight: 4,
@@ -56,6 +57,7 @@ function makeScoreResult(overrides?: Partial<ScoreResult>): ScoreResult {
         proportion: 0.75,
         earnedScore: 3,
         maxScore: 4,
+        scoreDisplayMode: 'numeric',
       },
       'markdown-url-support': {
         baseWeight: 7,
@@ -64,6 +66,7 @@ function makeScoreResult(overrides?: Partial<ScoreResult>): ScoreResult {
         proportion: 0,
         earnedScore: 0,
         maxScore: 7,
+        scoreDisplayMode: 'numeric',
       },
     },
     diagnostics: [],
@@ -411,5 +414,57 @@ describe('formatScorecard', () => {
   it('omits tag scores section when not present', () => {
     const output = formatScorecard(makeReport(), makeScoreResult());
     expect(output).not.toContain('Tag Scores:');
+  });
+
+  it('renders null category scores as N/A dash', () => {
+    const score = makeScoreResult({
+      categoryScores: {
+        'content-discoverability': { score: 80, grade: 'B' },
+        'markdown-availability': { score: null, grade: null },
+        'page-size': { score: null, grade: null },
+        'url-stability': { score: null, grade: null },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('Content Discoverability');
+    expect(output).toContain('80 / 100');
+    expect(output).toContain('(N/A)');
+    // Should not show a numeric score for null categories
+    expect(output).not.toContain('null / 100');
+  });
+
+  it('renders N/A scorecard end-to-end from single-page discovery report', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'No llms.txt found',
+        },
+        {
+          id: 'page-size-html',
+          category: 'page-size',
+          status: 'pass',
+          message: '1 page tested, all pass',
+        },
+        {
+          id: 'http-status-codes',
+          category: 'url-stability',
+          status: 'pass',
+          message: '1 page tested',
+        },
+      ],
+      summary: { total: 3, pass: 2, warn: 0, fail: 1, skip: 0, error: 0 },
+      testedPages: 1,
+      samplingStrategy: 'random',
+    });
+    // Let computeScore handle it (no pre-built scoreResult)
+    const output = formatScorecard(report);
+    // Page-level categories should show as N/A
+    expect(output).toContain('(N/A)');
+    // Should fire the single-page-sample diagnostic
+    expect(output).toContain('Interaction Diagnostics');
+    expect(output).toContain('Only one page was discovered');
   });
 });

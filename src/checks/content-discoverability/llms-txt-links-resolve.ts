@@ -152,6 +152,27 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
       ? ` (${crossBroken.length} external link${crossBroken.length === 1 ? '' : 's'} also failed; may be bot-detection or rate-limiting)`
       : '';
 
+  // Find the most common cross-origin domain for diagnostics
+  let dominantCrossOrigin: string | null = null;
+  if (crossOriginLinks.length > 0) {
+    const originCounts = new Map<string, number>();
+    for (const url of crossOriginLinks) {
+      try {
+        const o = new URL(url).origin;
+        originCounts.set(o, (originCounts.get(o) ?? 0) + 1);
+      } catch {
+        // skip unparseable
+      }
+    }
+    let maxCount = 0;
+    for (const [origin, count] of originCounts) {
+      if (count > maxCount) {
+        maxCount = count;
+        dominantCrossOrigin = origin;
+      }
+    }
+  }
+
   const details: Record<string, unknown> = {
     totalLinks,
     sameOrigin: {
@@ -171,6 +192,7 @@ async function checkLlmsTxtLinksResolve(ctx: CheckContext): Promise<CheckResult>
       broken: crossBroken.map((b) => ({ url: b.url, status: b.status, error: b.error })),
       fetchErrors: crossFetchErrors,
       rateLimited: crossRateLimited,
+      dominantOrigin: dominantCrossOrigin,
     },
     // Flat fields kept for backward compatibility
     testedLinks: sameResults.length + crossResults.length,

@@ -16,6 +16,7 @@ Each check earns a proportion of its weight based on its result:
 - **Warn**: Partial weight (see [warn coefficients](#warn-coefficients) below)
 - **Fail**: Zero
 - **Skip**: Excluded from both the numerator and denominator
+- **Not applicable**: Excluded (see [insufficient data](#insufficient-data) below)
 
 The score is rounded to the nearest integer and mapped to a [letter grade](/what-is-agent-score#letter-grades).
 
@@ -156,6 +157,20 @@ Some problems are severe enough that no amount of other passing checks should co
 | [No viable path](/interaction-diagnostics#no-viable-path-to-content) diagnostic fires | 39 (F) | Agents have no effective way to access content at all. |
 
 When multiple caps apply, the lowest one wins.
+
+The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check is marked as not applicable due to [insufficient data](#insufficient-data). If there isn't enough data to include the check in the score, there isn't enough data to cap the score based on it either.
+
+## Insufficient data
+
+When automatic page discovery finds only a single page (using `random` or `deterministic` sampling), page-level check scores are unreliable because they represent one page out of potentially thousands. In this case:
+
+- **Page-level checks** (those that test sampled pages like `page-size-html`, `rendering-strategy`, `http-status-codes`, etc.) are marked as "not applicable" and excluded from the score.
+- **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) are scored normally.
+- **Category scores** where all checks are not applicable display as a dash instead of a number.
+
+This typically happens when a site has no llms.txt or its llms.txt links point to a different origin (common with preview deployments). A [`single-page-sample` diagnostic](/interaction-diagnostics#single-page-sample) fires to explain the situation.
+
+This behavior does not apply when you explicitly choose pages with `--urls` or `--sampling curated`, or when you use `--sampling none`. If you intentionally test a single page, the score reflects that page.
 
 ## Cluster coefficients
 

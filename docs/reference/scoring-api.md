@@ -12,7 +12,9 @@ const score = computeScore(report);
 
 console.log(score.overall); // 72
 console.log(score.grade); // 'C'
-console.log(score.categoryScores); // { 'content-discoverability': { score: 80, grade: 'B' }, ... }
+console.log(score.categoryScores);
+// { 'content-discoverability': { score: 80, grade: 'B' }, ... }
+// Categories may have null score/grade when all checks lack sufficient data
 console.log(score.diagnostics); // [{ id: 'markdown-undiscoverable', severity: 'warning', ... }]
 console.log(score.resolutions); // { 'llms-txt-directive-html': 'Add a visually-hidden element...' }
 ```
@@ -33,16 +35,18 @@ This is the same function; the subpath is provided for consumers who want a narr
 
 `computeScore` returns a `ScoreResult` with these fields:
 
-| Field            | Type                            | Description                                                               |
-| ---------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| `overall`        | `number`                        | The overall score (0-100)                                                 |
-| `grade`          | `Grade`                         | Letter grade (`A+`, `A`, `B`, `C`, `D`, `F`)                              |
-| `categoryScores` | `Record<string, CategoryScore>` | Per-category score and grade                                              |
-| `checkScores`    | `Record<string, CheckScore>`    | Per-check scoring details (weight, coefficient, proportion, earned score) |
-| `diagnostics`    | `Diagnostic[]`                  | Interaction diagnostics that fired                                        |
-| `caps`           | `ScoreCap[]`                    | Score caps that were applied                                              |
-| `resolutions`    | `Record<string, string>`        | Fix suggestions keyed by check ID                                         |
-| `tagScores`      | `Record<string, TagScore>`      | Per-tag aggregate scores (present when curated pages have tags)           |
+| Field            | Type                            | Description                                                                                                                           |
+| ---------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `overall`        | `number`                        | The overall score (0-100)                                                                                                             |
+| `grade`          | `Grade`                         | Letter grade (`A+`, `A`, `B`, `C`, `D`, `F`)                                                                                          |
+| `categoryScores` | `Record<string, CategoryScore>` | Per-category score and grade. `score` and `grade` are `null` when all checks in the category are `notApplicable` (insufficient data). |
+| `checkScores`    | `Record<string, CheckScore>`    | Per-check scoring details (weight, coefficient, proportion, earned score, scoreDisplayMode)                                           |
+| `diagnostics`    | `Diagnostic[]`                  | Interaction diagnostics that fired                                                                                                    |
+| `cap`            | `ScoreCap`                      | Score cap that was applied (present only when a cap reduced the score)                                                                |
+| `resolutions`    | `Record<string, string>`        | Fix suggestions keyed by check ID                                                                                                     |
+| `tagScores`      | `Record<string, TagScore>`      | Per-tag aggregate scores (present when curated pages have tags)                                                                       |
+
+Each `CheckScore` includes a `scoreDisplayMode` field (`"numeric"` or `"notApplicable"`). When automatic page discovery finds only one page, page-level checks are marked `"notApplicable"` and excluded from overall and category score calculations. See [Insufficient data](/agent-score-calculation#insufficient-data) for details.
 
 ## TagScore
 
@@ -105,6 +109,7 @@ import type {
   Diagnostic,
   DiagnosticSeverity, // 'info' | 'warning' | 'critical'
   Grade, // 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'
+  ScoreDisplayMode, // 'numeric' | 'notApplicable'
 } from 'afdocs';
 ```
 

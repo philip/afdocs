@@ -193,12 +193,45 @@ same destination are deduplicated before scoring (e.g., if `/docs/llms.txt`
 ### Overall Score
 
 ```
-score = (sum of check_scores for non-skipped checks)
-      / (sum of weights for non-skipped checks)
+score = (sum of check_scores for non-skipped, non-N/A checks)
+      / (sum of weights for non-skipped, non-N/A checks)
       * 100
 ```
 
 Rounded to the nearest integer.
+
+### Score Display Mode (Insufficient Data)
+
+Each `CheckScore` has a `scoreDisplayMode` field:
+
+- `"numeric"` (default): normal scored result.
+- `"notApplicable"`: insufficient data to score meaningfully. The check ran
+  but its score is excluded from the overall and category calculations.
+
+The `notApplicable` mode triggers when all of:
+
+- `samplingStrategy` is `random` or `deterministic` (discovery-based).
+- `testedPages` equals 1.
+- The check is page-level (tests sampled pages, not site-level resources).
+
+Page-level checks: `llms-txt-directive-html`, `llms-txt-directive-md`,
+`markdown-url-support`, `content-negotiation`, `markdown-code-fence-validity`,
+`page-size-markdown`, `page-size-html`, `markdown-content-parity`,
+`content-start-position`, `tabbed-content-serialization`,
+`section-header-quality`, `http-status-codes`, `redirect-behavior`,
+`rendering-strategy`, `auth-gate-detection`, `cache-header-hygiene`.
+
+Site-level checks (always `numeric`): `llms-txt-exists`, `llms-txt-valid`,
+`llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`,
+`llms-txt-coverage`, `auth-alternative-access`.
+
+**Category scores**: When all scored checks in a category are `notApplicable`,
+the category score is `null` (rendered as a dash in the scorecard). Mixed
+categories (some N/A, some numeric) score based on numeric checks only.
+
+**ReportResult fields**: `testedPages` (number of pages tested by page-level
+checks) and `samplingStrategy` (the strategy used for this run) are added to
+`ReportResult` so the scoring layer can detect the insufficient-data condition.
 
 ### Critical Check Score Caps
 
@@ -213,6 +246,8 @@ or its **status** (for single-resource checks):
 For each critical check:
   if single-resource AND status == fail:
     apply cap (total failure)
+  if multi-page AND scoreDisplayMode == 'notApplicable':
+    skip (insufficient data to justify a cap)
   if multi-page AND proportion <= 0.25 (75%+ of pages fail):
     cap overall score at 39 (F)
   if multi-page AND proportion <= 0.50 (50%+ of pages fail):
@@ -515,6 +550,54 @@ in dependency order: `markdown-undiscoverable` and
 - **Resolution**: Either reduce HTML page sizes (break large pages, reduce
   inline CSS/JS), or provide markdown versions and ensure agents can discover
   them via content negotiation or an llms.txt directive.
+
+#### `single-page-sample`
+
+- **Severity**: warning
+- **Triggers when**: `samplingStrategy` is `random` or `deterministic` AND
+  `testedPages` equals 1.
+- **Message**: Only one page was discovered and tested. Page-level category
+  scores are based on a single page and may not represent the site. These
+  categories are marked as N/A in the score.
+- **Resolution**: If your site has an llms.txt, ensure it contains working
+  links so the tool can discover more pages. If testing a preview deployment,
+  use --canonical-origin to rewrite cross-origin llms.txt links. You can also
+  provide specific pages with --urls.
+
+#### `cross-origin-llms-txt`
+
+- **Severity**: warning
+- **Triggers when**: `llms-txt-links-resolve` ran AND its details show
+  `sameOrigin.total === 0` AND `crossOrigin.total > 0`.
+- **Message**: All {n} links in your llms.txt point to {dominant_origin}, not
+  the origin being tested. This typically happens when testing a preview or
+  staging deployment whose llms.txt still references the production domain.
+  Page discovery falls back to a single page.
+- **Resolution**: Use --canonical-origin <production-origin> to rewrite
+  cross-origin links during testing.
+
+#### `gzipped-sitemap-skipped`
+
+- **Severity**: info
+- **Triggers when**: Any check's `details.discoveryWarnings` array contains
+  a string matching "gzipped sitemap".
+- **Message**: A gzipped sitemap was skipped during URL discovery. If this
+  is the only sitemap source, it may have reduced the number of pages
+  discovered for testing.
+- **Resolution**: Provide an uncompressed sitemap.xml alongside the gzipped
+  version, or supply specific pages via --urls for targeted testing.
+
+#### `rate-limiting-severe`
+
+- **Severity**: warning
+- **Triggers when**: Across all checks that report `details.rateLimited`,
+  the total rate-limited count exceeds 20% of the total tested count
+  (derived from `details.testedLinks` or `details.pageResults.length`).
+- **Message**: {pct}% of tested URLs returned HTTP 429 (rate limited). Check
+  results may be unreliable because rate-limited requests are not retried
+  indefinitely.
+- **Resolution**: Increase --request-delay to slow down requests, or contact
+  the site operator to allowlist your IP or user-agent for testing.
 
 ---
 
