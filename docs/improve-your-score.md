@@ -110,7 +110,7 @@ These are worth addressing but won't move the score as dramatically:
 
 - **llms.txt directive in markdown** (`llms-txt-directive-md`): Add a blockquote near the top of each markdown page pointing to your llms.txt.
 - **Content negotiation** (`content-negotiation`): Return markdown when agents send `Accept: text/markdown`. Requires server-side support.
-- **Content start position** (`content-start-position`): Reduce boilerplate (inline CSS/JS, navigation markup) before the main content. Move styles and scripts to external files.
+- **Content start position** (`content-start-position`): Reduce navigation, breadcrumb, and sidebar markup that precedes the main content area.
 - **Tabbed content** (`tabbed-content-serialization`): If tabbed UI components create oversized output, consider restructuring into separate pages or using query params to retrieve only specific tab versions.
 - **Code fence validity** (`markdown-code-fence-validity`): Fix unclosed code fences in your markdown sources.
 - **Redirect behavior** (`redirect-behavior`): Replace JavaScript and cross-host redirects with standard HTTP redirects.

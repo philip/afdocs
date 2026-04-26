@@ -178,7 +178,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${warnCount} of ${tested} pages convert to 50K-100K characters of ` +
-        'markdown. These may be truncated on some agent platforms.'
+        'markdown. Review pages for reducible boilerplate (navigation, ' +
+        'serialized tabbed content). Consider providing markdown versions ' +
+        'as a smaller alternative path for agents.'
       );
     },
     fail: (d) => {
@@ -186,8 +188,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${failCount} of ${tested} pages convert to over 100K characters of ` +
-        'markdown. Reduce inline CSS/JS, break large pages, or provide ' +
-        'markdown versions as a smaller alternative.'
+        'markdown. Break large pages into smaller units, reduce navigation ' +
+        'boilerplate, or provide markdown versions that bypass the HTML ' +
+        'conversion overhead.'
       );
     },
   },
@@ -198,9 +201,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${warnCount} of ${tested} pages have documentation content ` +
-        'starting 10-50% into the converted output. Inline CSS or ' +
-        "boilerplate consumes part of the agent's truncation budget " +
-        'before content begins.'
+        'starting 10-50% into the converted output. Reduce navigation, ' +
+        'breadcrumb, and sidebar markup that precedes the content area.'
       );
     },
     fail: (d) => {
@@ -209,7 +211,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `${failCount} of ${tested} pages have content starting past 50% of ` +
         'the converted output. Agents may never see the documentation ' +
-        'content. Move or remove inline CSS/JS that precedes the content area.'
+        'content. Reduce navigation, breadcrumb, and sidebar markup that ' +
+        'precedes the content area.'
       );
     },
   },
@@ -293,7 +296,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `Your llms.txt covers ${coverage}% of your site's pages ` +
         `(${warnThreshold}-${passThreshold}% is warn). ${missing} live ` +
-        'pages are not represented in the index.'
+        'pages are not represented in the index. Review missing pages ' +
+        'and add them, or adjust --coverage-pass-threshold/' +
+        '--coverage-warn-threshold if they are intentionally excluded.'
       );
     },
     fail: (d) => {
@@ -303,8 +308,10 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `Your llms.txt covers ${coverage}% of your site's pages ` +
         `(below ${warnThreshold}% threshold). ` +
-        `${missing} live pages are missing from the index. Regenerate ` +
-        'llms.txt from your sitemap or build pipeline.'
+        `${missing} live pages are missing from the index. If ` +
+        'unintentional, regenerate llms.txt from your sitemap or build ' +
+        'pipeline. If intentional, lower the threshold or set it to 0 to ' +
+        'make the check informational.'
       );
     },
   },
@@ -339,7 +346,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const warnCount = (d.warnBucket as number) ?? 0;
       return (
         `${warnCount} endpoints have moderate cache lifetimes (1-24 hours). ` +
-        'Updates to llms.txt or markdown content may take hours to propagate.'
+        'Updates to llms.txt or markdown content may take hours to ' +
+        'propagate. Consider reducing cache lifetimes for these resources.'
       );
     },
     fail: (d) => {
@@ -361,7 +369,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
     fail: () =>
       'All or most documentation pages require authentication. Agents ' +
       'cannot access your documentation and will rely on potentially ' +
-      'outdated training data or secondary sources.',
+      'outdated training data or secondary sources. Consider providing ' +
+      'alternative access paths (see auth-alternative-access check).',
   },
 
   'auth-alternative-access': {

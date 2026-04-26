@@ -23,7 +23,7 @@ The [Agent-Friendly Documentation Spec](https://agentdocsspec.com) is the founda
 
 The spec is maintained at [github.com/agent-ecosystem/agent-docs-spec](https://github.com/agent-ecosystem/agent-docs-spec) and is open for contributions.
 
-AFDocs implements spec v0.3.0 (2026-03-31).
+AFDocs implements spec v0.5.0 (2026-04-25).
 
 ## Status
 

@@ -68,9 +68,9 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 **Triggers when** HTML pages exceed agent truncation limits and there's no discoverable markdown path that could offer smaller representations.
 
-**What it means**: Agents will silently receive truncated content on oversized pages, with no alternative path to the full content. This is particularly common on sites that inline large amounts of CSS and JavaScript.
+**What it means**: Agents will silently receive truncated content on oversized pages, with no alternative path to the full content.
 
-**What to do**: Either reduce HTML page sizes (break large pages into smaller ones, move inline CSS/JS to external files) or provide markdown versions and make them discoverable via content negotiation or llms.txt links. See [Page Size checks](/checks/page-size) for the specific thresholds.
+**What to do**: Either reduce HTML page sizes (break large pages into smaller ones, reduce navigation boilerplate) or provide markdown versions and make them discoverable via content negotiation or llms.txt links. See [Page Size checks](/checks/page-size) for the specific thresholds.
 
 **Score impact**: No direct score cap, but the combination of failing page-size checks with no markdown alternative typically results in low category scores for both Page Size and Markdown Availability.
 

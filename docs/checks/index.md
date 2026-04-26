@@ -6,7 +6,7 @@ AFDocs runs 23 checks across 7 categories. Each check implements a section of th
 
 | Category                                                   | Checks | What it covers                                                       |
 | ---------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
-| [Content Discoverability](/checks/content-discoverability) | 6      | Whether agents can find and navigate your documentation via llms.txt |
+| [Content Discoverability](/checks/content-discoverability) | 7      | Whether agents can find and navigate your documentation via llms.txt |
 | [Markdown Availability](/checks/markdown-availability)     | 2      | Whether agents can get documentation as markdown instead of HTML     |
 | [Page Size and Truncation Risk](/checks/page-size)         | 4      | Whether agents can process your pages without losing content         |
 | [Content Structure](/checks/content-structure)             | 3      | Whether page content is structured in ways agents can consume        |
