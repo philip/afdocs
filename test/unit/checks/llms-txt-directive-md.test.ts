@@ -152,7 +152,7 @@ describe('llms-txt-directive-md', () => {
       http.get(
         'http://test.local/docs/page1.md',
         () =>
-          new HttpResponse(`# Docs\n\n${padding}> See llms.txt for the index.\n`, {
+          new HttpResponse(`# Docs\n\n${padding}> See /llms.txt for the index.\n`, {
             status: 200,
             headers: { 'Content-Type': 'text/markdown' },
           }),
@@ -313,7 +313,7 @@ describe('llms-txt-directive-md', () => {
       http.get(
         'http://test.local/docs/page1.md',
         () =>
-          new HttpResponse(`# Docs\n\n${before}See llms.txt for index.\n\n${after}`, {
+          new HttpResponse(`# Docs\n\n${before}See /llms.txt for index.\n\n${after}`, {
             status: 200,
             headers: { 'Content-Type': 'text/markdown' },
           }),
@@ -324,6 +324,23 @@ describe('llms-txt-directive-md', () => {
     expect(result.status).toBe('pass');
     expect(result.message).not.toContain('near the top');
     expect(result.message).not.toContain('buried');
+  });
+
+  it('ignores bare "llms.txt" text without path context (documentation prose)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1.md',
+        () =>
+          new HttpResponse('# About llms.txt\n\nCreate an llms.txt file to help agents.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
   });
 
   it('handles curated .md pages', async () => {

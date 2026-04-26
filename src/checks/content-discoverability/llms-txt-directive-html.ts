@@ -20,10 +20,12 @@ const LINK_PATTERN =
   /<a\s[^>]*href\s*=\s*["']([^"']*\/llms\.txt(?:[?#][^"']*)?)["'][^>]*>[\s\S]*?<\/a>/gi;
 
 /**
- * Plain text mentions of "llms.txt" in body content (after nav/script/style
- * are stripped). Catches visually-hidden directives and text-only directives.
+ * Path-like references to an llms.txt file in body content (after
+ * nav/script/style are stripped). Requires a leading slash to distinguish
+ * actual directives (e.g. "See /llms.txt") from documentation prose that
+ * merely discusses the llms.txt concept (e.g. "Create an llms.txt file").
  */
-const TEXT_PATTERN = /llms\.txt/gi;
+const TEXT_PATTERN = /\/llms\.txt/gi;
 
 const TOP_THRESHOLD = 0.1;
 const DEEP_THRESHOLD = 0.5;

@@ -356,13 +356,13 @@ describe('llms-txt-directive-html', () => {
     expect(result.message).not.toContain('buried');
   });
 
-  it('detects text mention of llms.txt in content area (outside nav)', async () => {
+  it('detects text mention of /llms.txt path in content area (outside nav)', async () => {
     server.use(
       http.get(
         'http://test.local/docs/page1',
         () =>
           new HttpResponse(
-            '<html><body><p>See our llms.txt for a full documentation index.</p><h1>Docs</h1><p>Content...</p></body></html>',
+            '<html><body><p>See /llms.txt for a full documentation index.</p><h1>Docs</h1><p>Content...</p></body></html>',
             { status: 200, headers: { 'Content-Type': 'text/html' } },
           ),
       ),
@@ -371,5 +371,22 @@ describe('llms-txt-directive-html', () => {
     const result = await check.run(makeCtx(llms('/docs/page1')));
     expect(result.status).toBe('pass');
     expect(result.details?.foundCount).toBe(1);
+  });
+
+  it('ignores bare "llms.txt" text without path context (documentation prose)', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><p>Create an llms.txt file to help agents discover your docs.</p><h1>Docs</h1><p>Content...</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
   });
 });

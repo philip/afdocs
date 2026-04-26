@@ -15,7 +15,11 @@ interface DirectiveResult {
   error?: string;
 }
 
-const DIRECTIVE_PATTERN = /llms\.txt/gi;
+/**
+ * Path-like references to an llms.txt file. Requires a leading slash to
+ * distinguish actual directives from documentation prose about the concept.
+ */
+const DIRECTIVE_PATTERN = /\/llms\.txt/gi;
 
 const TOP_THRESHOLD = 0.1;
 const DEEP_THRESHOLD = 0.5;
