@@ -2,6 +2,7 @@ import type { CheckContext, CheckResult, RunnerOptions, ReportResult } from './t
 import { DEFAULT_OPTIONS, SPEC_BASE_URL } from './constants.js';
 import { createHttpClient } from './http.js';
 import { getChecksSorted } from './checks/registry.js';
+import { validateRunnerOptions } from './validation.js';
 
 /**
  * Normalize dependsOn to the internal format: array of OR-groups.
@@ -41,6 +42,20 @@ export function normalizeUrl(url: string): string {
 }
 
 export function createContext(baseUrl: string, options?: Partial<RunnerOptions>): CheckContext {
+  if (options) {
+    if (options.canonicalOrigin) {
+      options = { ...options, canonicalOrigin: normalizeUrl(options.canonicalOrigin) };
+    }
+    if (options.llmsTxtUrl) {
+      options = { ...options, llmsTxtUrl: normalizeUrl(options.llmsTxtUrl) };
+    }
+    const validation = validateRunnerOptions(options);
+    if (!validation.valid) {
+      const messages = validation.errors.map((e) => `${e.field}: ${e.message}`);
+      throw new Error(`Invalid options: ${messages.join('; ')}`);
+    }
+  }
+
   const merged = { ...DEFAULT_OPTIONS, ...options };
   baseUrl = normalizeUrl(baseUrl);
   const url = new URL(baseUrl);
@@ -154,6 +169,7 @@ export async function runChecks(
 
   const urlTags = ctx._sampledPages?.urlTags;
   const discoverySources = ctx._sampledPages?.sources;
+  const testedPages = ctx._sampledPages?.urls.length;
 
   return {
     url: baseUrl,
@@ -163,5 +179,7 @@ export async function runChecks(
     summary,
     ...(urlTags && { urlTags }),
     ...(discoverySources && { discoverySources }),
+    ...(testedPages !== undefined && { testedPages }),
+    samplingStrategy: ctx.options.samplingStrategy,
   };
 }

@@ -1,9 +1,9 @@
 # Scoring Implementation Reference: Agent-Friendly Docs Scorecard
 
 Scoring Version: 0.1.0
-Agent-Friendly Docs Spec Version: v0.3.0
+Agent-Friendly Docs Spec Version: v0.5.0
 Spec URL: https://agentdocsspec.com
-Date: 03/31/2026
+Date: 04/25/2026
 
 ## Goals
 
@@ -55,20 +55,21 @@ and the empirical evidence sections in each check definition.
 | `page-size-markdown`           | High     | 7      | Direct truncation risk on the best-case content path.                                                                                                 |
 | `page-size-html`               | High     | 7      | Affects the majority of agents, which receive HTML.                                                                                                   |
 | `http-status-codes`            | High     | 7      | Soft 404s actively mislead agents into extracting info from error pages.                                                                              |
-| `llms-txt-directive`           | High     | 7      | Discoverability multiplier. Amplifies value of llms.txt and markdown support.                                                                         |
+| `llms-txt-directive-html`      | High     | 7      | Discoverability multiplier for HTML path. Tells agents about llms.txt.                                                                                |
+| `llms-txt-directive-md`        | Medium   | 4      | Discoverability multiplier for markdown path. Tells agents about llms.txt.                                                                            |
 | `llms-txt-valid`               | Medium   | 4      | Structure helps parsing, but even non-standard llms.txt with links is useful.                                                                         |
 | `content-negotiation`          | Medium   | 4      | Only some agents send Accept: text/markdown. Valuable but not universal.                                                                              |
 | `content-start-position`       | Medium   | 4      | Boilerplate preamble on HTML path wastes truncation budget.                                                                                           |
 | `tabbed-content-serialization` | Medium   | 4      | Tabbed content can be catastrophic but only affects pages that use it.                                                                                |
 | `markdown-code-fence-validity` | Medium   | 4      | Unclosed fences corrupt all content after the break point.                                                                                            |
-| `llms-txt-freshness`           | Medium   | 4      | Stale index is a slow failure mode; broken links catch the acute version.                                                                             |
+| `llms-txt-coverage`            | Medium   | 4      | Stale index is a slow failure mode; broken links catch the acute version.                                                                             |
 | `markdown-content-parity`      | Medium   | 4      | Content drift between markdown and HTML leaves agents with outdated info.                                                                             |
 | `auth-alternative-access`      | Medium   | 4      | Partial mitigation for auth-gated sites.                                                                                                              |
 | `redirect-behavior`            | Medium   | 4      | Cross-host redirects are a known friction point for some agents.                                                                                      |
 | `section-header-quality`       | Low      | 2      | Refinement for tabbed content; only matters when tabs exist.                                                                                          |
 | `cache-header-hygiene`         | Low      | 2      | Aggressive caching rarely causes acute agent failures.                                                                                                |
 
-**Maximum raw score**: 3(10) + 8(7) + 9(4) + 2(2) = 30 + 56 + 36 + 4 = **126 points**
+**Maximum raw score**: 3(10) + 8(7) + 10(4) + 2(2) = 30 + 56 + 40 + 4 = **130 points**
 
 ---
 
@@ -108,10 +109,11 @@ Each check has a specific warn coefficient rather than a uniform default.
 | `llms-txt-valid`                                             | 0.75       | Non-standard structure, but links are parseable. Missing a blockquote doesn't prevent navigation.                                                                                            |
 | `content-negotiation`                                        | 0.75       | Agent gets the markdown content; wrong Content-Type may prevent optimizations but the content itself is correct.                                                                             |
 | `llms-txt-links-resolve`                                     | 0.75       | >90% of links work. A few broken links is a maintenance issue, not a structural one.                                                                                                         |
-| `llms-txt-freshness`                                         | 0.75       | 80-95% of pages covered. Most of the site is represented in the index.                                                                                                                       |
+| `llms-txt-coverage`                                          | 0.75       | 80-95% of pages covered. Most of the site is represented in the index.                                                                                                                       |
 | `markdown-content-parity`                                    | 0.75       | Minor formatting differences, not substantive content drift.                                                                                                                                 |
 | **0.60: Partial coverage or platform-dependent**             |            |                                                                                                                                                                                              |
-| `llms-txt-directive`                                         | 0.60       | Present on some pages but not others. Agents that land on covered pages benefit; others get no guidance.                                                                                     |
+| `llms-txt-directive-html`                                    | 0.60       | Present in HTML of some pages but not others. Agents that land on covered pages benefit; others get no guidance.                                                                             |
+| `llms-txt-directive-md`                                      | 0.60       | Present in markdown of some pages but not others.                                                                                                                                            |
 | `redirect-behavior`                                          | 0.60       | Cross-host HTTP redirects: some agents follow them, some don't. Platform-dependent outcome.                                                                                                  |
 | **0.25: Actively steering agents away from the better path** |            |                                                                                                                                                                                              |
 | `llms-txt-links-markdown`                                    | 0.25       | Markdown variants exist but llms.txt links to HTML. The one place you control agent navigation actively directs agents away from markdown. Agents don't independently discover .md variants. |
@@ -158,7 +160,8 @@ these fields from `details`:
 | `section-header-quality`       | `pageResults` array, count per-status                                     |
 | `http-status-codes`            | `pageResults` array, count per-status                                     |
 | `redirect-behavior`            | `pageResults` array, count per-status                                     |
-| `llms-txt-directive`           | `pageResults` array, count per-status                                     |
+| `llms-txt-directive-html`      | `pageResults` array, count per-status                                     |
+| `llms-txt-directive-md`        | `pageResults` array, count per-status                                     |
 | `cache-header-hygiene`         | `passBucket`, `warnBucket`, `failBucket`                                  |
 | `markdown-content-parity`      | `passBucket`, `warnBucket`, `failBucket`                                  |
 | `auth-gate-detection`          | `pageResults` array, count per-status                                     |
@@ -172,7 +175,7 @@ Single-resource checks (no proportional scoring needed):
 | `llms-txt-size`           | Per-file average (see note below)                             |
 | `llms-txt-links-resolve`  | Uses resolve rate directly from details (`resolveRate` field) |
 | `llms-txt-links-markdown` | Percentage-based status                                       |
-| `llms-txt-freshness`      | Coverage percentage                                           |
+| `llms-txt-coverage`       | Coverage percentage                                           |
 | `auth-alternative-access` | Binary: alternative path exists or doesn't                    |
 
 For `llms-txt-links-resolve`, the `resolveRate` field in details (a 0-1 float)
@@ -190,12 +193,45 @@ same destination are deduplicated before scoring (e.g., if `/docs/llms.txt`
 ### Overall Score
 
 ```
-score = (sum of check_scores for non-skipped checks)
-      / (sum of weights for non-skipped checks)
+score = (sum of check_scores for non-skipped, non-N/A checks)
+      / (sum of weights for non-skipped, non-N/A checks)
       * 100
 ```
 
 Rounded to the nearest integer.
+
+### Score Display Mode (Insufficient Data)
+
+Each `CheckScore` has a `scoreDisplayMode` field:
+
+- `"numeric"` (default): normal scored result.
+- `"notApplicable"`: insufficient data to score meaningfully. The check ran
+  but its score is excluded from the overall and category calculations.
+
+The `notApplicable` mode triggers when all of:
+
+- `samplingStrategy` is `random` or `deterministic` (discovery-based).
+- `testedPages` is less than `MIN_PAGES_FOR_SCORING` (default 5).
+- The check is page-level (tests sampled pages, not site-level resources).
+
+Page-level checks: `llms-txt-directive-html`, `llms-txt-directive-md`,
+`markdown-url-support`, `content-negotiation`, `markdown-code-fence-validity`,
+`page-size-markdown`, `page-size-html`, `markdown-content-parity`,
+`content-start-position`, `tabbed-content-serialization`,
+`section-header-quality`, `http-status-codes`, `redirect-behavior`,
+`rendering-strategy`, `auth-gate-detection`, `cache-header-hygiene`.
+
+Site-level checks (always `numeric`): `llms-txt-exists`, `llms-txt-valid`,
+`llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`,
+`llms-txt-coverage`, `auth-alternative-access`.
+
+**Category scores**: When all scored checks in a category are `notApplicable`,
+the category score is `null` (rendered as a dash in the scorecard). Mixed
+categories (some N/A, some numeric) score based on numeric checks only.
+
+**ReportResult fields**: `testedPages` (number of pages tested by page-level
+checks) and `samplingStrategy` (the strategy used for this run) are added to
+`ReportResult` so the scoring layer can detect the insufficient-data condition.
 
 ### Critical Check Score Caps
 
@@ -210,6 +246,8 @@ or its **status** (for single-resource checks):
 For each critical check:
   if single-resource AND status == fail:
     apply cap (total failure)
+  if multi-page AND scoreDisplayMode == 'notApplicable':
+    skip (insufficient data to justify a cap)
   if multi-page AND proportion <= 0.25 (75%+ of pages fail):
     cap overall score at 39 (F)
   if multi-page AND proportion <= 0.50 (50%+ of pages fail):
@@ -276,15 +314,16 @@ markdown delivers zero value to agents today.
 
 `markdown-url-support` is excluded from this coefficient because it measures
 whether the capability exists, not the quality of an established path. A site
-should get credit for serving markdown (and the `markdown-undiscoverable`
-diagnostic tells them to make it discoverable), but the downstream quality
+should get credit for serving markdown (and the `markdown-undiscoverable` or
+`markdown-partially-discoverable` diagnostic tells them to make it
+discoverable), but the downstream quality
 checks only matter if agents actually reach the markdown.
 
 ```
 discovery_coefficient:
   content-negotiation pass      -> 1.0  (mechanical; no agent decision involved)
-  llms-txt-directive pass       -> 0.8  (effective but agents sometimes ignore
-                                         the directive even when present)
+  llms-txt-directive-html pass  -> 0.8  (effective but agents sometimes ignore
+  OR llms-txt-directive-md pass          the directive even when present)
   llms-txt-links-markdown pass  -> 0.5  (requires finding llms.txt first,
                                          then following .md links from it)
   none of the above             -> 0.0  (agents won't find the markdown path)
@@ -317,7 +356,7 @@ of the HTML path as a whole).
 ### Index Truncation Coefficient
 
 **Applies to**: `llms-txt-links-resolve`, `llms-txt-valid`,
-`llms-txt-freshness`, `llms-txt-links-markdown`
+`llms-txt-coverage`, `llms-txt-links-markdown`
 
 If `llms-txt-size` fails, agents only see a fraction of the index. The quality
 of the invisible portion doesn't affect agent experience.
@@ -393,26 +432,43 @@ Each diagnostic has:
 - **Resolution**: What to do about it
 
 Some diagnostics reference the trigger state of other diagnostics (e.g.,
-`page-size-no-markdown-escape` references whether markdown is undiscoverable).
-The implementation must evaluate diagnostics in dependency order:
-`markdown-undiscoverable` first, then diagnostics that reference it.
+`page-size-no-markdown-escape` references whether markdown is undiscoverable
+or only partially discoverable). The implementation must evaluate diagnostics
+in dependency order: `markdown-undiscoverable` and
+`markdown-partially-discoverable` first, then diagnostics that reference them.
 
 ### Diagnostic Definitions
 
 #### `markdown-undiscoverable`
 
 - **Severity**: warning
-- **Triggers when**: `markdown-url-support` passes, AND all of
-  (`content-negotiation`, `llms-txt-directive`, `llms-txt-links-markdown`)
-  are not pass.
+- **Triggers when**: `markdown-url-support` passes, AND
+  `content-negotiation` does not pass, AND `llms-txt-directive-html` does
+  not pass.
 - **Message**: Your site serves markdown at .md URLs, but agents have no way
-  to discover this. Without content negotiation, an llms.txt directive on your
-  pages, or .md links in your llms.txt, most agents will default to the HTML
-  path. Your markdown support is not being utilized.
-- **Resolution**: Add a blockquote directive near the top of each docs page
-  pointing to your llms.txt, or implement content negotiation for
-  `Accept: text/markdown`. Either change makes your existing markdown support
-  discoverable.
+  to discover this. No agent-facing directive points to your llms.txt, and
+  the server does not support content negotiation. Most agents will default
+  to the HTML path and never benefit from your markdown support.
+- **Resolution**: Add a directive near the top of each docs page pointing to
+  your llms.txt, and implement content negotiation for `Accept: text/markdown`.
+  The directive is the primary discovery mechanism (it reaches all agents);
+  content negotiation provides a fast path for agents that request markdown
+  by default.
+
+#### `markdown-partially-discoverable`
+
+- **Severity**: warning
+- **Triggers when**: `markdown-url-support` passes, AND
+  `content-negotiation` passes, AND `llms-txt-directive-html` does not pass.
+- **Message**: Your site serves markdown and supports content negotiation,
+  but has no agent-facing directive on HTML pages pointing to llms.txt.
+  Agents that send Accept: text/markdown (Claude Code, Cursor, OpenCode) get
+  markdown automatically, but the majority of agents fetch HTML by default
+  and have no signal to try the markdown path.
+- **Resolution**: Add a directive near the top of each docs page pointing to
+  your llms.txt. If your site serves markdown, mention that in the directive
+  too. The directive reaches all agents, not just the ones that request
+  markdown by default.
 
 #### `truncated-index`
 
@@ -448,8 +504,8 @@ The implementation must evaluate diagnostics in dependency order:
 - **Triggers when**: (`llms-txt-exists` fails OR (`llms-txt-exists` passes
   AND `llms-txt-links-resolve` resolveRate < 10%)) AND
   (`rendering-strategy` fails OR `rendering-strategy` not run) AND
-  (`markdown-url-support` fails OR markdown is undiscoverable per
-  `markdown-undiscoverable` trigger).
+  (`markdown-url-support` fails OR `markdown-undiscoverable` triggered OR
+  `markdown-partially-discoverable` triggered).
 
   The expanded llms.txt condition recognizes that an llms.txt where <10% of
   links resolve is functionally equivalent to having no llms.txt: agents
@@ -485,7 +541,8 @@ The implementation must evaluate diagnostics in dependency order:
 
 - **Severity**: warning
 - **Triggers when**: `page-size-html` fails AND (`markdown-url-support` fails
-  OR markdown is undiscoverable).
+  OR `markdown-undiscoverable` triggered OR
+  `markdown-partially-discoverable` triggered).
 - **Message**: {n} pages exceed agent truncation limits on the HTML path, and
   there is no discoverable markdown path for agents to get smaller
   representations. Agents will silently receive truncated content on these
@@ -493,6 +550,54 @@ The implementation must evaluate diagnostics in dependency order:
 - **Resolution**: Either reduce HTML page sizes (break large pages, reduce
   inline CSS/JS), or provide markdown versions and ensure agents can discover
   them via content negotiation or an llms.txt directive.
+
+#### `single-page-sample`
+
+- **Severity**: warning
+- **Triggers when**: `samplingStrategy` is `random` or `deterministic` AND
+  `testedPages` is less than `MIN_PAGES_FOR_SCORING` (default 5).
+- **Message**: Only {n} page(s) discovered and tested (minimum 5 needed for
+  reliable scoring). Page-level category scores may not represent the site.
+  These categories are marked as N/A in the score.
+- **Resolution**: If your site has an llms.txt, ensure it contains working
+  links so the tool can discover more pages. If testing a preview deployment,
+  use --canonical-origin to rewrite cross-origin llms.txt links. You can also
+  provide specific pages with --urls.
+
+#### `cross-origin-llms-txt`
+
+- **Severity**: warning
+- **Triggers when**: `llms-txt-links-resolve` ran AND its details show
+  `sameOrigin.total === 0` AND `crossOrigin.total > 0`.
+- **Message**: All {n} links in your llms.txt point to {dominant_origin}, not
+  the origin being tested. This typically happens when testing a preview or
+  staging deployment whose llms.txt still references the production domain.
+  Page discovery falls back to a single page.
+- **Resolution**: Use --canonical-origin <production-origin> to rewrite
+  cross-origin links during testing.
+
+#### `gzipped-sitemap-skipped`
+
+- **Severity**: info
+- **Triggers when**: Any check's `details.discoveryWarnings` array contains
+  a string matching "gzipped sitemap".
+- **Message**: A gzipped sitemap was skipped during URL discovery. If this
+  is the only sitemap source, it may have reduced the number of pages
+  discovered for testing.
+- **Resolution**: Provide an uncompressed sitemap.xml alongside the gzipped
+  version, or supply specific pages via --urls for targeted testing.
+
+#### `rate-limiting-severe`
+
+- **Severity**: warning
+- **Triggers when**: Across all checks that report `details.rateLimited`,
+  the total rate-limited count exceeds 20% of the total tested count
+  (derived from `details.testedLinks` or `details.pageResults.length`).
+- **Message**: {pct}% of tested URLs returned HTTP 429 (rate limited). Check
+  results may be unreliable because rate-limited requests are not retried
+  indefinitely.
+- **Resolution**: Increase --request-delay to slow down requests, or contact
+  the site operator to allowlist your IP or user-agent for testing.
 
 ---
 
@@ -529,9 +634,9 @@ Agent-Friendly Docs Scorecard
   Interaction Diagnostics:
     [!] Markdown support is undiscoverable
         Your site serves markdown at .md URLs, but agents have no way to
-        discover this. Without content negotiation, an llms.txt directive
-        on your pages, or .md links in your llms.txt, most agents will
-        default to the HTML path.
+        discover this. No agent-facing directive points to your llms.txt,
+        and the server does not support content negotiation. Most agents
+        will default to the HTML path.
 
         Fix: Add a blockquote directive near the top of each docs page
         pointing to your llms.txt, or implement content negotiation for
@@ -553,8 +658,8 @@ Agent-Friendly Docs Scorecard
       PASS  llms-txt-links-resolve All links resolve
       FAIL  llms-txt-links-markdown Links point to HTML, not markdown
             Fix: Update links to use .md URL variants ...
-      FAIL  llms-txt-directive     No directive detected on any tested page
-            Fix: Add a blockquote near the top of each page pointing to ...
+      FAIL  llms-txt-directive-html No directive detected in HTML of any tested page
+            Fix: Add a visually-hidden element near the top of each page ...
 
     ...
 ```

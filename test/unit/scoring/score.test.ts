@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeScore, toGrade } from '../../../src/scoring/score.js';
-import type { CheckResult, ReportResult } from '../../../src/types.js';
+import type { CheckResult, ReportResult, SamplingStrategy } from '../../../src/types.js';
 
 function makeResult(
   id: string,
@@ -11,7 +11,10 @@ function makeResult(
   return { id, category, status, message: `${id}: ${status}`, details };
 }
 
-function makeReport(results: CheckResult[]): ReportResult {
+function makeReport(
+  results: CheckResult[],
+  overrides?: { testedPages?: number; samplingStrategy?: SamplingStrategy },
+): ReportResult {
   const summary = { total: results.length, pass: 0, warn: 0, fail: 0, skip: 0, error: 0 };
   for (const r of results) {
     summary[r.status]++;
@@ -22,6 +25,7 @@ function makeReport(results: CheckResult[]): ReportResult {
     specUrl: 'https://agentdocsspec.com/spec/',
     results,
     summary,
+    ...overrides,
   };
 }
 
@@ -49,7 +53,8 @@ describe('computeScore', () => {
       makeResult('llms-txt-size', 'content-discoverability', 'pass'),
       makeResult('llms-txt-links-resolve', 'content-discoverability', 'pass'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'pass'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'pass'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'pass'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'pass'),
       makeResult('markdown-url-support', 'markdown-availability', 'pass'),
       makeResult('content-negotiation', 'markdown-availability', 'pass'),
       makeResult('rendering-strategy', 'page-size', 'pass', {
@@ -65,7 +70,7 @@ describe('computeScore', () => {
       makeResult('markdown-code-fence-validity', 'content-structure', 'pass'),
       makeResult('http-status-codes', 'url-stability', 'pass'),
       makeResult('redirect-behavior', 'url-stability', 'pass'),
-      makeResult('llms-txt-freshness', 'observability', 'pass'),
+      makeResult('llms-txt-coverage', 'observability', 'pass'),
       makeResult('markdown-content-parity', 'observability', 'pass'),
       makeResult('cache-header-hygiene', 'observability', 'pass'),
       makeResult('auth-gate-detection', 'authentication', 'pass'),
@@ -228,7 +233,8 @@ describe('computeScore', () => {
     // is not discoverable
     const results: CheckResult[] = [
       makeResult('content-negotiation', 'markdown-availability', 'fail'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'fail'),
       makeResult('page-size-markdown', 'page-size', 'pass'),
     ];
@@ -279,7 +285,8 @@ describe('computeScore', () => {
     const results: CheckResult[] = [
       makeResult('markdown-url-support', 'markdown-availability', 'pass'),
       makeResult('content-negotiation', 'markdown-availability', 'fail'),
-      makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
       makeResult('llms-txt-links-markdown', 'content-discoverability', 'fail'),
     ];
     const score = computeScore(makeReport(results));
@@ -356,7 +363,8 @@ describe('computeScore', () => {
           markdownRate: 0,
           testedLinks: 20,
         }),
-        makeResult('llms-txt-directive', 'content-discoverability', 'fail'),
+        makeResult('llms-txt-directive-html', 'content-discoverability', 'fail'),
+        makeResult('llms-txt-directive-md', 'content-discoverability', 'fail'),
 
         // No markdown
         makeResult('markdown-url-support', 'markdown-availability', 'fail'),
@@ -385,7 +393,7 @@ describe('computeScore', () => {
         makeResult('redirect-behavior', 'url-stability', 'pass'),
 
         // Observability
-        makeResult('llms-txt-freshness', 'observability', 'pass'),
+        makeResult('llms-txt-coverage', 'observability', 'pass'),
         makeResult('cache-header-hygiene', 'observability', 'pass'),
 
         // No auth issues
@@ -405,7 +413,7 @@ describe('computeScore', () => {
 
       // Should have resolutions for failing checks
       expect(score.resolutions['llms-txt-links-markdown']).toBeDefined();
-      expect(score.resolutions['llms-txt-directive']).toBeDefined();
+      expect(score.resolutions['llms-txt-directive-html']).toBeDefined();
       expect(score.resolutions['markdown-url-support']).toBeDefined();
     });
   });
@@ -446,6 +454,133 @@ describe('computeScore', () => {
       ];
       const score = computeScore(makeReport(results));
       expect(score.tagScores).toBeUndefined();
+    });
+  });
+
+  describe('single-page scoring (scoreDisplayMode)', () => {
+    it('marks page-level checks as notApplicable when testedPages=1 and discovery-based', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
+        makeResult('page-size-html', 'page-size', 'pass'),
+        makeResult('rendering-strategy', 'page-size', 'pass', {
+          serverRendered: 1,
+          sparseContent: 0,
+          spaShells: 0,
+        }),
+      ];
+      const score = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      expect(score.checkScores['llms-txt-exists'].scoreDisplayMode).toBe('numeric');
+      expect(score.checkScores['page-size-html'].scoreDisplayMode).toBe('notApplicable');
+      expect(score.checkScores['rendering-strategy'].scoreDisplayMode).toBe('notApplicable');
+    });
+
+    it('does not mark checks as notApplicable with curated sampling', () => {
+      const results: CheckResult[] = [makeResult('page-size-html', 'page-size', 'pass')];
+      const score = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'curated' }),
+      );
+      expect(score.checkScores['page-size-html'].scoreDisplayMode).toBe('numeric');
+    });
+
+    it('does not mark checks as notApplicable when testedPages > 1', () => {
+      const results: CheckResult[] = [makeResult('page-size-html', 'page-size', 'pass')];
+      const score = computeScore(
+        makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
+      );
+      expect(score.checkScores['page-size-html'].scoreDisplayMode).toBe('numeric');
+    });
+
+    it('nulls category scores when all checks in category are notApplicable', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
+        makeResult('http-status-codes', 'url-stability', 'pass'),
+        makeResult('redirect-behavior', 'url-stability', 'pass'),
+      ];
+      const score = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      // url-stability has only page-level checks -> null
+      expect(score.categoryScores['url-stability'].score).toBeNull();
+      expect(score.categoryScores['url-stability'].grade).toBeNull();
+      // content-discoverability has site-level check -> numeric
+      expect(score.categoryScores['content-discoverability'].score).toBe(100);
+    });
+
+    it('computes mixed category scores from numeric checks only', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-coverage', 'observability', 'pass'),
+        makeResult('cache-header-hygiene', 'observability', 'pass'),
+      ];
+      const score = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      // observability: llms-txt-coverage is site-level (numeric), cache-header-hygiene is page-level (N/A)
+      // score computed from only llms-txt-coverage
+      expect(score.categoryScores['observability'].score).toBe(100);
+    });
+
+    it('excludes notApplicable checks from overall score', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
+        makeResult('page-size-html', 'page-size', 'fail', {
+          passBucket: 0,
+          warnBucket: 0,
+          failBucket: 1,
+        }),
+      ];
+      // With N/A: only llms-txt-exists counts (pass) -> 100
+      const scoreNA = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      // Without N/A: both count, page-size-html fails -> less than 100
+      const scoreNormal = computeScore(
+        makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
+      );
+      expect(scoreNA.overall).toBe(100);
+      expect(scoreNormal.overall).toBeLessThan(100);
+    });
+
+    it('fires single-page-sample diagnostic when N/A condition met', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-exists', 'content-discoverability', 'fail'),
+        makeResult('page-size-html', 'page-size', 'pass'),
+      ];
+      const score = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      expect(score.diagnostics.find((d) => d.id === 'single-page-sample')).toBeDefined();
+    });
+
+    it('all checks get numeric scoreDisplayMode by default (no sampling info)', () => {
+      const results: CheckResult[] = [makeResult('page-size-html', 'page-size', 'pass')];
+      const score = computeScore(makeReport(results));
+      expect(score.checkScores['page-size-html'].scoreDisplayMode).toBe('numeric');
+    });
+
+    it('does not apply rendering-strategy cap when check is notApplicable', () => {
+      const results: CheckResult[] = [
+        makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
+        makeResult('rendering-strategy', 'page-size', 'fail', {
+          serverRendered: 0,
+          sparseContent: 0,
+          spaShells: 1,
+        }),
+      ];
+      // With N/A: rendering-strategy is notApplicable, cap should NOT fire
+      const scoreNA = computeScore(
+        makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
+      );
+      expect(scoreNA.checkScores['rendering-strategy'].scoreDisplayMode).toBe('notApplicable');
+      expect(scoreNA.cap).toBeUndefined();
+
+      // Without N/A: same data, cap SHOULD fire
+      const scoreNormal = computeScore(
+        makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
+      );
+      expect(scoreNormal.cap).toBeDefined();
+      expect(scoreNormal.cap!.cap).toBe(39);
     });
   });
 });

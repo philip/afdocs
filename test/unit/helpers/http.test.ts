@@ -229,4 +229,82 @@ describe('createHttpClient', () => {
       expect(text).toBe(original);
     });
   });
+
+  describe('concurrency and rate limiting', () => {
+    it('enforces requestDelay between requests', async () => {
+      const timestamps: number[] = [];
+      globalThis.fetch = vi.fn(async () => {
+        timestamps.push(Date.now());
+        return makeResponse(200);
+      });
+
+      const client = createHttpClient({
+        requestDelay: 200,
+        requestTimeout: 5000,
+        maxConcurrency: 10,
+      });
+
+      const p1 = client.fetch('http://example.com/a');
+      await vi.advanceTimersByTimeAsync(0);
+      await p1;
+
+      const p2 = client.fetch('http://example.com/b');
+      await vi.advanceTimersByTimeAsync(250);
+      await p2;
+
+      expect(timestamps).toHaveLength(2);
+      expect(timestamps[1] - timestamps[0]).toBeGreaterThanOrEqual(200);
+    });
+
+    it('waits for a concurrency slot when at max', async () => {
+      let resolveFetch: (() => void) | null = null;
+      let callCount = 0;
+
+      globalThis.fetch = vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            callCount++;
+            if (callCount === 1) {
+              resolveFetch = () =>
+                resolve({
+                  ok: true,
+                  status: 200,
+                  headers: new Headers(),
+                  text: async () => '',
+                } as unknown as Response);
+            } else {
+              resolve({
+                ok: true,
+                status: 200,
+                headers: new Headers(),
+                text: async () => '',
+              } as unknown as Response);
+            }
+          }),
+      );
+
+      const client = createHttpClient({
+        requestDelay: 0,
+        requestTimeout: 5000,
+        maxConcurrency: 1,
+      });
+
+      const p1 = client.fetch('http://example.com/a');
+      await vi.advanceTimersByTimeAsync(0);
+
+      const p2 = client.fetch('http://example.com/b');
+      // Second request should be waiting for the slot
+      await vi.advanceTimersByTimeAsync(50);
+      expect(callCount).toBe(1);
+
+      // Release the first request
+      resolveFetch!();
+      await p1;
+
+      // Now the second request can proceed
+      await vi.advanceTimersByTimeAsync(100);
+      await p2;
+      expect(callCount).toBe(2);
+    });
+  });
 });

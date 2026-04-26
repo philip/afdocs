@@ -1,6 +1,6 @@
 # Score Calculation
 
-The Agent Score is a weighted average of 22 check results, adjusted for interaction effects between checks. This page covers the mechanics: how checks are weighted, how multi-page results are scored proportionally, and how the system handles cases where checks influence each other.
+The Agent Score is a weighted average of 23 check results, adjusted for interaction effects between checks. This page covers the mechanics: how checks are weighted, how multi-page results are scored proportionally, and how the system handles cases where checks influence each other.
 
 Each check corresponds to a section of the [Agent-Friendly Documentation Spec](https://agentdocsspec.com), which documents what the check measures and the observed agent behaviors that motivated it. For what each check measures, see the [Checks Reference](/checks/).
 
@@ -16,6 +16,7 @@ Each check earns a proportion of its weight based on its result:
 - **Warn**: Partial weight (see [warn coefficients](#warn-coefficients) below)
 - **Fail**: Zero
 - **Skip**: Excluded from both the numerator and denominator
+- **Not applicable**: Excluded (see [insufficient data](#insufficient-data) below)
 
 The score is rounded to the nearest integer and mapped to a [letter grade](/what-is-agent-score#letter-grades).
 
@@ -37,7 +38,8 @@ Every check is assigned a weight tier based on its observed impact on agent work
 | `llms-txt-size`           | High (7)      |
 | `llms-txt-links-resolve`  | High (7)      |
 | `llms-txt-links-markdown` | High (7)      |
-| `llms-txt-directive`      | High (7)      |
+| `llms-txt-directive-html` | High (7)      |
+| `llms-txt-directive-md`   | Medium (4)    |
 
 ### Markdown Availability
 
@@ -74,7 +76,7 @@ Every check is assigned a weight tier based on its observed impact on agent work
 
 | Check                     | Weight     |
 | ------------------------- | ---------- |
-| `llms-txt-freshness`      | Medium (4) |
+| `llms-txt-coverage`       | Medium (4) |
 | `markdown-content-parity` | Medium (4) |
 | `cache-header-hygiene`    | Low (2)    |
 
@@ -93,24 +95,25 @@ Checks that test multiple pages use proportional scoring. If `page-size-html` te
 
 These checks sample pages from your site and score based on the pass rate across those pages:
 
-| Check                          | What's measured per page                                    |
-| ------------------------------ | ----------------------------------------------------------- |
-| `rendering-strategy`           | Whether the page is server-rendered or an SPA shell         |
-| `page-size-html`               | Whether the HTML-to-text conversion fits within size limits |
-| `page-size-markdown`           | Whether the markdown version fits within size limits        |
-| `content-start-position`       | How far into the response actual content begins             |
-| `content-negotiation`          | Whether the server returns markdown for this page           |
-| `markdown-url-support`         | Whether the `.md` URL variant returns markdown              |
-| `http-status-codes`            | Whether a fabricated bad URL returns a proper 404           |
-| `redirect-behavior`            | Whether redirects use standard HTTP methods                 |
-| `auth-gate-detection`          | Whether the page is publicly accessible                     |
-| `llms-txt-directive`           | Whether the page includes a directive pointing to llms.txt  |
-| `tabbed-content-serialization` | Whether tabbed content creates oversized output             |
-| `section-header-quality`       | Whether tab section headers include variant context         |
-| `markdown-code-fence-validity` | Whether code fences are properly closed                     |
-| `markdown-content-parity`      | Whether markdown and HTML versions match                    |
-| `cache-header-hygiene`         | Whether cache headers allow timely updates                  |
-| `auth-alternative-access`      | Whether auth-gated pages have alternative access paths      |
+| Check                          | What's measured per page                                            |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `rendering-strategy`           | Whether the page is server-rendered or an SPA shell                 |
+| `page-size-html`               | Whether the HTML-to-text conversion fits within size limits         |
+| `page-size-markdown`           | Whether the markdown version fits within size limits                |
+| `content-start-position`       | How far into the response actual content begins                     |
+| `content-negotiation`          | Whether the server returns markdown for this page                   |
+| `markdown-url-support`         | Whether the `.md` URL variant returns markdown                      |
+| `http-status-codes`            | Whether a fabricated bad URL returns a proper 404                   |
+| `redirect-behavior`            | Whether redirects use standard HTTP methods                         |
+| `auth-gate-detection`          | Whether the page is publicly accessible                             |
+| `llms-txt-directive-html`      | Whether the HTML page includes a directive pointing to llms.txt     |
+| `llms-txt-directive-md`        | Whether the markdown page includes a directive pointing to llms.txt |
+| `tabbed-content-serialization` | Whether tabbed content creates oversized output                     |
+| `section-header-quality`       | Whether tab section headers include variant context                 |
+| `markdown-code-fence-validity` | Whether code fences are properly closed                             |
+| `markdown-content-parity`      | Whether markdown and HTML versions match                            |
+| `cache-header-hygiene`         | Whether cache headers allow timely updates                          |
+| `auth-alternative-access`      | Whether auth-gated pages have alternative access paths              |
 
 ### Single-resource checks (all-or-nothing)
 
@@ -123,7 +126,7 @@ These checks test a single site-wide resource and produce one pass, warn, or fai
 | `llms-txt-size`           | Whether the llms.txt fits within agent context limits  |
 | `llms-txt-links-resolve`  | Whether links in the llms.txt return 200               |
 | `llms-txt-links-markdown` | Whether llms.txt links point to markdown content       |
-| `llms-txt-freshness`      | Whether the llms.txt reflects the current site state   |
+| `llms-txt-coverage`       | Whether the llms.txt reflects the current site state   |
 
 Note that the llms.txt link checks (`llms-txt-links-resolve`, `llms-txt-links-markdown`) do test multiple URLs, but they test the links _within_ the llms.txt file rather than sampling pages from the site. Their result is a single pass/warn/fail based on the overall resolution or markdown rate.
 
@@ -133,8 +136,8 @@ A warning is not a binary "half credit." Different warnings represent different 
 
 | Coefficient | Meaning                                  | Checks                                                                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-freshness`, `markdown-content-parity`                                                                                                                                                                     |
-| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive`, `redirect-behavior`                                                                                                                                                                                                                                              |
+| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-coverage`, `markdown-content-parity`                                                                                                                                                                      |
+| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive-html`, `llms-txt-directive-md`, `redirect-behavior`                                                                                                                                                                                                                |
 | **0.50**    | Genuine functional degradation           | `llms-txt-exists`, `llms-txt-size`, `rendering-strategy`, `markdown-url-support`, `page-size-markdown`, `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`, `cache-header-hygiene`, `auth-gate-detection`, `auth-alternative-access` |
 | **0.25**    | Actively steering agents to a worse path | `llms-txt-links-markdown` (markdown exists but llms.txt links to HTML)                                                                                                                                                                                                                 |
 
@@ -155,6 +158,20 @@ Some problems are severe enough that no amount of other passing checks should co
 
 When multiple caps apply, the lowest one wins.
 
+The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check is marked as not applicable due to [insufficient data](#insufficient-data). If there isn't enough data to include the check in the score, there isn't enough data to cap the score based on it either.
+
+## Insufficient data
+
+When automatic page discovery finds fewer than 5 pages (using `random` or `deterministic` sampling), page-level check scores are unreliable because they represent a handful of pages out of potentially thousands. In this case:
+
+- **Page-level checks** (those that test sampled pages like `page-size-html`, `rendering-strategy`, `http-status-codes`, etc.) are marked as "not applicable" and excluded from the score.
+- **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) are scored normally.
+- **Category scores** where all checks are not applicable display as a dash instead of a number.
+
+This typically happens when a site has no llms.txt or its llms.txt links point to a different origin (common with preview deployments). A [`single-page-sample` diagnostic](/interaction-diagnostics#single-page-sample) fires to explain the situation.
+
+This behavior does not apply when you explicitly choose pages with `--urls` or `--sampling curated`, or when you use `--sampling none`. If you intentionally select pages, the score reflects those pages regardless of count.
+
 ## Cluster coefficients
 
 Some checks only matter if agents can actually reach the content they measure. If agents can't discover your markdown path, measuring markdown quality is pointless. The score handles this through cluster coefficients that scale both a check's score and its weight proportionally.
@@ -165,12 +182,12 @@ Some checks only matter if agents can actually reach the content they measure. I
 
 These checks measure markdown path quality. But if agents can't discover that path, the quality is irrelevant.
 
-| Condition                   | Coefficient | Why                                                             |
-| --------------------------- | ----------- | --------------------------------------------------------------- |
-| Content negotiation passes  | 1.0         | Agents that request it get markdown automatically.              |
-| llms.txt directive passes   | 0.8         | Effective, but agents sometimes ignore the directive.           |
-| llms.txt links use .md URLs | 0.5         | Agents must find llms.txt first, then follow .md links.         |
-| None of the above           | 0.0         | Agents won't find the markdown path. Check excluded from score. |
+| Condition                                                   | Coefficient | Why                                                             |
+| ----------------------------------------------------------- | ----------- | --------------------------------------------------------------- |
+| Content negotiation passes                                  | 1.0         | Agents that request it get markdown automatically.              |
+| `llms-txt-directive-html` or `llms-txt-directive-md` passes | 0.8         | Effective, but agents sometimes ignore the directive.           |
+| llms.txt links use .md URLs                                 | 0.5         | Agents must find llms.txt first, then follow .md links.         |
+| None of the above                                           | 0.0         | Agents won't find the markdown path. Check excluded from score. |
 
 If multiple conditions are met, the highest coefficient applies.
 
@@ -184,7 +201,7 @@ If pages are SPA shells, measuring HTML quality is meaningless. This coefficient
 
 ### Index truncation coefficient
 
-**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, `llms-txt-links-markdown`
+**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, `llms-txt-links-markdown`
 
 If your llms.txt is truncated, agents only see part of the index. Measuring the quality of the invisible portion doesn't reflect real agent experience.
 

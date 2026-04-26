@@ -2,7 +2,7 @@
 
 Whether agents can process your pages without losing content. Agent platforms have diverse truncation limits, from 5K characters on some platforms to over 100K on others. Pages that exceed these limits are silently truncated: the agent sees the beginning of the page and loses the rest.
 
-This category also covers the related problem of pages that technically fit within limits but waste most of that budget on boilerplate (inline CSS, JavaScript, navigation chrome) instead of documentation content.
+This category also covers the related problem of pages that technically fit within limits but waste most of that budget on boilerplate (navigation chrome, breadcrumbs, sidebars) instead of documentation content.
 
 ## rendering-strategy
 
@@ -83,7 +83,7 @@ Character count of the HTML response and the post-conversion size when converted
 
 ### Why it matters
 
-Many agents receive HTML, either because they don't request markdown or because the server doesn't support delivering markdown when requested. When agents receive HTML, the page size that matters isn't the raw HTML; it's how large the page is after the agent's platform converts it to text. Pages with a lot of inline CSS and JavaScript may be less likely to convert cleanly to text; the version of the page that the agent "sees" may still contain a lot of inline CSS and JavaScript. This can push the actual documentation content past agent truncation limits.
+Many agents receive HTML, either because they don't request markdown or because the server doesn't support delivering markdown when requested. When agents receive HTML, the page size that matters isn't the raw HTML; it's how large the page is after the agent's platform converts it to text. Navigation boilerplate, serialized tabbed content, and deeply nested page structure can all inflate the converted output well beyond the documentation content itself. This can push the actual documentation content past agent truncation limits.
 
 AFDocs measures both the raw HTML size and the post-conversion size, and scores based on the conversion result. See [content-start-position](#content-start-position) below for more on how boilerplate affects what agents see.
 
@@ -101,13 +101,14 @@ The output also reports the conversion ratio. A page that converts from 505KB HT
 
 ### How to fix
 
-**If pages convert to too many characters**, the fix depends on where the bloat comes from:
+**If pages convert to too many characters**, review pages for reducible boilerplate (navigation, serialized tabbed content) and consider these fixes:
 
-- **Inline CSS/JS**: Move styles and scripts to external files. This is the most common cause of high boilerplate percentages.
 - **Large pages**: Break long reference pages into smaller sections.
+- **Navigation boilerplate**: Reduce navigation, sidebar, and breadcrumb markup that inflates the converted output.
 - **Tabbed content**: See [tabbed-content-serialization](/checks/content-structure#tabbed-content-serialization).
+- **Markdown alternative**: Provide markdown versions as a smaller alternative path for agents that bypass HTML conversion overhead.
 
-**If you also serve markdown**, this check matters less for agents that can request it. But most agents (4 of 6 tested) still fetch HTML, so the HTML path remains important.
+Markdown availability helps agents that request it, but most agents still fetch HTML, so fixing the HTML path remains important.
 
 ---
 
@@ -122,7 +123,7 @@ How far into the response actual documentation content begins.
 
 ### Why it matters
 
-When agents convert HTML to text, they don't always strip out the non-content parts of the page. Inline CSS and JavaScript can end up mixed in with your documentation from the agent's perspective. If enough of this boilerplate appears before your actual content, the agent may never see your documentation at all because it hits truncation limits first.
+After HTML-to-markdown conversion, boilerplate often survives. Navigation menus, breadcrumbs, sidebars, and footer content all convert to text that precedes or surrounds the actual documentation. Depending on the agent's conversion pipeline, inline CSS and JavaScript may also survive as raw text. If enough of this boilerplate appears before your actual content, the agent may never see your documentation at all because it hits truncation limits first.
 
 In observed cases, actual content didn't start until 87% through the converted page: 441,000 characters of styling code before the first paragraph of actual documentation. The agent reported seeing a documentation page _about_ CSS instead of the actual documentation content.
 
@@ -138,6 +139,6 @@ Based on where content begins in the converted output:
 
 ### How to fix
 
-**If this check warns or fails**, move inline CSS and JavaScript to external files. This is the most effective fix because external resources aren't included when agents process the page.
+**If this check warns or fails**, reduce navigation, breadcrumb, and sidebar markup that precedes the content area. These are the most common sources of boilerplate that pushes content past truncation limits.
 
-If your platform inlines critical CSS, check whether you can reduce the amount. Navigation chrome, theme variables, and third-party widget styles all contribute to the boilerplate before content.
+If your platform inlines CSS or JavaScript, check whether you can reduce the amount or move it to external files. Navigation chrome, theme variables, and third-party widget styles all contribute to the boilerplate before content.

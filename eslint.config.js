@@ -15,6 +15,13 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'coverage/', 'node_modules/', 'bin/', 'docs/.vitepress/dist/'],
+    ignores: [
+      'dist/',
+      'coverage/',
+      'node_modules/',
+      'bin/',
+      'docs/.vitepress/dist/',
+      'docs/.vitepress/cache/',
+    ],
   },
 );

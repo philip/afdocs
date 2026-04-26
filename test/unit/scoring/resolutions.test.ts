@@ -63,6 +63,168 @@ describe('resolutions', () => {
     expect(text).toContain('8 of 50');
   });
 
+  it('returns "unknown" when sizes array is empty', () => {
+    const text = getResolution(r('llms-txt-size', 'warn', { sizes: [] }));
+    expect(text).toContain('unknown');
+  });
+
+  it('returns "unknown" when sizes field is missing', () => {
+    const text = getResolution(r('llms-txt-size', 'fail', {}));
+    expect(text).toContain('unknown');
+  });
+
+  it('returns 0 broken links when broken array is missing', () => {
+    const text = getResolution(r('llms-txt-links-resolve', 'fail', { testedLinks: 10 }));
+    expect(text).toContain('0 of 10');
+  });
+
+  it('returns 0 count when pageResults missing for markdown-url-support', () => {
+    const text = getResolution(r('markdown-url-support', 'warn', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns undefined for check with only a fail template when status is warn', () => {
+    const text = getResolution(r('markdown-code-fence-validity', 'warn'));
+    expect(text).toBeUndefined();
+  });
+
+  it('returns undefined for check with only a fail template (http-status-codes)', () => {
+    const text = getResolution(r('http-status-codes', 'warn'));
+    expect(text).toBeUndefined();
+  });
+
+  it('interpolates tabbed page counts', () => {
+    const text = getResolution(
+      r('tabbed-content-serialization', 'warn', {
+        tabbedPages: [{ status: 'warn' }, { status: 'warn' }, { status: 'pass' }],
+      }),
+    );
+    expect(text).toContain('2 pages');
+  });
+
+  it('handles empty tabbedPages array', () => {
+    const text = getResolution(
+      r('tabbed-content-serialization', 'fail', {
+        tabbedPages: [],
+      }),
+    );
+    expect(text).toContain('0 pages');
+  });
+
+  it('interpolates coverage details', () => {
+    const text = getResolution(
+      r('llms-txt-coverage', 'warn', {
+        missingCount: 12,
+        coverageRate: 85,
+        coverageWarnThreshold: 80,
+        coveragePassThreshold: 95,
+      }),
+    );
+    expect(text).toContain('85%');
+    expect(text).toContain('12 live');
+    expect(text).toContain('80-95%');
+  });
+
+  it('interpolates coverage fail details', () => {
+    const text = getResolution(
+      r('llms-txt-coverage', 'fail', {
+        missingCount: 50,
+        coverageRate: 60,
+        coverageWarnThreshold: 80,
+      }),
+    );
+    expect(text).toContain('60%');
+    expect(text).toContain('below 80%');
+    expect(text).toContain('50 live');
+  });
+
+  it('interpolates parity fail details with rounding', () => {
+    const text = getResolution(
+      r('markdown-content-parity', 'fail', {
+        failBucket: 3,
+        avgMissingPercent: 27.8,
+      }),
+    );
+    expect(text).toContain('3 pages');
+    expect(text).toContain('avg 28% missing');
+  });
+
+  it('uses default thresholds when details are empty for llms-txt-coverage warn', () => {
+    const text = getResolution(r('llms-txt-coverage', 'warn', {}));
+    expect(text).toContain('0%');
+    expect(text).toContain('80-95%');
+  });
+
+  it('uses default threshold for llms-txt-coverage fail', () => {
+    const text = getResolution(r('llms-txt-coverage', 'fail', {}));
+    expect(text).toContain('below 80%');
+  });
+
+  it('returns 0 for markdown-content-parity warn with empty details', () => {
+    const text = getResolution(r('markdown-content-parity', 'warn', {}));
+    expect(text).toContain('0 pages');
+  });
+
+  it('returns 0 for cache-header-hygiene warn with empty details', () => {
+    const text = getResolution(r('cache-header-hygiene', 'warn', {}));
+    expect(text).toContain('0 endpoints');
+  });
+
+  it('returns 0 for cache-header-hygiene fail with empty details', () => {
+    const text = getResolution(r('cache-header-hygiene', 'fail', {}));
+    expect(text).toContain('0 endpoints');
+  });
+
+  it('returns 0 for rendering-strategy warn with empty details', () => {
+    const text = getResolution(r('rendering-strategy', 'warn', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for rendering-strategy fail with empty details', () => {
+    const text = getResolution(r('rendering-strategy', 'fail', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for page-size-markdown warn with empty details', () => {
+    const text = getResolution(r('page-size-markdown', 'warn', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for page-size-markdown fail with empty details', () => {
+    const text = getResolution(r('page-size-markdown', 'fail', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for content-start-position warn with empty details', () => {
+    const text = getResolution(r('content-start-position', 'warn', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for content-start-position fail with empty details', () => {
+    const text = getResolution(r('content-start-position', 'fail', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for redirect-behavior warn with empty details', () => {
+    const text = getResolution(r('redirect-behavior', 'warn', {}));
+    expect(text).toContain('0 pages');
+  });
+
+  it('returns 0 for redirect-behavior fail with empty details', () => {
+    const text = getResolution(r('redirect-behavior', 'fail', {}));
+    expect(text).toContain('0 pages');
+  });
+
+  it('returns 0 for markdown-url-support warn with empty details', () => {
+    const text = getResolution(r('markdown-url-support', 'warn', {}));
+    expect(text).toContain('0 of 0');
+  });
+
+  it('returns 0 for llms-txt-links-resolve fail with empty details', () => {
+    const text = getResolution(r('llms-txt-links-resolve', 'fail', {}));
+    expect(text).toContain('0 of 0');
+  });
+
   it('provides resolution for every check with warn/fail', () => {
     const checkIds = [
       'llms-txt-exists',
@@ -70,7 +232,8 @@ describe('resolutions', () => {
       'llms-txt-size',
       'llms-txt-links-resolve',
       'llms-txt-links-markdown',
-      'llms-txt-directive',
+      'llms-txt-directive-html',
+      'llms-txt-directive-md',
       'markdown-url-support',
       'content-negotiation',
       'rendering-strategy',
@@ -82,7 +245,7 @@ describe('resolutions', () => {
       'markdown-code-fence-validity',
       'http-status-codes',
       'redirect-behavior',
-      'llms-txt-freshness',
+      'llms-txt-coverage',
       'markdown-content-parity',
       'cache-header-hygiene',
       'auth-gate-detection',

@@ -79,16 +79,28 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       'variants so agents receive markdown instead of converted HTML.',
   },
 
-  'llms-txt-directive': {
+  'llms-txt-directive-html': {
     warn: () =>
-      'An llms.txt directive was found on some pages but is missing from ' +
-      'others, or is buried deep in the page. Ensure the directive appears ' +
-      'near the top of every documentation page.',
+      'An llms.txt directive was found in the HTML of some pages but is ' +
+      'missing from others, or is buried deep in the page. Ensure the ' +
+      'directive appears near the top of every documentation page.',
     fail: () =>
-      'No agent-facing directive pointing to llms.txt was detected on any ' +
-      'tested page. Add a blockquote near the top of each page (e.g., ' +
-      '"> For the complete documentation index, see [llms.txt](/llms.txt)"). ' +
-      'This can be visually hidden with CSS while remaining accessible to agents.',
+      'No agent-facing directive pointing to llms.txt was detected in the ' +
+      'HTML of any tested page. Add a visually-hidden element near the top ' +
+      'of each page (e.g., a div with CSS clip-rect) containing a link to ' +
+      'your llms.txt. If your site serves markdown versions of pages, ' +
+      'mention that in the directive too so agents know to request it.',
+  },
+
+  'llms-txt-directive-md': {
+    warn: () =>
+      'An llms.txt directive was found in the markdown of some pages but is ' +
+      'missing from others, or is buried deep in the page. Ensure the ' +
+      'directive appears near the top of every markdown page.',
+    fail: () =>
+      'No llms.txt directive was detected in the markdown of any tested ' +
+      'page. Add a blockquote near the top of each markdown page (e.g., ' +
+      '"> For the complete documentation index, see [llms.txt](/llms.txt)").',
   },
 
   'markdown-url-support': {
@@ -166,7 +178,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${warnCount} of ${tested} pages convert to 50K-100K characters of ` +
-        'markdown. These may be truncated on some agent platforms.'
+        'markdown. Review pages for reducible boilerplate (navigation, ' +
+        'serialized tabbed content). Consider providing markdown versions ' +
+        'as a smaller alternative path for agents.'
       );
     },
     fail: (d) => {
@@ -174,8 +188,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${failCount} of ${tested} pages convert to over 100K characters of ` +
-        'markdown. Reduce inline CSS/JS, break large pages, or provide ' +
-        'markdown versions as a smaller alternative.'
+        'markdown. Break large pages into smaller units, reduce navigation ' +
+        'boilerplate, or provide markdown versions that bypass the HTML ' +
+        'conversion overhead.'
       );
     },
   },
@@ -186,9 +201,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const tested = (d.testedPages as number) ?? 0;
       return (
         `${warnCount} of ${tested} pages have documentation content ` +
-        'starting 10-50% into the converted output. Inline CSS or ' +
-        "boilerplate consumes part of the agent's truncation budget " +
-        'before content begins.'
+        'starting 10-50% into the converted output. Reduce navigation, ' +
+        'breadcrumb, and sidebar markup that precedes the content area.'
       );
     },
     fail: (d) => {
@@ -197,7 +211,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `${failCount} of ${tested} pages have content starting past 50% of ` +
         'the converted output. Agents may never see the documentation ' +
-        'content. Move or remove inline CSS/JS that precedes the content area.'
+        'content. Reduce navigation, breadcrumb, and sidebar markup that ' +
+        'precedes the content area.'
       );
     },
   },
@@ -272,20 +287,31 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
     },
   },
 
-  'llms-txt-freshness': {
+  'llms-txt-coverage': {
     warn: (d) => {
       const missing = (d.missingCount as number) ?? 0;
+      const coverage = (d.coverageRate as number) ?? 0;
+      const warnThreshold = (d.coverageWarnThreshold as number) ?? 80;
+      const passThreshold = (d.coveragePassThreshold as number) ?? 95;
       return (
-        `Your llms.txt covers 80-95% of your site's pages. ${missing} live ` +
-        'pages are not represented in the index.'
+        `Your llms.txt covers ${coverage}% of your site's pages ` +
+        `(${warnThreshold}-${passThreshold}% is warn). ${missing} live ` +
+        'pages are not represented in the index. Review missing pages ' +
+        'and add them, or adjust --coverage-pass-threshold/' +
+        '--coverage-warn-threshold if they are intentionally excluded.'
       );
     },
     fail: (d) => {
       const missing = (d.missingCount as number) ?? 0;
+      const coverage = (d.coverageRate as number) ?? 0;
+      const warnThreshold = (d.coverageWarnThreshold as number) ?? 80;
       return (
-        `Your llms.txt covers less than 80% of your site's pages. ` +
-        `${missing} live pages are missing from the index. Regenerate ` +
-        'llms.txt from your sitemap or build pipeline.'
+        `Your llms.txt covers ${coverage}% of your site's pages ` +
+        `(below ${warnThreshold}% threshold). ` +
+        `${missing} live pages are missing from the index. If ` +
+        'unintentional, regenerate llms.txt from your sitemap or build ' +
+        'pipeline. If intentional, lower the threshold or set it to 0 to ' +
+        'make the check informational.'
       );
     },
   },
@@ -295,7 +321,9 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const warnCount = (d.warnBucket as number) ?? 0;
       return (
         `${warnCount} pages have minor content differences between their ` +
-        'markdown and HTML versions. Review for formatting variations.'
+        'markdown and HTML versions. If this is intentional audience ' +
+        'segmentation, adjust --parity-pass-threshold and ' +
+        '--parity-warn-threshold (set both to 0 for informational mode).'
       );
     },
     fail: (d) => {
@@ -304,9 +332,11 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       return (
         `${failCount} pages have substantive content differences between ` +
         `markdown and HTML (avg ${Math.round(avgMissing)}% missing). ` +
-        'Agents receiving the markdown version are getting outdated or ' +
-        'incomplete content. Regenerate markdown from source or fix the ' +
-        'build pipeline.'
+        'If unintentional, agents are getting outdated content; ' +
+        'regenerate markdown from source or fix the build pipeline. ' +
+        'If intentional (audience segmentation), add ' +
+        'data-markdown-ignore to human-only HTML elements, or adjust ' +
+        'thresholds with --parity-pass-threshold/--parity-warn-threshold.'
       );
     },
   },
@@ -316,7 +346,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
       const warnCount = (d.warnBucket as number) ?? 0;
       return (
         `${warnCount} endpoints have moderate cache lifetimes (1-24 hours). ` +
-        'Updates to llms.txt or markdown content may take hours to propagate.'
+        'Updates to llms.txt or markdown content may take hours to ' +
+        'propagate. Consider reducing cache lifetimes for these resources.'
       );
     },
     fail: (d) => {
@@ -338,7 +369,8 @@ const RESOLUTION_TEMPLATES: Record<string, ResolutionTemplate> = {
     fail: () =>
       'All or most documentation pages require authentication. Agents ' +
       'cannot access your documentation and will rely on potentially ' +
-      'outdated training data or secondary sources.',
+      'outdated training data or secondary sources. Consider providing ' +
+      'alternative access paths (see auth-alternative-access check).',
   },
 
   'auth-alternative-access': {

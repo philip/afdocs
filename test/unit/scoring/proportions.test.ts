@@ -170,10 +170,10 @@ describe('proportions', () => {
     });
   });
 
-  describe('llms-txt-directive', () => {
+  describe('llms-txt-directive-html', () => {
     it('maps found boolean and position to pass/warn/fail', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-directive', 'warn', {
+        makeResult('llms-txt-directive-html', 'warn', {
           pageResults: [
             { url: '/a', found: true, positionPercent: 5 },
             { url: '/b', found: true, positionPercent: 60 },
@@ -189,7 +189,7 @@ describe('proportions', () => {
 
     it('excludes pages with errors', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-directive', 'pass', {
+        makeResult('llms-txt-directive-html', 'pass', {
           pageResults: [
             { url: '/a', found: true, positionPercent: 5 },
             { url: '/b', error: 'fetch failed' },
@@ -353,14 +353,195 @@ describe('proportions', () => {
       expect(result!.proportion).toBe(0.3);
     });
 
-    it('llms-txt-freshness: uses coverageRate', () => {
+    it('llms-txt-coverage: uses coverageRate', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-freshness', 'warn', {
+        makeResult('llms-txt-coverage', 'warn', {
           coverageRate: 88,
         }),
         makeWeight(4, 0.75),
       );
       expect(result!.proportion).toBe(0.88);
+    });
+  });
+
+  describe('edge cases with empty or malformed details', () => {
+    it('bucket check: returns undefined when all buckets are zero', () => {
+      const result = getCheckProportion(
+        makeResult('page-size-html', 'warn', {
+          passBucket: 0,
+          warnBucket: 0,
+          failBucket: 0,
+        }),
+        makeWeight(7, 0.5),
+      );
+      // Falls back to status-based proportion
+      expect(result!.proportion).toBe(0.5);
+    });
+
+    it('pageResults: returns undefined when array is empty', () => {
+      const result = getCheckProportion(
+        makeResult('markdown-code-fence-validity', 'pass', {
+          pageResults: [],
+        }),
+        makeWeight(4),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(1.0);
+    });
+
+    it('rendering-strategy: returns undefined when all counts are zero', () => {
+      const result = getCheckProportion(
+        makeResult('rendering-strategy', 'warn', {
+          serverRendered: 0,
+          sparseContent: 0,
+          spaShells: 0,
+        }),
+        makeWeight(10, 0.5),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(0.5);
+    });
+
+    it('tabbed-content: returns undefined when tabbedPages is empty', () => {
+      const result = getCheckProportion(
+        makeResult('tabbed-content-serialization', 'warn', {
+          tabbedPages: [],
+        }),
+        makeWeight(4, 0.5),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(0.5);
+    });
+
+    it('section-header: returns undefined when analyses is empty', () => {
+      const result = getCheckProportion(
+        makeResult('section-header-quality', 'warn', {
+          analyses: [],
+        }),
+        makeWeight(2, 0.5),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(0.5);
+    });
+
+    it('http-status-codes: returns undefined when pageResults is empty', () => {
+      const result = getCheckProportion(
+        makeResult('http-status-codes', 'pass', {
+          pageResults: [],
+        }),
+        makeWeight(7),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(1.0);
+    });
+
+    it('content-negotiation: excludes skipped and handles unknown classification', () => {
+      const result = getCheckProportion(
+        makeResult('content-negotiation', 'warn', {
+          pageResults: [
+            { url: '/a', classification: 'unknown-type', status: 200 },
+            { url: '/b', classification: 'markdown-with-correct-type', status: 200 },
+            { url: '/c', skipped: true, status: 0 },
+          ],
+        }),
+        makeWeight(4, 0.75),
+      );
+      // unknown → skip (excluded), markdown-with-correct-type → pass
+      // Only 1 item counted (pass), skip items excluded from proportion
+      expect(result!.proportion).toBe(1.0);
+      expect(result!.tested).toBe(1);
+    });
+
+    it('redirect-behavior: handles unknown classification as skip', () => {
+      const result = getCheckProportion(
+        makeResult('redirect-behavior', 'pass', {
+          pageResults: [
+            { url: '/a', classification: 'no-redirect' },
+            { url: '/b', classification: 'unknown-type' },
+          ],
+        }),
+        makeWeight(4, 0.6),
+      );
+      // no-redirect → pass, unknown → skip
+      expect(result!.proportion).toBe(1.0);
+      expect(result!.tested).toBe(1);
+    });
+
+    it('auth-gate: handles auth-redirect classification', () => {
+      const result = getCheckProportion(
+        makeResult('auth-gate-detection', 'fail', {
+          pageResults: [{ url: '/a', classification: 'auth-redirect' }],
+        }),
+        makeWeight(10, 0.5),
+      );
+      expect(result!.proportion).toBe(0.0);
+    });
+
+    it('llms-txt-size: uses default thresholds when not provided', () => {
+      const result = getCheckProportion(
+        makeResult('llms-txt-size', 'warn', {
+          sizes: [{ characters: 30_000 }, { characters: 70_000 }],
+        }),
+        makeWeight(7, 0.5),
+      );
+      // Default thresholds: pass=50K, fail=100K
+      // 30K → pass, 70K → warn
+      expect(result!.proportion).toBe(0.75);
+    });
+
+    it('llms-txt-size: fail file exceeding fail threshold', () => {
+      const result = getCheckProportion(
+        makeResult('llms-txt-size', 'fail', {
+          sizes: [{ characters: 150_000 }],
+          thresholds: { pass: 50_000, fail: 100_000 },
+        }),
+        makeWeight(7, 0.5),
+      );
+      expect(result!.proportion).toBe(0.0);
+    });
+
+    it('llms-txt-size: returns undefined when sizes is empty', () => {
+      const result = getCheckProportion(
+        makeResult('llms-txt-size', 'warn', { sizes: [] }),
+        makeWeight(7, 0.5),
+      );
+      // Falls back to status-based
+      expect(result!.proportion).toBe(0.5);
+    });
+
+    it('markdown-url-support: all pages skipped yields zero proportion', () => {
+      const result = getCheckProportion(
+        makeResult('markdown-url-support', 'pass', {
+          pageResults: [
+            { url: '/a', skipped: true },
+            { url: '/b', skipped: true },
+          ],
+        }),
+        makeWeight(7, 0.5),
+      );
+      // All pages filtered out → countByStatus returns 0/0
+      expect(result!.proportion).toBe(0);
+      expect(result!.tested).toBe(0);
+    });
+
+    it('llms-txt-directive: all pages have errors', () => {
+      const result = getCheckProportion(
+        makeResult('llms-txt-directive-html', 'fail', {
+          pageResults: [
+            { url: '/a', error: 'fetch failed' },
+            { url: '/b', error: 'timeout' },
+          ],
+        }),
+        makeWeight(7, 0.6),
+      );
+      // All filtered out, countByStatus returns 0/0
+      expect(result!.proportion).toBe(0);
+      expect(result!.tested).toBe(0);
+    });
+
+    it('uses default warn coefficient of 0.5 when not provided', () => {
+      const result = getCheckProportion(makeResult('llms-txt-exists', 'warn'), makeWeight(10));
+      expect(result).toEqual({ proportion: 0.5, tested: 1 });
     });
   });
 
@@ -386,9 +567,9 @@ describe('proportions', () => {
       expect(result!.proportion).toBe(0.0);
     });
 
-    it('llms-txt-freshness: falls back when no coverageRate', () => {
+    it('llms-txt-coverage: falls back when no coverageRate', () => {
       const result = getCheckProportion(
-        makeResult('llms-txt-freshness', 'warn', {}),
+        makeResult('llms-txt-coverage', 'warn', {}),
         makeWeight(4, 0.75),
       );
       expect(result!.proportion).toBe(0.75);

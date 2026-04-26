@@ -28,7 +28,7 @@ The scorecard tells you _what's wrong_. The verbose text output tells you _where
 
 ## Step 3: Work through fixes iteratively
 
-You don't need to run all 22 checks every time you make a change. Target just the check you're fixing for fast feedback:
+You don't need to run all 23 checks every time you make a change. Target just the check you're fixing for fast feedback:
 
 ```bash
 # Iterate on llms.txt
@@ -47,7 +47,8 @@ checks:
   - llms-txt-valid
   - llms-txt-size
   - llms-txt-links-resolve
-  - llms-txt-directive
+  - llms-txt-directive-html
+  - llms-txt-directive-md
   - rendering-strategy
   - page-size-html
   - content-start-position
@@ -67,7 +68,7 @@ Not all fixes are equal. Here are the highest-impact changes, ordered by the sco
 
 If `llms-txt-exists` fails, create an `llms.txt` at your site root listing your documentation pages with markdown links. See the [llms.txt specification](https://llmstxt.org/) for the format.
 
-This also unblocks five dependent checks (`llms-txt-valid`, `llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`, `llms-txt-freshness`) that are currently skipped.
+This also unblocks five dependent checks (`llms-txt-valid`, `llms-txt-size`, `llms-txt-links-resolve`, `llms-txt-links-markdown`, `llms-txt-coverage`) that are currently skipped.
 
 **Enable server-side rendering**
 
@@ -87,9 +88,9 @@ At 50%+ gated pages, the score is [capped at D](/agent-score-calculation#score-c
 
 If `markdown-url-support` fails, agents are stuck with HTML. Many docs platforms support this natively (VitePress, for example, serves markdown at `.md` URLs out of the box). Others need a server configuration change.
 
-**Add an llms.txt directive to pages**
+**Add an llms.txt directive to HTML pages**
 
-If `llms-txt-directive` fails, agents visiting individual pages have no way to discover your llms.txt. Add a blockquote directive near the top of each page, typically through your docs platform's page template or layout component.
+If `llms-txt-directive-html` fails, agents visiting individual pages have no way to discover your llms.txt. Add a visually-hidden element near the top of each page pointing to your llms.txt. If your site serves markdown, mention that in the directive too so agents know to request it.
 
 **Fix broken llms.txt links**
 
@@ -107,12 +108,13 @@ If `llms-txt-size` warns or fails, agents are seeing a truncated version of your
 
 These are worth addressing but won't move the score as dramatically:
 
+- **llms.txt directive in markdown** (`llms-txt-directive-md`): Add a blockquote near the top of each markdown page pointing to your llms.txt.
 - **Content negotiation** (`content-negotiation`): Return markdown when agents send `Accept: text/markdown`. Requires server-side support.
-- **Content start position** (`content-start-position`): Reduce boilerplate (inline CSS/JS, navigation markup) before the main content. Move styles and scripts to external files.
+- **Content start position** (`content-start-position`): Reduce navigation, breadcrumb, and sidebar markup that precedes the main content area.
 - **Tabbed content** (`tabbed-content-serialization`): If tabbed UI components create oversized output, consider restructuring into separate pages or using query params to retrieve only specific tab versions.
 - **Code fence validity** (`markdown-code-fence-validity`): Fix unclosed code fences in your markdown sources.
 - **Redirect behavior** (`redirect-behavior`): Replace JavaScript and cross-host redirects with standard HTTP redirects.
-- **llms.txt freshness** (`llms-txt-freshness`): Generate llms.txt at build time to keep it in sync with your site.
+- **llms.txt coverage** (`llms-txt-coverage`): Generate llms.txt at build time to keep it in sync with your site.
 - **Content parity** (`markdown-content-parity`): Ensure markdown and HTML versions of pages contain the same content.
 - **llms.txt validity** (`llms-txt-valid`): Follow the [llmstxt.org](https://llmstxt.org/) structure.
 

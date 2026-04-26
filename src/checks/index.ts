@@ -6,7 +6,8 @@ import './content-discoverability/llms-txt-valid.js';
 import './content-discoverability/llms-txt-size.js';
 import './content-discoverability/llms-txt-links-resolve.js';
 import './content-discoverability/llms-txt-links-markdown.js';
-import './content-discoverability/llms-txt-directive.js';
+import './content-discoverability/llms-txt-directive-html.js';
+import './content-discoverability/llms-txt-directive-md.js';
 
 // Category 2: Markdown Availability
 import './markdown-availability/markdown-url-support.js';
@@ -28,7 +29,7 @@ import './url-stability/http-status-codes.js';
 import './url-stability/redirect-behavior.js';
 
 // Category 6: Observability
-import './observability/llms-txt-freshness.js';
+import './observability/llms-txt-coverage.js';
 import './observability/markdown-content-parity.js';
 import './observability/cache-header-hygiene.js';
 

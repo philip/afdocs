@@ -6,13 +6,23 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 ## Markdown support is undiscoverable
 
-**Triggers when** your site serves markdown at `.md` URLs, but none of the discovery mechanisms exist: no content negotiation, no llms.txt directive on pages, and no `.md` links in llms.txt.
+**Triggers when** your site serves markdown at `.md` URLs, but there is no agent-facing directive on HTML pages pointing to llms.txt and the server does not support content negotiation.
 
 **What it means**: You've done the work to support markdown, but agents have no way to find out. They'll default to the HTML path every time. In observed agent behavior, agents do not independently discover `.md` URL variants; they need to be told.
 
-**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive) on your docs pages pointing to llms.txt, or implement [content negotiation](/checks/markdown-availability#content-negotiation) for `Accept: text/markdown`. Either change makes your existing markdown support visible to agents.
+**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive-html) on your docs pages pointing to llms.txt, and implement [content negotiation](/checks/markdown-availability#content-negotiation) for `Accept: text/markdown`. The directive is the primary discovery mechanism because it reaches all agents; content negotiation provides a fast path for agents that request markdown by default. Both are recommended.
 
 **Score impact**: Markdown quality checks (`page-size-markdown`, `markdown-code-fence-validity`, `markdown-content-parity`) are excluded from the score entirely when this diagnostic fires, because their results don't reflect real agent experience.
+
+## Markdown support is only partially discoverable
+
+**Triggers when** your site serves markdown at `.md` URLs and supports content negotiation, but there is no agent-facing directive on HTML pages pointing to llms.txt.
+
+**What it means**: Agents that send `Accept: text/markdown` (Claude Code, Cursor, OpenCode) get markdown automatically, but the majority of agents fetch HTML by default and have no signal that a markdown path exists. Your markdown support benefits a subset of agents but not most of them.
+
+**What to do**: Add a [directive](/checks/content-discoverability#llms-txt-directive-html) near the top of each HTML page pointing to your llms.txt. If your site serves markdown, mention that in the directive too. The directive reaches all agents, not just the ones that request markdown by default.
+
+**Score impact**: Same as the undiscoverable case: markdown quality checks are excluded from the score because most agents still can't find the markdown path.
 
 ## Truncated index
 
@@ -22,7 +32,7 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 **What to do**: Split into a root llms.txt that links to section-level llms.txt files, each under 50,000 characters. The [llms-txt-size check](/checks/content-discoverability#llms-txt-size) details the thresholds.
 
-**Score impact**: The index truncation coefficient scales down `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, and `llms-txt-links-markdown` proportionally. A file that's twice the limit counts those checks at roughly half weight.
+**Score impact**: The index truncation coefficient scales down `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, and `llms-txt-links-markdown` proportionally. A file that's twice the limit counts those checks at roughly half weight.
 
 ## SPA shells invalidate HTML path
 
@@ -58,8 +68,50 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 **Triggers when** HTML pages exceed agent truncation limits and there's no discoverable markdown path that could offer smaller representations.
 
-**What it means**: Agents will silently receive truncated content on oversized pages, with no alternative path to the full content. This is particularly common on sites that inline large amounts of CSS and JavaScript.
+**What it means**: Agents will silently receive truncated content on oversized pages, with no alternative path to the full content.
 
-**What to do**: Either reduce HTML page sizes (break large pages into smaller ones, move inline CSS/JS to external files) or provide markdown versions and make them discoverable via content negotiation or llms.txt links. See [Page Size checks](/checks/page-size) for the specific thresholds.
+**What to do**: Either reduce HTML page sizes (break large pages into smaller ones, reduce navigation boilerplate) or provide markdown versions and make them discoverable via content negotiation or llms.txt links. See [Page Size checks](/checks/page-size) for the specific thresholds.
 
 **Score impact**: No direct score cap, but the combination of failing page-size checks with no markdown alternative typically results in low category scores for both Page Size and Markdown Availability.
+
+## Single-page sample
+
+**Triggers when** automatic page discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
+
+**What it means**: Page-level category scores (Page Size, Content Structure, URL Stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score rather than showing potentially misleading numbers.
+
+**What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls` to test exactly the pages you care about.
+
+This diagnostic does not fire when you explicitly choose pages with `--urls`, `--sampling curated`, or `--sampling none`.
+
+**Score impact**: Page-level checks are excluded from the overall score and their categories show as N/A. Only site-level checks (llms.txt checks, coverage, auth-alternative-access) contribute to the score.
+
+## All llms.txt links are cross-origin
+
+**Triggers when** every link in your llms.txt points to a different origin than the one being tested.
+
+**What it means**: This typically happens when testing a preview or staging deployment whose llms.txt still references the production domain. The tool filters cross-origin links during page discovery, so it falls back to testing a single page. You'll usually see this alongside the [single-page sample](#single-page-sample) diagnostic.
+
+**What to do**: Use `--canonical-origin <production-origin>` to rewrite cross-origin links during testing. For example: `npx afdocs check https://preview.example.com --canonical-origin https://docs.example.com`.
+
+**Score impact**: Indirect. By reducing discovered pages to one, it triggers the single-page sample behavior described above.
+
+## Gzipped sitemap skipped
+
+**Triggers when** a gzipped sitemap (e.g. `sitemap.xml.gz`) was encountered during URL discovery and skipped because gzipped sitemaps are not yet supported.
+
+**What it means**: If the gzipped sitemap is the only sitemap source, URL discovery may have found fewer pages than expected. This can reduce the representativeness of page-level check results.
+
+**What to do**: Provide an uncompressed `sitemap.xml` alongside the gzipped version, or supply specific pages via `--urls` for targeted testing.
+
+**Score impact**: No direct score impact, but fewer discovered pages may reduce the representativeness of results.
+
+## Severe rate limiting
+
+**Triggers when** more than 20% of tested URLs returned HTTP 429 (Too Many Requests) across all checks that make HTTP requests.
+
+**What it means**: The target site is rate-limiting requests from the tool. Check results may be unreliable because rate-limited requests are not retried indefinitely, so some pages may not have been fully tested.
+
+**What to do**: Increase `--request-delay` to slow down requests (the default is 200ms), or contact the site operator to allowlist your IP or user-agent for testing.
+
+**Score impact**: No direct score impact, but rate-limited requests may cause checks to report incomplete data, leading to scores that don't reflect the site's actual state.

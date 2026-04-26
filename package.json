@@ -79,6 +79,7 @@
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "node-html-parser": "^7.1.0",
+    "picomatch": "^4.0.4",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
     "yaml": "^2.7.0"
@@ -86,6 +87,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.4",
+    "@types/picomatch": "^4.0.3",
     "@types/turndown": "^5.0.6",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^10.0.1",

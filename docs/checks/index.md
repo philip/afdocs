@@ -1,12 +1,12 @@
 # Checks Reference
 
-AFDocs runs 22 checks across 7 categories. Each check implements a section of the [Agent-Friendly Documentation Spec](https://agentdocsspec.com/spec), which documents the observed agent behaviors and failure modes that motivated the check.
+AFDocs runs 23 checks across 7 categories. Each check implements a section of the [Agent-Friendly Documentation Spec](https://agentdocsspec.com/spec), which documents the observed agent behaviors and failure modes that motivated the check.
 
 ## Categories
 
 | Category                                                   | Checks | What it covers                                                       |
 | ---------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
-| [Content Discoverability](/checks/content-discoverability) | 6      | Whether agents can find and navigate your documentation via llms.txt |
+| [Content Discoverability](/checks/content-discoverability) | 7      | Whether agents can find and navigate your documentation via llms.txt |
 | [Markdown Availability](/checks/markdown-availability)     | 2      | Whether agents can get documentation as markdown instead of HTML     |
 | [Page Size and Truncation Risk](/checks/page-size)         | 4      | Whether agents can process your pages without losing content         |
 | [Content Structure](/checks/content-structure)             | 3      | Whether page content is structured in ways agents can consume        |
@@ -33,7 +33,7 @@ Some checks depend on others. If a dependency doesn't pass, the dependent check 
 - `page-size-markdown` requires `markdown-url-support` or `content-negotiation`
 - `section-header-quality` requires `tabbed-content-serialization`
 - `markdown-code-fence-validity` requires `markdown-url-support` or `content-negotiation`
-- `llms-txt-freshness` requires `llms-txt-exists`
+- `llms-txt-coverage` requires `llms-txt-exists`
 - `markdown-content-parity` requires `markdown-url-support` or `content-negotiation`
 - `auth-alternative-access` requires `auth-gate-detection` (warn or fail)
 

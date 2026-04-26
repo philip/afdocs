@@ -2,7 +2,7 @@
 
 How agents find and navigate your documentation. This category covers `llms.txt`: whether it exists, whether agents can parse it, whether the links work, and whether agents visiting individual pages know it's there.
 
-These six checks carry the most combined weight of any category. Without discoverability, everything else is less useful.
+These seven checks carry the most combined weight of any category. Without discoverability, everything else is less useful.
 
 ## llms-txt-exists
 
@@ -43,7 +43,7 @@ If your `llms.txt` lives at a location not covered by these candidates, AFDocs w
 
 ### Canonical selection
 
-When more than one candidate returns a file (e.g. an apex `llms.txt` for the marketing site _and_ a `/docs/llms.txt` for the docs section), AFDocs picks one as **canonical**. The canonical file is the single source of truth for downstream checks: link sampling, size, validation, freshness, and link-resolution all operate on it alone. Other discovered files still appear in `details.discoveredFiles` for visibility, and `cache-header-hygiene` still verifies headers on every llms.txt found.
+When more than one candidate returns a file (e.g. an apex `llms.txt` for the marketing site _and_ a `/docs/llms.txt` for the docs section), AFDocs picks one as **canonical**. The canonical file is the single source of truth for downstream checks: link sampling, size, validation, coverage, and link-resolution all operate on it alone. Other discovered files still appear in `details.discoveredFiles` for visibility, and `cache-header-hygiene` still verifies headers on every llms.txt found.
 
 The selection rule is _most-specific-to-the-baseUrl wins_. AFDocs picks the file whose directory is the longest prefix of the URL you passed. For example:
 
@@ -198,32 +198,62 @@ A warning on this check carries a bigger penalty in scoring because it means mar
 
 ---
 
-## llms-txt-directive
+## llms-txt-directive-html
 
-Whether your documentation pages tell agents where to find `llms.txt`.
+Whether the HTML version of your documentation pages tells agents where to find `llms.txt`.
 
-|            |                                                                          |
-| ---------- | ------------------------------------------------------------------------ |
-| **Weight** | High (7)                                                                 |
-| **Spec**   | [llms-txt-directive](https://agentdocsspec.com/spec/#llms-txt-directive) |
+|            |                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------- |
+| **Weight** | High (7)                                                                           |
+| **Spec**   | [llms-txt-directive-html](https://agentdocsspec.com/spec/#llms-txt-directive-html) |
 
 ### Why it matters
 
-Agents don't know to look for `llms.txt` by default. When they land on an individual documentation page, they have no way to discover that a navigation index exists unless the page tells them. A blockquote directive near the top of each page is the agent equivalent of a "You Are Here" marker.
+Agents that fetch the HTML version of your pages have no built-in way to discover that a documentation index exists at `/llms.txt`. An in-page directive serves as an agent "You Are Here" marker that points them to the index. The directive can be visually hidden (e.g., using a CSS clip-rect technique or `sr-only` class) as long as it remains in the DOM and survives HTML-to-markdown conversion.
 
-In practice, agents that see the directive can follow it and use the index to navigate. In testing, Anthropic's Claude Code documentation used this pattern, and it worked reliably for Claude agents. However, agents are non-deterministic, and platforms implement functionality in different ways, so efficacy may vary across agents. This is more of a suggestion than a guarantee.
+This check searches within the HTML `<body>` but excludes `<nav>`, `<script>`, and `<style>` elements. Navigation sidebar links to pages _about_ llms.txt (e.g., a docs page describing the llms.txt feature) are not counted as directives.
 
 ### Results
 
-| Result | Condition                                                                  |
-| ------ | -------------------------------------------------------------------------- |
-| Pass   | Directive found on all or nearly all documentation pages, near the top     |
-| Warn   | Found on some pages but missing from others, or buried past 50% of content |
-| Fail   | Not detected on any tested page                                            |
+| Result | Condition                                                                      |
+| ------ | ------------------------------------------------------------------------------ |
+| Pass   | Directive found in HTML of all or nearly all documentation pages, near the top |
+| Warn   | Found on some pages but missing from others, or buried past 50% of content     |
+| Fail   | Not detected in the HTML of any tested page                                    |
 
 ### How to fix
 
-Add a blockquote near the top of each documentation page pointing to your `llms.txt`. For example:
+Add a visually-hidden element near the top of each page (e.g., a `<div>` with CSS clip-rect) containing a link to your `llms.txt`. If your site serves markdown versions of pages, mention that in the directive too so agents know to request it. This can be added through your docs platform's page template or layout component. Use server-rendered HTML, not client-side JavaScript injection.
+
+---
+
+## llms-txt-directive-md
+
+Whether the markdown version of your documentation pages tells agents where to find `llms.txt`.
+
+|                |                                                                                |
+| -------------- | ------------------------------------------------------------------------------ |
+| **Weight**     | Medium (4)                                                                     |
+| **Depends on** | `markdown-url-support` or `content-negotiation`                                |
+| **Spec**       | [llms-txt-directive-md](https://agentdocsspec.com/spec/#llms-txt-directive-md) |
+
+### Why it matters
+
+Agents that fetch markdown versions of pages (via `.md` URLs or content negotiation) benefit from a directive pointing them to the documentation index. Anthropic's Claude Code documentation includes a blockquote at the top of every markdown page telling agents to fetch the documentation index at `llms.txt`. In practice, agents that encounter this directive may follow it to discover the full documentation index.
+
+This check is skipped if the site doesn't serve markdown (neither `markdown-url-support` nor `content-negotiation` passes).
+
+### Results
+
+| Result | Condition                                                                          |
+| ------ | ---------------------------------------------------------------------------------- |
+| Pass   | Directive found in markdown of all or nearly all documentation pages, near the top |
+| Warn   | Found on some pages but missing from others, or buried past 50% of content         |
+| Fail   | Not detected in the markdown of any tested page                                    |
+
+### How to fix
+
+Add a blockquote near the top of each markdown page pointing to your `llms.txt`. For example:
 
 ```markdown
 > For the complete documentation index, see [llms.txt](/llms.txt)
@@ -231,8 +261,6 @@ Add a blockquote near the top of each documentation page pointing to your `llms.
 
 The URL in the directive should match wherever you placed your `llms.txt`. If it's at `/docs/llms.txt`, use that path instead.
 
-This can typically be added through your docs platform's page template or layout component. It can be visually hidden with CSS while remaining accessible to agents, as long as it's in the server-rendered HTML (not injected by client-side JavaScript).
-
 ### Score impact
 
-This check is one of the signals used by the [discovery coefficient](/agent-score-calculation#discovery-coefficient). If neither this check nor content negotiation passes, downstream markdown quality checks are discounted because agents can't find the markdown path.
+These checks are signals used by the [discovery coefficient](/agent-score-calculation#discovery-coefficient). If neither directive check nor content negotiation passes, downstream markdown quality checks are discounted because agents can't find the markdown path.

@@ -107,6 +107,9 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const convertedSizes = successful.map((r) => r.convertedCharacters).sort((a, b) => a - b);
   const median = convertedSizes[Math.floor(convertedSizes.length / 2)];
   const max = convertedSizes[convertedSizes.length - 1];
+  const htmlSizes = successful.map((r) => r.htmlCharacters).sort((a, b) => a - b);
+  const medianHtml = htmlSizes[Math.floor(htmlSizes.length / 2)];
+  const maxHtml = htmlSizes[htmlSizes.length - 1];
   const avgRatio = Math.round(
     successful.reduce((sum, r) => sum + r.conversionRatio, 0) / successful.length,
   );
@@ -124,11 +127,11 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
 
   let message: string;
   if (overallStatus === 'pass') {
-    message = `All ${successful.length} ${pageLabel} convert under ${formatSize(passThreshold)} chars (median ${formatSize(median)}, ${avgRatio}% boilerplate)${suffix}`;
+    message = `All ${successful.length} ${pageLabel} under ${formatSize(passThreshold)} chars (median ${formatSize(medianHtml)} HTML → ${formatSize(median)} markdown (${avgRatio}% boilerplate))${suffix}`;
   } else if (overallStatus === 'warn') {
-    message = `${warnBucket} of ${successful.length} ${pageLabel} convert to ${formatSize(passThreshold)}–${formatSize(failThreshold)} chars (max ${formatSize(max)}, ${avgRatio}% boilerplate)${suffix}`;
+    message = `${warnBucket} of ${successful.length} ${pageLabel} convert to ${formatSize(passThreshold)}–${formatSize(failThreshold)} chars (max ${formatSize(maxHtml)} HTML → ${formatSize(max)} markdown (${avgRatio}% boilerplate))${suffix}`;
   } else {
-    message = `${failBucket} of ${successful.length} ${pageLabel} convert to over ${formatSize(failThreshold)} chars (max ${formatSize(max)}, ${avgRatio}% boilerplate)${suffix}`;
+    message = `${failBucket} of ${successful.length} ${pageLabel} convert to over ${formatSize(failThreshold)} chars (max ${formatSize(maxHtml)} HTML → ${formatSize(max)} markdown (${avgRatio}% boilerplate))${suffix}`;
   }
 
   return {

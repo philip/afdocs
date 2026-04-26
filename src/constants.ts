@@ -1,4 +1,11 @@
-import type { CheckOptions, SizeThresholds } from './types.js';
+import type { CheckOptions, SamplingStrategy, SizeThresholds } from './types.js';
+
+export const VALID_SAMPLING_STRATEGIES: readonly SamplingStrategy[] = [
+  'random',
+  'deterministic',
+  'curated',
+  'none',
+];
 
 export const DEFAULT_THRESHOLDS: SizeThresholds = {
   pass: 50_000,
@@ -34,5 +41,23 @@ export const LINK_RESOLVE_THRESHOLD = 0.9;
 /** Maximum number of URLs to collect from sitemaps before stopping. */
 export const MAX_SITEMAP_URLS = 500;
 
+/** Default llms-txt-coverage pass threshold (percentage). */
+export const DEFAULT_COVERAGE_PASS_THRESHOLD = 95;
+
+/** Default llms-txt-coverage warn threshold (percentage). */
+export const DEFAULT_COVERAGE_WARN_THRESHOLD = 80;
+
+/** Default markdown-content-parity pass threshold (percentage of missing segments). */
+export const DEFAULT_PARITY_PASS_THRESHOLD = 5;
+
+/** Default markdown-content-parity warn threshold (percentage of missing segments). */
+export const DEFAULT_PARITY_WARN_THRESHOLD = 20;
+
+/** Minimum discovered pages before page-level scores are considered meaningful. */
+export const MIN_PAGES_FOR_SCORING = 5;
+
 /** Base URL for the Agent-Friendly Documentation Spec. */
 export const SPEC_BASE_URL = 'https://agentdocsspec.com/spec/';
+
+/** Version of the Agent-Friendly Documentation Spec implemented by this release. */
+export const SPEC_VERSION = 'v0.5.0';

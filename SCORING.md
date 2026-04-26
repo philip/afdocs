@@ -1,10 +1,10 @@
 # How the Agent-Friendly Docs Score Works
 
-Scoring Version: 0.1.0 · [Agent-Friendly Docs Spec v0.3.0](https://agentdocsspec.com) · March 2026
+Scoring Version: 0.1.0 · [Agent-Friendly Docs Spec v0.5.0](https://agentdocsspec.com) · April 2026
 
 ## What is this score?
 
-The Agent-Friendly Docs Scorecard measures how effectively AI coding agents can discover, navigate, and consume a documentation site. It runs 22 automated checks against your site and produces a 0–100 score with a letter grade.
+The Agent-Friendly Docs Scorecard measures how effectively AI coding agents can discover, navigate, and consume a documentation site. It runs 23 automated checks against your site and produces a 0–100 score with a letter grade.
 
 Each check corresponds to a section of the [Agent-Friendly Docs Spec](https://agentdocsspec.com), which documents what the check measures, why it matters for real agent workflows, and the observed behaviors that motivated it. This document covers how checks are **scored**, not what they **measure**. If you want to understand a specific check in depth, follow the spec links in the table below.
 
@@ -23,7 +23,7 @@ The score reflects how well agents can _actually use_ your documentation, not ju
 
 ## What we check
 
-The 22 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows:
+The 23 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows (3 critical, 8 high, 10 medium, 2 low; max raw score 130):
 
 - **Critical (10 pts)**: Agents cannot function without this. Failure means zero content, zero navigation, or zero access.
 - **High (7 pts)**: Directly limits agent effectiveness. Failure means truncation, dead ends, or agents stuck on a worse path.
@@ -41,7 +41,8 @@ How agents find and navigate your documentation.
 | [llms-txt-size](https://agentdocsspec.com/spec/#llms-txt-size)                     | High (7)      | Whether your llms.txt fits within agent context windows. Truncated indexes defeat their purpose.                         |
 | [llms-txt-links-resolve](https://agentdocsspec.com/spec/#llms-txt-links-resolve)   | High (7)      | Whether links in your llms.txt actually work. Broken links send agents down dead ends with high confidence.              |
 | [llms-txt-links-markdown](https://agentdocsspec.com/spec/#llms-txt-links-markdown) | High (7)      | Whether llms.txt links point to markdown rather than HTML. Agents work significantly less effectively with HTML content. |
-| [llms-txt-directive](https://agentdocsspec.com/spec/#llms-txt-directive)           | High (7)      | Whether your docs pages tell agents where to find llms.txt. Without this, agents won't know it exists.                   |
+| [llms-txt-directive-html](https://agentdocsspec.com/spec/#llms-txt-directive-html) | High (7)      | Whether your HTML pages tell agents where to find llms.txt. Without this, agents won't know it exists.                   |
+| [llms-txt-directive-md](https://agentdocsspec.com/spec/#llms-txt-directive-md)     | Medium (4)    | Whether your markdown pages tell agents where to find llms.txt.                                                          |
 
 ### Markdown Availability
 
@@ -88,7 +89,7 @@ Whether agent-facing resources stay accurate over time.
 
 | Check                                                                              | Weight     | What it measures                                                                                           |
 | ---------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| [llms-txt-freshness](https://agentdocsspec.com/spec/#llms-txt-freshness)           | Medium (4) | Whether your llms.txt reflects your current site. A stale index sends agents to outdated or missing pages. |
+| [llms-txt-coverage](https://agentdocsspec.com/spec/#llms-txt-coverage)             | Medium (4) | Whether your llms.txt reflects your current site. A stale index sends agents to outdated or missing pages. |
 | [markdown-content-parity](https://agentdocsspec.com/spec/#markdown-content-parity) | Medium (4) | Whether markdown and HTML versions of pages contain the same content.                                      |
 | [cache-header-hygiene](https://agentdocsspec.com/spec/#cache-header-hygiene)       | Low (2)    | Whether cache lifetimes allow content updates to reach agents in a reasonable timeframe.                   |
 
@@ -120,7 +121,23 @@ For checks that test multiple pages (like `page-size-html` or `rendering-strateg
 score = (sum of check scores) / (sum of weights for non-skipped checks) × 100
 ```
 
-Rounded to the nearest integer.
+Rounded to the nearest integer. Checks marked as `notApplicable` (see below) are excluded from both numerator and denominator.
+
+### Insufficient-data handling (scoreDisplayMode)
+
+When automatic discovery (`random` or `deterministic` sampling) finds fewer than 5 pages, page-level check scores are unreliable because they represent a handful of pages out of potentially thousands. In this case:
+
+- **Page-level checks** get `scoreDisplayMode: "notApplicable"` and are excluded from the overall score calculation.
+- **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) remain `scoreDisplayMode: "numeric"` and are scored normally.
+- **Category scores** where all checks are `notApplicable` become `null` and render as a dash in the scorecard.
+- **Categories with a mix** of page-level and site-level checks score based on the site-level checks only.
+
+This follows the Lighthouse convention: don't present a number when the data behind it isn't meaningful.
+
+This behavior does **not** apply when:
+
+- `--sampling curated` or `--urls`: the user explicitly chose pages to test.
+- `--sampling none`: the user opted out of sampling entirely.
 
 ### Warn coefficients
 
@@ -128,8 +145,8 @@ Not all warnings represent the same degree of degradation. A warning on `llms-tx
 
 | Coefficient | Meaning                                  | Checks                                                                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-freshness`, `markdown-content-parity`                                                                                                                                                                     |
-| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive`, `redirect-behavior`                                                                                                                                                                                                                                              |
+| **0.75**    | Content substantively intact             | `llms-txt-valid`, `content-negotiation`, `llms-txt-links-resolve`, `llms-txt-coverage`, `markdown-content-parity`                                                                                                                                                                      |
+| **0.60**    | Partial coverage or platform-dependent   | `llms-txt-directive-html`, `llms-txt-directive-md`, `redirect-behavior`                                                                                                                                                                                                                |
 | **0.50**    | Genuine functional degradation           | `llms-txt-exists`, `llms-txt-size`, `rendering-strategy`, `markdown-url-support`, `page-size-markdown`, `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`, `cache-header-hygiene`, `auth-gate-detection`, `auth-alternative-access` |
 | **0.25**    | Actively steering agents to a worse path | `llms-txt-links-markdown` (markdown exists but llms.txt links to HTML; agents don't discover .md variants on their own)                                                                                                                                                                |
 
@@ -154,17 +171,27 @@ Some problems are severe enough that no amount of other good behavior should com
 
 When multiple caps apply, the lowest one wins.
 
+The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check has `scoreDisplayMode: "notApplicable"` (insufficient data). If we don't trust the data enough to include it in the score, we don't trust it enough to cap the score either.
+
 ## Interaction diagnostics
 
 Some problems only become visible when you look at multiple checks together. The scorecard surfaces these as **interaction diagnostics**: system-level findings that emerge from combinations of check results.
 
 ### Markdown support is undiscoverable
 
-**Triggers when** your site serves markdown at .md URLs, but none of the discovery mechanisms (content negotiation, llms.txt directive, .md links in llms.txt) are in place.
+**Triggers when** your site serves markdown at .md URLs, but there is no agent-facing directive on HTML pages pointing to llms.txt and the server does not support content negotiation.
 
 **What it means**: You've done the work to support markdown, but agents have no way to find out. They'll default to the HTML path. In observed agent behavior, agents do not independently discover .md URL variants; they need to be told.
 
-**What to do**: Add a directive on your docs pages pointing to llms.txt, or implement content negotiation for `Accept: text/markdown`. Either change makes your existing markdown support visible to agents.
+**What to do**: Add a directive on your docs pages pointing to llms.txt, and implement content negotiation for `Accept: text/markdown`. The directive is the primary discovery mechanism because it reaches all agents; content negotiation provides a fast path for agents that request markdown by default. Both are recommended.
+
+### Markdown support is only partially discoverable
+
+**Triggers when** your site serves markdown at .md URLs and supports content negotiation, but there is no agent-facing directive on HTML pages pointing to llms.txt.
+
+**What it means**: Agents that send `Accept: text/markdown` (Claude Code, Cursor, OpenCode) get markdown automatically, but the majority of agents fetch HTML by default and have no signal that a markdown path exists.
+
+**What to do**: Add a directive near the top of each HTML page pointing to your llms.txt. If your site serves markdown, mention that in the directive too. The directive reaches all agents, not just the ones that request markdown by default.
 
 ### Truncated index
 
@@ -208,6 +235,38 @@ Some problems only become visible when you look at multiple checks together. The
 
 **What to do**: Either reduce HTML page sizes (break large pages, reduce inline CSS/JS) or provide markdown versions and make them discoverable.
 
+### Single-page sample
+
+**Triggers when** automatic discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
+
+**What it means**: Page-level category scores (page size, content structure, URL stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score.
+
+**What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls`.
+
+### All llms.txt links are cross-origin
+
+**Triggers when** every link in your llms.txt points to a different origin than the one being tested.
+
+**What it means**: This typically happens when testing a preview or staging deployment whose llms.txt still references the production domain. The tool filters cross-origin links during page discovery, so it falls back to testing a single page.
+
+**What to do**: Use `--canonical-origin <production-origin>` to rewrite cross-origin links during testing.
+
+### Gzipped sitemap skipped
+
+**Triggers when** a gzipped sitemap (e.g. `sitemap.xml.gz`) was encountered during URL discovery and skipped because gzipped sitemaps are not yet supported.
+
+**What it means**: If the gzipped sitemap is the only sitemap source, URL discovery may have found fewer pages than expected.
+
+**What to do**: Provide an uncompressed `sitemap.xml` alongside the gzipped version, or supply specific pages via `--urls`.
+
+### Severe rate limiting
+
+**Triggers when** more than 20% of tested URLs returned HTTP 429 (Too Many Requests).
+
+**What it means**: The target site is rate-limiting requests from the tool. Check results may be unreliable because rate-limited requests are not retried indefinitely.
+
+**What to do**: Increase `--request-delay` to slow down requests, or contact the site operator to allowlist your IP or user-agent for testing.
+
 ## Cluster coefficients
 
 Some checks have **conditional value**: their contribution depends on whether the conditions needed to realize that value are actually met. The score accounts for this through cluster coefficients that scale a check's contribution up or down.
@@ -237,7 +296,7 @@ If pages are SPA shells, measuring HTML quality is meaningless. This coefficient
 
 ### Index truncation coefficient
 
-**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-freshness`, `llms-txt-links-markdown`
+**Affects**: `llms-txt-links-resolve`, `llms-txt-valid`, `llms-txt-coverage`, `llms-txt-links-markdown`
 
 If your llms.txt is truncated, agents only see part of the index. Measuring the quality of the invisible portion doesn't reflect agent experience.
 

@@ -211,7 +211,6 @@ const genericAria: Detector = (root, claimed) => {
     }
 
     const { container, panels } = found;
-    if (tabs.length === 0 && panels.length === 0) continue;
 
     // Use tab count as the authority. Containers may hold panels from
     // multiple tab groups; capping to tabs.length avoids misattributing

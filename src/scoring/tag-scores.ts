@@ -98,7 +98,14 @@ const STATUS_MAPPERS: Record<string, (item: Record<string, unknown>) => string> 
     }
   },
 
-  'llms-txt-directive': (item) => {
+  'llms-txt-directive-html': (item) => {
+    if (item.error) return 'skip';
+    if (!item.found) return 'fail';
+    if (typeof item.positionPercent === 'number' && item.positionPercent > 50) return 'warn';
+    return 'pass';
+  },
+
+  'llms-txt-directive-md': (item) => {
     if (item.error) return 'skip';
     if (!item.found) return 'fail';
     if (typeof item.positionPercent === 'number' && item.positionPercent > 50) return 'warn';
@@ -119,7 +126,7 @@ const SINGLE_RESOURCE_CHECKS = new Set([
   'llms-txt-size',
   'llms-txt-links-resolve',
   'llms-txt-links-markdown',
-  'llms-txt-freshness',
+  'llms-txt-coverage',
 ]);
 
 /**

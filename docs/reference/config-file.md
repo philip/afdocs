@@ -36,6 +36,19 @@ options:
   thresholds:
     pass: 50000
     fail: 100000
+  # Coverage check: thresholds and exclusions
+  # coveragePassThreshold: 95
+  # coverageWarnThreshold: 80
+  # coverageExclusions:
+  #   - /docs/reference/**
+  #   - /docs/changelog/**
+  #   - "**/release-notes/**"  # quote patterns starting with *
+  # Parity check: thresholds and exclusions
+  # parityPassThreshold: 5
+  # parityWarnThreshold: 20
+  # parityExclusions:
+  #   - .human-only-content
+  #   - '[data-audience="humans"]'  # quote selectors starting with [ (YAML treats unquoted [] as arrays)
 
 # Optional: test specific pages instead of discovering via llms.txt/sitemap
 # pages:
@@ -52,7 +65,7 @@ The documentation site URL to check. This is the only required field.
 
 ### `checks` (optional)
 
-A list of check IDs to run. If omitted, all 22 checks run. Use this to focus on checks that are actionable for your platform. See the [Checks Reference](/checks/) for the full list of check IDs.
+A list of check IDs to run. If omitted, all 23 checks run. Use this to focus on checks that are actionable for your platform. See the [Checks Reference](/checks/) for the full list of check IDs.
 
 This is particularly useful when your docs platform doesn't support certain capabilities. For example, if you can't serve markdown, exclude the markdown-related checks so your score reflects what you can control. See [Improve Your Score](/improve-your-score#step-3-work-through-fixes-iteratively) for more on this approach.
 
@@ -71,19 +84,25 @@ skipChecks:
 
 Override default runner options. All fields are optional:
 
-| Field              | Default     | Description                                                                                 |
-| ------------------ | ----------- | ------------------------------------------------------------------------------------------- |
-| `maxLinksToTest`   | `50`        | Maximum number of pages to sample                                                           |
-| `samplingStrategy` | `random`    | `random`, `deterministic`, `curated`, or `none`                                             |
-| `maxConcurrency`   | `3`         | Maximum concurrent HTTP requests                                                            |
-| `requestDelay`     | `200`       | Delay between requests in milliseconds                                                      |
-| `requestTimeout`   | `30000`     | Timeout for individual HTTP requests in milliseconds                                        |
-| `preferredLocale`  | auto-detect | Preferred locale for URL discovery (e.g. `en`, `fr`, `ja`)                                  |
-| `preferredVersion` | auto-detect | Preferred version for URL discovery (e.g. `v3`, `2.x`)                                      |
-| `canonicalOrigin`  |             | The production domain your content links to                                                 |
-| `llmsTxtUrl`       |             | Explicit llms.txt URL to use as canonical (overrides the discovery heuristic; see CLI docs) |
-| `thresholds.pass`  | `50000`     | Page size pass threshold in characters                                                      |
-| `thresholds.fail`  | `100000`    | Page size fail threshold in characters                                                      |
+| Field                   | Default     | Description                                                                                              |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
+| `maxLinksToTest`        | `50`        | Maximum number of pages to sample                                                                        |
+| `samplingStrategy`      | `random`    | `random`, `deterministic`, `curated`, or `none`                                                          |
+| `maxConcurrency`        | `3`         | Maximum concurrent HTTP requests                                                                         |
+| `requestDelay`          | `200`       | Delay between requests in milliseconds                                                                   |
+| `requestTimeout`        | `30000`     | Timeout for individual HTTP requests in milliseconds                                                     |
+| `preferredLocale`       | auto-detect | Preferred locale for URL discovery (e.g. `en`, `fr`, `ja`)                                               |
+| `preferredVersion`      | auto-detect | Preferred version for URL discovery (e.g. `v3`, `2.x`)                                                   |
+| `canonicalOrigin`       |             | The production domain your content links to                                                              |
+| `llmsTxtUrl`            |             | Explicit llms.txt URL to use as canonical (overrides the discovery heuristic; see CLI docs)              |
+| `thresholds.pass`       | `50000`     | Page size pass threshold in characters                                                                   |
+| `thresholds.fail`       | `100000`    | Page size fail threshold in characters                                                                   |
+| `coveragePassThreshold` | `95`        | `llms-txt-coverage` pass threshold: minimum coverage % to pass (higher = stricter)                       |
+| `coverageWarnThreshold` | `80`        | `llms-txt-coverage` warn threshold: minimum coverage % to avoid failure (higher = stricter)              |
+| `coverageExclusions`    |             | Glob patterns to exclude from the sitemap before calculating coverage (quote patterns starting with `*`) |
+| `parityPassThreshold`   | `5`         | `markdown-content-parity` pass threshold: maximum missing % to pass (lower = stricter)                   |
+| `parityWarnThreshold`   | `20`        | `markdown-content-parity` warn threshold: maximum missing % to avoid failure (lower = stricter)          |
+| `parityExclusions`      |             | CSS selectors to strip from HTML before parity comparison                                                |
 
 ### `pages` (optional)
 

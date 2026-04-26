@@ -295,4 +295,21 @@ describe('redirect-behavior', () => {
     expect(result.status).toBe('warn');
     expect(result.details?.crossHostCount).toBe(1);
   });
+
+  it('classifies as no-redirect when 3xx lacks Location header', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/no-location',
+        () =>
+          new HttpResponse(null, {
+            status: 301,
+          }),
+        { once: true },
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/no-location')));
+    const pages = result.details?.pageResults as Array<{ classification: string }>;
+    expect(pages[0].classification).toBe('no-redirect');
+  });
 });

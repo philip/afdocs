@@ -198,6 +198,41 @@ These thresholds apply to `page-size-html`, `page-size-markdown`, and `tabbed-co
 
 The defaults (50K pass, 100K fail) reflect observed agent truncation limits. You generally don't need to change these unless you have specific knowledge of your users' agent platforms.
 
+### Coverage thresholds
+
+| Flag                               | Default | Description                                                   |
+| ---------------------------------- | ------- | ------------------------------------------------------------- |
+| `--coverage-pass-threshold <n>`    | `95`    | Minimum coverage % to pass (higher = stricter)                |
+| `--coverage-warn-threshold <n>`    | `80`    | Minimum coverage % to avoid failure (higher = stricter)       |
+| `--coverage-exclusions <patterns>` |         | Comma-separated glob patterns to exclude from the denominator |
+
+These control the `llms-txt-coverage` check, which compares `llms.txt` page URLs against the sitemap. Set both thresholds to `0` to make the check informational: it still reports coverage percentage and missing pages, but doesn't warn or fail.
+
+Use exclusion patterns with glob syntax (`**` matches across path segments, `*` matches within one) to remove matching sitemap URLs from the denominator before calculating coverage. Exclude content like API reference pages or changelog archives that you omit intentionally from llms.txt:
+
+```bash
+afdocs check https://example.com --coverage-exclusions "/docs/reference/**,/docs/changelog/**"
+```
+
+### Parity thresholds
+
+| Flag                              | Default | Description                                                               |
+| --------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `--parity-pass-threshold <n>`     | `5`     | Maximum missing % to pass (lower = stricter)                              |
+| `--parity-warn-threshold <n>`     | `20`    | Maximum missing % to avoid failure (lower = stricter)                     |
+| `--parity-exclusions <selectors>` |         | Comma-separated CSS selectors to strip from HTML before parity comparison |
+
+These control the `markdown-content-parity` check, which compares HTML content against markdown to detect drift. Set both thresholds to `0` to make the check informational: it still reports the missing percentage, but doesn't warn or fail. This is useful for sites that intentionally serve different content to different audiences.
+
+The check also has built-in support for the `data-markdown-ignore` HTML attribute. Elements with this attribute are stripped from the HTML before comparison, so human-only content doesn't count as "missing" from markdown.
+
+Use `--parity-exclusions` for platform-specific conventions beyond `data-markdown-ignore`:
+
+```bash
+# Strip elements with a custom class or data attribute
+afdocs check https://example.com --parity-exclusions ".human-only-content,[data-audience='humans']"
+```
+
 ## Exit codes
 
 | Code | Meaning                     |

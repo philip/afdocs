@@ -18,8 +18,9 @@ describe('markdown-content-parity', () => {
   function makeCtx(
     pages: Array<{ url: string; markdown: string; htmlBody: string }>,
     host: string,
+    options?: Record<string, unknown>,
   ) {
-    const ctx = createContext(`http://${host}`, { requestDelay: 0 });
+    const ctx = createContext(`http://${host}`, { requestDelay: 0, ...options });
 
     // Simulate upstream markdown-url-support having run
     ctx.previousResults.set('markdown-url-support', {
@@ -1839,5 +1840,251 @@ Use a linter to automatically verify code fence syntax across all your documents
     expect(result.status).toBe('pass');
     const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
     expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  // --- Audience segmentation tests ---
+
+  it('strips data-markdown-ignore elements from HTML before comparison', async () => {
+    // Content inside data-markdown-ignore is intended only for human readers;
+    // it is expected to be absent from the markdown version.
+    const html = `<html><body><main>
+      <h1>Getting Started</h1>
+      <p>Install the SDK with npm to add it to your project dependencies list.</p>
+      <div data-markdown-ignore>
+        <p>Click the gear icon in the top-right corner to open the settings panel.</p>
+        <p>Navigate to the API section and click Generate New Key to create credentials.</p>
+      </div>
+      <p>Then import the client module and configure it with your API credentials here.</p>
+      <p>Run the following commands to get started with the installation process now.</p>
+      <p>After installation import the client and call the initialize method first please.</p>
+      <p>The client will automatically detect your configuration from environment variables.</p>
+      <p>You can override any configuration option by passing it to the constructor directly.</p>
+      <p>Make sure your API key is set before attempting to make any requests to the server.</p>
+      <p>The library validates all configuration options and throws helpful error messages.</p>
+      <p>Connection pooling is handled automatically for optimal performance and throughput.</p>
+      <p>TLS certificates are verified by default to ensure secure communication channels.</p>
+    </main></body></html>`;
+
+    const markdown = `# Getting Started
+
+Install the SDK with npm to add it to your project dependencies list.
+
+Then import the client module and configure it with your API credentials here.
+
+Run the following commands to get started with the installation process now.
+
+After installation import the client and call the initialize method first please.
+
+The client will automatically detect your configuration from environment variables.
+
+You can override any configuration option by passing it to the constructor directly.
+
+Make sure your API key is set before attempting to make any requests to the server.
+
+The library validates all configuration options and throws helpful error messages.
+
+Connection pooling is handled automatically for optimal performance and throughput.
+
+TLS certificates are verified by default to ensure secure communication channels.`;
+
+    const url = 'http://mcp-segmentation.local/docs/start';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-segmentation.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+    expect(result.details?.segmentationElementsStripped).toBe(1);
+  });
+
+  it('uses configurable thresholds (0/0 = informational mode)', async () => {
+    // Setting both thresholds to 0 means the check always passes,
+    // making it informational for sites with intentional content divergence.
+    const html = `<html><body>
+      <h1>Installation Guide</h1>
+      <p>You need Node.js 18 or later installed on your system before proceeding.</p>
+      <p>Create a configuration file with your API credentials and region settings.</p>
+      <p>Import and initialize the client using the configuration you just created.</p>
+      <p>Run the health check to verify everything is working correctly in your environment.</p>
+      <p>Common issues include connection timeouts and authentication failures with expired keys.</p>
+      <p>Check your network connectivity if you experience connection timeout errors repeatedly.</p>
+      <p>Verify your API key has not expired if you see authentication failure messages.</p>
+      <p>Make sure the target host is accessible and responding to network requests properly.</p>
+      <p>Review the troubleshooting section for additional debugging information and tips.</p>
+      <p>Contact support if you continue to experience issues after following these steps.</p>
+      <p>The installation process should take approximately five minutes from start to finish.</p>
+    </body></html>`;
+
+    const markdown = `# Changelog
+
+## v2.0.0
+
+Breaking changes in this release that affect all existing integrations.
+
+## v1.5.0
+
+Added new features for managing team resources and permissions.`;
+
+    const url = 'http://mcp-informational.local/docs/install';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-informational.local', {
+      parityPassThreshold: 0,
+      parityWarnThreshold: 0,
+    });
+    const result = await check.run(ctx);
+    // With thresholds at 0, even massive differences pass
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingPercent: number }>;
+    // The missing percentage is still reported even though the check passes
+    expect(pageResults[0].missingPercent).toBeGreaterThan(0);
+  });
+
+  it('applies custom parityExclusions CSS selectors', async () => {
+    // Site uses a custom attribute for audience segmentation that isn't
+    // data-markdown-ignore. The user provides it via parityExclusions.
+    const html = `<html><body><main>
+      <h1>API Reference</h1>
+      <p>The API supports the following operations for managing resources securely.</p>
+      <section class="human-only-ui-steps">
+        <p>Open the dashboard and navigate to the API Keys section in the sidebar.</p>
+        <p>Click the Create button to generate a new API key for your application.</p>
+      </section>
+      <p>Use bearer tokens for authentication with the API endpoints on every request.</p>
+      <p>Include your API key in the Authorization header of every request you send.</p>
+      <p>Requests are limited to one hundred per minute per API key by default now.</p>
+      <p>Error responses include a JSON body with a code field and a message for details.</p>
+      <p>Use cursor-based pagination with the after parameter in your requests to pages.</p>
+      <p>Each page returns up to fifty items by default unless configured otherwise here.</p>
+      <p>The SDK supports automatic retries with exponential backoff for transient failures.</p>
+      <p>Configure the maximum number of retries using the maxRetries constructor option.</p>
+      <p>All requests are authenticated automatically using the configured API credentials.</p>
+    </main></body></html>`;
+
+    const markdown = `# API Reference
+
+The API supports the following operations for managing resources securely.
+
+Use bearer tokens for authentication with the API endpoints on every request.
+
+Include your API key in the Authorization header of every request you send.
+
+Requests are limited to one hundred per minute per API key by default now.
+
+Error responses include a JSON body with a code field and a message for details.
+
+Use cursor-based pagination with the after parameter in your requests to pages.
+
+Each page returns up to fifty items by default unless configured otherwise here.
+
+The SDK supports automatic retries with exponential backoff for transient failures.
+
+Configure the maximum number of retries using the maxRetries constructor option.
+
+All requests are authenticated automatically using the configured API credentials.`;
+
+    const url = 'http://mcp-custom-excl.local/docs/api';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-custom-excl.local', {
+      parityExclusions: ['.human-only-ui-steps'],
+    });
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('reports custom thresholds in details when non-default', async () => {
+    const html =
+      '<html><body><h1>Page</h1><p>Content that matches between HTML and markdown versions exactly.</p></body></html>';
+    const markdown = '# Page\n\nContent that matches between HTML and markdown versions exactly.';
+    const url = 'http://mcp-threshold-report.local/docs/page';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-threshold-report.local', {
+      parityPassThreshold: 10,
+      parityWarnThreshold: 30,
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.parityPassThreshold).toBe(10);
+    expect(result.details?.parityWarnThreshold).toBe(30);
+  });
+
+  it('reports a clear error for invalid CSS selectors in parityExclusions', async () => {
+    const html = `<html><body><main>
+      <h1>Page Title</h1>
+      <p>Content that is long enough to form a meaningful segment for comparison.</p>
+      <p>Additional content that provides enough segments for a valid comparison run.</p>
+      <p>Third paragraph ensures we are above the minimum segment threshold limit.</p>
+      <p>Fourth paragraph provides additional content for the comparison to process.</p>
+      <p>Fifth paragraph rounds out the content to ensure robust segment extraction.</p>
+      <p>Sixth paragraph adds more unique text to exceed the minimum required amount.</p>
+      <p>Seventh paragraph continues to build the content body for a thorough check.</p>
+      <p>Eighth paragraph ensures this page has plenty of content for the check run.</p>
+      <p>Ninth paragraph keeps the content flowing with additional unique text here.</p>
+      <p>Tenth paragraph wraps up the page with one final block of meaningful text.</p>
+    </main></body></html>`;
+    const markdown = '# Page Title\n\nSome markdown content here.';
+    const url = 'http://mcp-bad-selector.local/docs/page';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-bad-selector.local', {
+      parityExclusions: ['[data-foo='],
+    });
+    const result = await check.run(ctx);
+    const pageResults = result.details?.pageResults as Array<{ error?: string }>;
+    expect(pageResults[0].error).toContain('Invalid CSS selector');
   });
 });
