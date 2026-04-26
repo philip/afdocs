@@ -2052,32 +2052,6 @@ All requests are authenticated automatically using the configured API credential
     expect(result.details?.parityWarnThreshold).toBe(30);
   });
 
-  it('returns error when parityPassThreshold exceeds parityWarnThreshold', async () => {
-    const html =
-      '<html><body><h1>Page</h1><p>Content that matches between HTML and markdown versions exactly.</p></body></html>';
-    const markdown = '# Page\n\nContent that matches between HTML and markdown versions exactly.';
-    const url = 'http://mcp-inverted.local/docs/page';
-
-    server.use(
-      http.get(
-        url,
-        () =>
-          new HttpResponse(html, {
-            status: 200,
-            headers: { 'Content-Type': 'text/html' },
-          }),
-      ),
-    );
-
-    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-inverted.local', {
-      parityPassThreshold: 20,
-      parityWarnThreshold: 5,
-    });
-    const result = await check.run(ctx);
-    expect(result.status).toBe('error');
-    expect(result.message).toContain('greater than');
-  });
-
   it('reports a clear error for invalid CSS selectors in parityExclusions', async () => {
     const html = `<html><body><main>
       <h1>Page Title</h1>

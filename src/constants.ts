@@ -1,4 +1,11 @@
-import type { CheckOptions, SizeThresholds } from './types.js';
+import type { CheckOptions, SamplingStrategy, SizeThresholds } from './types.js';
+
+export const VALID_SAMPLING_STRATEGIES: readonly SamplingStrategy[] = [
+  'random',
+  'deterministic',
+  'curated',
+  'none',
+];
 
 export const DEFAULT_THRESHOLDS: SizeThresholds = {
   pass: 50_000,

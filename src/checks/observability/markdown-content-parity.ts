@@ -651,18 +651,6 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const failThreshold = ctx.options.parityWarnThreshold ?? DEFAULT_PARITY_WARN_THRESHOLD;
   const parityExclusions = ctx.options.parityExclusions;
 
-  if (warnThreshold > failThreshold && failThreshold > 0) {
-    return {
-      id,
-      category,
-      status: 'error',
-      message:
-        `parityPassThreshold (${warnThreshold}) is greater than ` +
-        `parityWarnThreshold (${failThreshold}). The pass threshold must be ` +
-        'less than or equal to the warn threshold.',
-    };
-  }
-
   const results: PageParityResult[] = [];
   const concurrency = ctx.options.maxConcurrency;
   let totalSegmentationStripped = 0;

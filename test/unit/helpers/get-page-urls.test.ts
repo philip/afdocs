@@ -2037,11 +2037,12 @@ describe('discoverAndSamplePages', () => {
   });
 
   it('curated strategy returns configured URLs without discovery', async () => {
+    const curatedPages = ['http://curated.local/page-a', 'http://curated.local/page-b'];
     const ctx = createContext('http://curated.local', {
       requestDelay: 0,
       samplingStrategy: 'curated',
+      curatedPages,
     });
-    ctx._curatedPages = ['http://curated.local/page-a', 'http://curated.local/page-b'];
 
     const result = await discoverAndSamplePages(ctx);
     expect(result.urls).toEqual(['http://curated.local/page-a', 'http://curated.local/page-b']);
@@ -2051,15 +2052,16 @@ describe('discoverAndSamplePages', () => {
   });
 
   it('curated strategy with tagged objects populates urlTags', async () => {
-    const ctx = createContext('http://curated-tags.local', {
-      requestDelay: 0,
-      samplingStrategy: 'curated',
-    });
-    ctx._curatedPages = [
+    const curatedPages = [
       'http://curated-tags.local/page-a',
       { url: 'http://curated-tags.local/page-b', tag: 'api' },
       { url: 'http://curated-tags.local/page-c', tag: 'guides' },
     ];
+    const ctx = createContext('http://curated-tags.local', {
+      requestDelay: 0,
+      samplingStrategy: 'curated',
+      curatedPages,
+    });
 
     const result = await discoverAndSamplePages(ctx);
     expect(result.urls).toHaveLength(3);
@@ -2069,17 +2071,14 @@ describe('discoverAndSamplePages', () => {
     });
   });
 
-  it('curated strategy with empty pages falls back to baseUrl', async () => {
-    const ctx = createContext('http://curated-empty.local', {
-      requestDelay: 0,
-      samplingStrategy: 'curated',
-    });
-    ctx._curatedPages = [];
-
-    const result = await discoverAndSamplePages(ctx);
-    expect(result.urls).toEqual(['http://curated-empty.local']);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('no pages defined');
+  it('curated strategy with empty pages throws validation error', () => {
+    expect(() =>
+      createContext('http://curated-empty.local', {
+        requestDelay: 0,
+        samplingStrategy: 'curated',
+        curatedPages: [],
+      }),
+    ).toThrow('Curated sampling requires curatedPages to be non-empty');
   });
 
   it('curated strategy does not apply maxLinksToTest', async () => {
@@ -2088,8 +2087,8 @@ describe('discoverAndSamplePages', () => {
       requestDelay: 0,
       samplingStrategy: 'curated',
       maxLinksToTest: 5,
+      curatedPages: urls,
     });
-    ctx._curatedPages = urls;
 
     const result = await discoverAndSamplePages(ctx);
     expect(result.urls).toHaveLength(100);

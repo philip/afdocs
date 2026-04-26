@@ -798,36 +798,6 @@ describe('filterToUnprefixedLocale', () => {
 });
 
 describe('edge cases', () => {
-  test('warns when passThreshold < warnThreshold', async () => {
-    const host = 'cov-threshold-warn.local';
-    const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
-    const llmsPages = allPages.slice(0, 9);
-
-    const ctx = makeCtx(host, llmsPages, '/docs');
-    ctx.options.coveragePassThreshold = 50;
-    ctx.options.coverageWarnThreshold = 80;
-
-    server.use(
-      http.get(
-        `http://${host}/robots.txt`,
-        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
-      ),
-      http.get(
-        `http://${host}/sitemap.xml`,
-        () =>
-          new HttpResponse(makeSitemap(allPages), {
-            status: 200,
-            headers: { 'content-type': 'application/xml' },
-          }),
-      ),
-    );
-
-    const result = await check.run(ctx);
-    expect(result.details?.thresholdWarnings).toBeDefined();
-    const warnings = result.details?.thresholdWarnings as string[];
-    expect(warnings[0]).toContain('warn state is unreachable');
-  });
-
   test('handles malformed URLs in sitemap gracefully', async () => {
     const host = 'cov-malformed.local';
     const goodPages = [`http://${host}/docs/guide`];

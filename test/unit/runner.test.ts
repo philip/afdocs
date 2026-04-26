@@ -73,6 +73,26 @@ describe('createContext URL normalization', () => {
     const ctx = createContext('https://example.com');
     expect(ctx._curatedPages).toBeUndefined();
   });
+
+  it('throws on invalid options', () => {
+    expect(() => createContext('https://example.com', { maxConcurrency: -1 })).toThrow(
+      'Invalid options',
+    );
+  });
+
+  it('normalizes bare domain in canonicalOrigin', () => {
+    const ctx = createContext('https://preview.example.com', {
+      canonicalOrigin: 'example.com',
+    });
+    expect(ctx.options.canonicalOrigin).toBe('https://example.com');
+  });
+
+  it('normalizes bare domain in llmsTxtUrl', () => {
+    const ctx = createContext('https://example.com', {
+      llmsTxtUrl: 'example.com/llms.txt',
+    });
+    expect(ctx.options.llmsTxtUrl).toBe('https://example.com/llms.txt');
+  });
 });
 
 describe('runner', () => {
@@ -466,5 +486,17 @@ describe('runner', () => {
 
     expect(report.discoverySources).toBeDefined();
     expect(report.discoverySources).toContain('llms-txt');
+  });
+
+  it('throws on invalid options', async () => {
+    await expect(runChecks('http://invalid-opts.local', { maxConcurrency: -1 })).rejects.toThrow(
+      'Invalid options',
+    );
+  });
+
+  it('throws on unknown check IDs', async () => {
+    await expect(
+      runChecks('http://invalid-opts.local', { checkIds: ['nonexistent-check'] }),
+    ).rejects.toThrow('Unknown check ID');
   });
 });
