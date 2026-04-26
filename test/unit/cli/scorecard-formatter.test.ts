@@ -433,6 +433,97 @@ describe('formatScorecard', () => {
     expect(output).not.toContain('null / 100');
   });
 
+  it('shows tag scores with singular page count', () => {
+    const score = makeScoreResult({
+      tagScores: {
+        quickstart: {
+          score: 95,
+          grade: 'A',
+          pageCount: 1,
+          checks: [],
+        },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('1 page');
+    expect(output).not.toContain('1 pages');
+  });
+
+  it('shows tag score check breakdown with only warns (no fails)', () => {
+    const score = makeScoreResult({
+      tagScores: {
+        tutorials: {
+          score: 80,
+          grade: 'B',
+          pageCount: 3,
+          checks: [
+            {
+              checkId: 'page-size-html',
+              category: 'page-size',
+              weight: 7,
+              proportion: 0.8,
+              pages: [
+                { url: 'https://example.com/a', status: 'pass' },
+                { url: 'https://example.com/b', status: 'warn' },
+                { url: 'https://example.com/c', status: 'warn' },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('2 warn');
+    expect(output).toContain('1 pass');
+    expect(output).not.toContain('fail');
+    expect(output).toContain('WARN');
+  });
+
+  it('handles tag score page with skip status (not counted in pass/warn/fail)', () => {
+    const score = makeScoreResult({
+      tagScores: {
+        api: {
+          score: 50,
+          grade: 'D',
+          pageCount: 2,
+          checks: [
+            {
+              checkId: 'content-start-position',
+              category: 'page-size',
+              weight: 4,
+              proportion: 0.5,
+              pages: [
+                { url: 'https://example.com/a', status: 'fail' },
+                { url: 'https://example.com/b', status: 'skip' },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('1 fail');
+    expect(output).not.toContain('skip');
+  });
+
+  it('shows A+ grade with correct color', () => {
+    const score = makeScoreResult({
+      overall: 100,
+      grade: 'A+',
+      categoryScores: {
+        'content-discoverability': { score: 100, grade: 'A+' },
+      },
+    });
+    const output = formatScorecard(makeReport(), score);
+    expect(output).toContain('(A+)');
+  });
+
+  it('handles invalid timestamp gracefully', () => {
+    const report = makeReport({ timestamp: 'not-a-date' });
+    const output = formatScorecard(report, makeScoreResult());
+    expect(output).toContain('not-a-date');
+  });
+
   it('renders N/A scorecard end-to-end from single-page discovery report', () => {
     const report = makeReport({
       results: [

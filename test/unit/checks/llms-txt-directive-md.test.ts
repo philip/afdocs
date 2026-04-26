@@ -247,6 +247,85 @@ describe('llms-txt-directive-md', () => {
     expect(result.details?.fetchErrors).toBe(1);
   });
 
+  it('skips content negotiation when content-type is not text/markdown', async () => {
+    server.use(
+      http.get('http://test.local/docs/page1.md', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://test.local/docs/page1/index.md',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('<html><body>llms.txt mentioned here</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.fetchErrors).toBe(1);
+  });
+
+  it('skips content negotiation when response body is empty', async () => {
+    server.use(
+      http.get('http://test.local/docs/page1.md', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://test.local/docs/page1/index.md',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('   ', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.fetchErrors).toBe(1);
+  });
+
+  it('skips content negotiation when response is not ok', async () => {
+    server.use(
+      http.get('http://test.local/docs/page1.md', () => new HttpResponse('', { status: 404 })),
+      http.get(
+        'http://test.local/docs/page1/index.md',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+      http.get('http://test.local/docs/page1', () => new HttpResponse('', { status: 500 })),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.fetchErrors).toBe(1);
+  });
+
+  it('passes without "near the top" when directive is mid-page', async () => {
+    const before = 'Lorem ipsum content paragraph.\n\n'.repeat(15);
+    const after = 'More documentation content here.\n\n'.repeat(80);
+    server.use(
+      http.get(
+        'http://test.local/docs/page1.md',
+        () =>
+          new HttpResponse(`# Docs\n\n${before}See llms.txt for index.\n\n${after}`, {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.message).not.toContain('near the top');
+    expect(result.message).not.toContain('buried');
+  });
+
   it('handles curated .md pages', async () => {
     server.use(
       http.get(

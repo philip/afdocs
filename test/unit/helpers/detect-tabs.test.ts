@@ -624,6 +624,104 @@ Just some text, no Tab elements here.
     expect(groups).toHaveLength(0);
   });
 
+  it('MkDocs skips container with no labels and no panels', () => {
+    const html = `
+      <div class="tabbed-set">
+        <div class="tabbed-labels"></div>
+        <div class="tabbed-content"></div>
+      </div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(0);
+  });
+
+  it('Sphinx skips container with no tabs and no panels', () => {
+    const html = `
+      <div class="sphinx-tabs"></div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(0);
+  });
+
+  it('MkDocs handles more labels than panels (empty html fallback)', () => {
+    const html = `
+      <div class="tabbed-set">
+        <div class="tabbed-labels">
+          <label>Tab A</label>
+          <label>Tab B</label>
+          <label>Tab C</label>
+        </div>
+        <div class="tabbed-content">
+          <div class="tabbed-block"><pre>only panel</pre></div>
+        </div>
+      </div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].framework).toBe('mkdocs');
+    expect(groups[0].tabCount).toBe(3);
+    expect(groups[0].panels[0].html).toContain('only panel');
+    expect(groups[0].panels[1].html).toBe('');
+    expect(groups[0].panels[2].html).toBe('');
+  });
+
+  it('MS Learn skips container already claimed by Docusaurus', () => {
+    // A .tabGroup inside a Docusaurus tab — Docusaurus runs first and claims
+    // the outer container. MS Learn should skip the inner .tabGroup.
+    const html = `
+      <div>
+        <ul role="tablist">
+          <li class="tabs__item" role="tab">Outer</li>
+        </ul>
+        <div role="tabpanel">
+          <div class="tabGroup">
+            <a role="tab" data-tab="inner">Inner</a>
+            <section role="tabpanel"><pre>inner content</pre></section>
+          </div>
+        </div>
+      </div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].framework).toBe('docusaurus');
+  });
+
+  it('MS Learn handles more panels than tabs (null label fallback)', () => {
+    const html = `
+      <div class="tabGroup">
+        <a role="tab" data-tab="only">Only Tab</a>
+        <section role="tabpanel"><pre>panel 1</pre></section>
+        <section role="tabpanel"><pre>panel 2</pre></section>
+        <section role="tabpanel"><pre>panel 3</pre></section>
+      </div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].framework).toBe('microsoft-learn');
+    expect(groups[0].tabCount).toBe(3);
+    expect(groups[0].panels[0].label).toBe('Only Tab');
+    expect(groups[0].panels[1].label).toBeNull();
+    expect(groups[0].panels[2].label).toBeNull();
+  });
+
+  it('generic ARIA with panels but no tab elements uses panel count', () => {
+    // Some implementations have tabpanels without explicit role="tab" buttons.
+    // The detector should use panels.length as the count and set null labels.
+    const html = `
+      <div>
+        <div role="tablist"></div>
+        <div role="tabpanel"><p>Content A</p></div>
+        <div role="tabpanel"><p>Content B</p></div>
+      </div>
+    `;
+    const groups = detectTabGroups(html);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].framework).toBe('generic-aria');
+    expect(groups[0].tabCount).toBe(2);
+    expect(groups[0].panels[0].label).toBeNull();
+    expect(groups[0].panels[1].label).toBeNull();
+  });
+
   it('Docusaurus detector uses ancestor walking when panels are not siblings', () => {
     // Docusaurus with a wrapper structure where tablist and panels
     // share a grandparent rather than a direct parent.

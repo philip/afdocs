@@ -188,6 +188,60 @@ describe('coefficients', () => {
     });
   });
 
+  describe('HTML path coefficient edge cases', () => {
+    it('returns 1.0 when rendering-strategy is skip', () => {
+      const results = resultsMap(r('rendering-strategy', 'skip'));
+      expect(getCoefficient('page-size-html', results)).toBe(1.0);
+    });
+
+    it('returns 1.0 when rendering-strategy is error', () => {
+      const results = resultsMap(r('rendering-strategy', 'error'));
+      expect(getCoefficient('page-size-html', results)).toBe(1.0);
+    });
+
+    it('returns 1.0 when rendering-strategy has no details', () => {
+      const results = resultsMap(r('rendering-strategy', 'warn'));
+      expect(getCoefficient('page-size-html', results)).toBe(1.0);
+    });
+
+    it('returns 1.0 when rendering-strategy total is zero', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 0,
+          sparseContent: 0,
+          spaShells: 0,
+        }),
+      );
+      expect(getCoefficient('page-size-html', results)).toBe(1.0);
+    });
+  });
+
+  describe('index truncation coefficient edge cases', () => {
+    it('falls back to 0.5 when sizes have zero characters', () => {
+      const results = resultsMap(
+        r('llms-txt-size', 'fail', {
+          sizes: [{ characters: 0 }],
+        }),
+      );
+      expect(getCoefficient('llms-txt-valid', results)).toBe(0.5);
+    });
+
+    it('falls back to 0.5 when fail has no details at all', () => {
+      const results = resultsMap(r('llms-txt-size', 'fail'));
+      expect(getCoefficient('llms-txt-valid', results)).toBe(0.5);
+    });
+
+    it('returns 1.0 for non-standard status (error)', () => {
+      const results = resultsMap(r('llms-txt-size', 'error'));
+      expect(getCoefficient('llms-txt-valid', results)).toBe(1.0);
+    });
+
+    it('returns 1.0 for skip status', () => {
+      const results = resultsMap(r('llms-txt-size', 'skip'));
+      expect(getCoefficient('llms-txt-valid', results)).toBe(1.0);
+    });
+  });
+
   describe('non-coefficient checks', () => {
     it('returns 1.0 for checks without coefficients', () => {
       const results = resultsMap();

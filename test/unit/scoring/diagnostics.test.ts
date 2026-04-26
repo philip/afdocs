@@ -503,5 +503,123 @@ describe('diagnostics', () => {
       const diags = evaluateDiagnostics(results, defaultReport());
       expect(diags.find((d) => d.id === 'rate-limiting-severe')).toBeUndefined();
     });
+
+    it('uses pageResults length when testedLinks is absent', () => {
+      const results = resultsMap(
+        r('markdown-url-support', 'warn', {
+          pageResults: Array.from({ length: 10 }, () => ({})),
+          rateLimited: 5,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'rate-limiting-severe');
+      expect(diag).toBeDefined();
+      expect(diag!.message).toContain('50%');
+    });
+  });
+
+  describe('gzipped-sitemap-skipped message', () => {
+    it('includes URL from warning when regex matches', () => {
+      const results = resultsMap(
+        r('page-size-html', 'pass', {
+          discoveryWarnings: [
+            'Skipped gzipped sitemap (not supported): https://example.com/sitemap.xml.gz',
+          ],
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'gzipped-sitemap-skipped');
+      expect(diag!.message).toContain('https://example.com/sitemap.xml.gz');
+    });
+
+    it('handles warning without URL pattern', () => {
+      const results = resultsMap(
+        r('page-size-html', 'pass', {
+          discoveryWarnings: ['Skipped gzipped sitemap (not supported)'],
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'gzipped-sitemap-skipped');
+      expect(diag).toBeDefined();
+      expect(diag!.message).toContain('gzipped sitemap was skipped');
+    });
+  });
+
+  describe('spa-shell-html-invalid message', () => {
+    it('notes no alternative path when markdown-url-support fails', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'fail', {
+          serverRendered: 3,
+          sparseContent: 5,
+          spaShells: 5,
+        }),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'spa-shell-html-invalid');
+      expect(diag).toBeDefined();
+      expect(diag!.message).toContain('no alternative path');
+    });
+  });
+
+  describe('no-viable-path message', () => {
+    it('describes missing llms.txt when status is fail', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'fail'),
+        r('rendering-strategy', 'fail'),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'no-viable-path');
+      expect(diag!.message).toContain('no llms.txt');
+    });
+
+    it('describes broken llms.txt links when resolve rate is low', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'pass'),
+        r('llms-txt-links-resolve', 'fail', { resolveRate: 5 }),
+        r('rendering-strategy', 'fail'),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'no-viable-path');
+      expect(diag!.message).toContain('5% of links resolve');
+    });
+  });
+
+  describe('truncated-index message', () => {
+    it('computes visible percentage from file size', () => {
+      const results = resultsMap(
+        r('llms-txt-exists', 'pass'),
+        r('llms-txt-size', 'fail', { sizes: [{ characters: 500_000 }] }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'truncated-index');
+      expect(diag!.message).toContain('500,000 characters');
+      expect(diag!.message).toContain('20%');
+    });
+  });
+
+  describe('page-size-no-markdown-escape message', () => {
+    it('includes fail bucket count in message', () => {
+      const results = resultsMap(
+        r('page-size-html', 'fail', { failBucket: 7 }),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'page-size-no-markdown-escape');
+      expect(diag!.message).toContain('7 pages');
+    });
+  });
+
+  describe('single-page-sample message', () => {
+    it('uses plural form for multiple pages', () => {
+      const report = defaultReport();
+      report.testedPages = 3;
+      const results = resultsMap();
+      const diags = evaluateDiagnostics(results, report);
+      const diag = diags.find((d) => d.id === 'single-page-sample');
+      expect(diag!.message).toContain('3 pages were');
+    });
   });
 });

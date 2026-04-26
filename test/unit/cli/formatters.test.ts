@@ -830,6 +830,396 @@ describe('formatText', () => {
       expect(output).not.toContain('https://example.com/good');
     });
 
+    it('shows missing directives for llms-txt-directive-md', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'llms-txt-directive-md',
+            category: 'content-discoverability',
+            status: 'warn',
+            message: 'Directive found on some pages',
+            details: {
+              pageResults: [
+                { url: 'https://example.com/page1', found: false },
+                { url: 'https://example.com/page2', found: true, positionPercent: 3 },
+                { url: 'https://example.com/page3', found: true, positionPercent: 72 },
+                {
+                  url: 'https://example.com/page4',
+                  found: false,
+                  error: 'No markdown version available',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      // page1: not found, no error
+      expect(output).toContain('https://example.com/page1');
+      expect(output).toContain('no directive found');
+      // page2: found near top (3%), should not appear
+      expect(output).not.toContain('https://example.com/page2');
+      // page3: buried directive
+      expect(output).toContain('https://example.com/page3');
+      expect(output).toContain('directive at 72% of page');
+      // page4: error
+      expect(output).toContain('https://example.com/page4');
+      expect(output).toContain('No markdown version available');
+    });
+
+    it('shows error details in llms-txt-directive-html', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'llms-txt-directive-html',
+            category: 'content-discoverability',
+            status: 'fail',
+            message: 'Could not test',
+            details: {
+              pageResults: [{ url: 'https://example.com/err', found: false, error: 'HTTP 500' }],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/err');
+      expect(output).toContain('HTTP 500');
+    });
+
+    it('shows error details for rendering-strategy pages', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'rendering-strategy',
+            category: 'page-size',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/timeout',
+                  status: 'fail',
+                  error: 'Request timed out',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('https://example.com/timeout');
+      expect(output).toContain('Request timed out');
+    });
+
+    it('shows error details for redirect-behavior pages', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'redirect-behavior',
+            category: 'url-stability',
+            status: 'fail',
+            message: 'Errors',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/err',
+                  classification: 'fetch-error',
+                  error: 'ECONNREFUSED',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('ECONNREFUSED');
+    });
+
+    it('shows error details for auth-gate-detection pages', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'auth-gate-detection',
+            category: 'authentication',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/err',
+                  classification: 'auth-required',
+                  error: 'Connection reset',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('Connection reset');
+    });
+
+    it('shows error details for tabbed-content-serialization pages', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'tabbed-content-serialization',
+            category: 'content-structure',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              tabbedPages: [
+                {
+                  url: 'https://example.com/err',
+                  status: 'fail',
+                  error: 'Parse error',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('Parse error');
+    });
+
+    it('shows error details for markdown-content-parity pages', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'markdown-content-parity',
+            category: 'observability',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/err',
+                  status: 'fail',
+                  error: 'Fetch failed',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('Fetch failed');
+    });
+
+    it('shows parity page with missing missingPercent as "content differs"', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'markdown-content-parity',
+            category: 'observability',
+            status: 'warn',
+            message: 'Drift',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/drift',
+                  status: 'warn',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('content differs');
+    });
+
+    it('shows no-store for cache-header-hygiene', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'cache-header-hygiene',
+            category: 'observability',
+            status: 'warn',
+            message: 'Issues',
+            details: {
+              endpointResults: [
+                {
+                  url: 'https://example.com/api',
+                  status: 'warn',
+                  noStore: true,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('no-store');
+    });
+
+    it('shows error details for cache-header-hygiene', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'cache-header-hygiene',
+            category: 'observability',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              endpointResults: [
+                {
+                  url: 'https://example.com/err',
+                  status: 'fail',
+                  error: 'DNS resolution failed',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('DNS resolution failed');
+    });
+
+    it('shows hours for cache-header-hygiene max-age', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'cache-header-hygiene',
+            category: 'observability',
+            status: 'warn',
+            message: 'Issues',
+            details: {
+              endpointResults: [
+                {
+                  url: 'https://example.com/md',
+                  status: 'warn',
+                  effectiveMaxAge: 7200,
+                  noStore: false,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('max-age 2h');
+    });
+
+    it('shows seconds for short cache-header-hygiene max-age', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'cache-header-hygiene',
+            category: 'observability',
+            status: 'warn',
+            message: 'Issues',
+            details: {
+              endpointResults: [
+                {
+                  url: 'https://example.com/fast',
+                  status: 'warn',
+                  effectiveMaxAge: 300,
+                  noStore: false,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('max-age 300s');
+    });
+
+    it('shows http-status-codes error details', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'http-status-codes',
+            category: 'url-stability',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/page',
+                  testUrl: 'https://example.com/page/nonexistent',
+                  classification: 'soft-404',
+                  status: 200,
+                  error: 'Connection timeout',
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('Connection timeout');
+    });
+
+    it('shows soft-404 without bodyHint', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'http-status-codes',
+            category: 'url-stability',
+            status: 'fail',
+            message: 'Issues',
+            details: {
+              pageResults: [
+                {
+                  url: 'https://example.com/page',
+                  testUrl: 'https://example.com/page/nonexistent',
+                  classification: 'soft-404',
+                  status: 200,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('HTTP 200 instead of 404');
+    });
+
+    it('shows section-header without framework info', () => {
+      const report = makeReport({
+        results: [
+          {
+            id: 'section-header-quality',
+            category: 'content-structure',
+            status: 'warn',
+            message: 'Generic headers',
+            details: {
+              analyses: [
+                {
+                  url: 'https://example.com/tabs',
+                  genericHeaders: 6,
+                  totalHeaders: 8,
+                  hasGenericMajority: true,
+                },
+              ],
+            },
+          },
+        ],
+        summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+      });
+      const output = formatText(report, { verbose: true });
+      expect(output).toContain('6/8 generic');
+      expect(output).not.toContain('(undefined)');
+    });
+
     it('does not show details without verbose flag', () => {
       const report = makeReport({
         results: [
@@ -850,6 +1240,397 @@ describe('formatText', () => {
       const output = formatText(report);
       expect(output).not.toContain('https://example.com/page1');
     });
+  });
+});
+
+describe('formatText verbose null-guard branches', () => {
+  it('returns empty when cache-header-hygiene has no endpointResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'cache-header-hygiene',
+          category: 'observability',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when section-header-quality has no analyses', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'section-header-quality',
+          category: 'content-structure',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('uses p.url when testUrl is absent for http-status-codes', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'http-status-codes',
+          category: 'url-stability',
+          status: 'fail',
+          message: 'Soft 404s',
+          details: {
+            pageResults: [
+              {
+                url: 'https://example.com/page',
+                classification: 'soft-404',
+                status: 200,
+              },
+            ],
+          },
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('https://example.com/page');
+    expect(output).toContain('HTTP 200 instead of 404');
+  });
+
+  it('returns empty when page-size-html has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'page-size-html',
+          category: 'page-size',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when page-size-markdown has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'page-size-markdown',
+          category: 'page-size',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when content-start-position has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'content-start-position',
+          category: 'page-size',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when markdown-url-support has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'markdown-url-support',
+          category: 'markdown-availability',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when content-negotiation has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'content-negotiation',
+          category: 'markdown-availability',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when markdown-code-fence-validity has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'markdown-code-fence-validity',
+          category: 'content-structure',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when llms-txt-links-resolve has no broken array', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-links-resolve',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when rendering-strategy has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'rendering-strategy',
+          category: 'page-size',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when redirect-behavior has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'redirect-behavior',
+          category: 'url-stability',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when auth-gate-detection has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'auth-gate-detection',
+          category: 'authentication',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when llms-txt-directive-html has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-directive-html',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when llms-txt-directive-md has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-directive-md',
+          category: 'content-discoverability',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when tabbed-content-serialization has no tabbedPages', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'tabbed-content-serialization',
+          category: 'content-structure',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when markdown-content-parity has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'markdown-content-parity',
+          category: 'observability',
+          status: 'warn',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 1, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+
+  it('returns empty when http-status-codes has no pageResults', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'http-status-codes',
+          category: 'url-stability',
+          status: 'fail',
+          message: 'Issues',
+          details: {},
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 1, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Issues');
+  });
+});
+
+describe('formatText edge cases', () => {
+  it('handles invalid timestamp gracefully', () => {
+    const report = makeReport({ timestamp: 'not-a-real-date' });
+    const output = formatText(report);
+    expect(output).toContain('not-a-real-date');
+  });
+
+  it('renders unknown status with fallback icon', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'some-check',
+          category: 'test-cat',
+          status: 'something-unknown' as 'pass',
+          message: 'Weird result',
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report);
+    expect(output).toContain('Weird result');
+  });
+
+  it('shows spec link for error status', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'page-size-html',
+          category: 'page-size',
+          status: 'error',
+          message: 'Timeout',
+        },
+      ],
+      summary: { total: 1, pass: 0, warn: 0, fail: 0, skip: 0, error: 1 },
+    });
+    const output = formatText(report);
+    expect(output).toContain('Learn more:');
+    expect(output).toContain('#page-size-html');
+  });
+
+  it('does not show spec link for pass status', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'Found',
+        },
+      ],
+      summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report);
+    expect(output).not.toContain('Learn more:');
+  });
+
+  it('handles verbose with check having no detail formatter', () => {
+    const report = makeReport({
+      results: [
+        {
+          id: 'llms-txt-exists',
+          category: 'content-discoverability',
+          status: 'pass',
+          message: 'Found',
+          details: { someField: 'value' },
+        },
+      ],
+      summary: { total: 1, pass: 1, warn: 0, fail: 0, skip: 0, error: 0 },
+    });
+    const output = formatText(report, { verbose: true });
+    expect(output).toContain('Found');
   });
 });
 

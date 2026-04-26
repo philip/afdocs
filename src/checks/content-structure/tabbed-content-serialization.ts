@@ -29,8 +29,7 @@ function worstStatus(statuses: CheckStatus[]): CheckStatus {
 }
 
 function formatSize(chars: number): string {
-  if (chars >= 1000) return `${Math.round(chars / 1000)}K`;
-  return String(chars);
+  return `${Math.round(chars / 1000)}K`;
 }
 
 /**

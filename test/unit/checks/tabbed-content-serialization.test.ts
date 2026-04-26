@@ -353,6 +353,191 @@ describe('tabbed-content-serialization', () => {
     expect(tabbedPages[0].source).toBe('html');
   });
 
+  it('SPA shell: md fallback returns markdown with no tabs', async () => {
+    const spaHtml =
+      '<html><head><style>' +
+      'x'.repeat(15_000) +
+      '</style></head><body><div id="___gatsby"></div></body></html>';
+
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(spaHtml, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page1.md',
+        () =>
+          new HttpResponse('# Just a page\n\nNo tabs here at all.', {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown' },
+          }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    ctx.previousResults.set('rendering-strategy', {
+      id: 'rendering-strategy',
+      category: 'page-size',
+      status: 'fail',
+      message: 'SPA shell detected',
+      details: {
+        pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }],
+      },
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.totalGroupsFound).toBe(0);
+    const tabbedPages = result.details?.tabbedPages as Array<{ source: string }>;
+    expect(tabbedPages[0].source).toBe('html');
+  });
+
+  it('SPA shell: md fallback skips wrong content-type', async () => {
+    const spaHtml =
+      '<html><head><style>' +
+      'x'.repeat(15_000) +
+      '</style></head><body><div id="___gatsby"></div></body></html>';
+
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(spaHtml, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page1.md',
+        () =>
+          new HttpResponse('<Tabs><Tab name="A">A</Tab></Tabs>', {
+            status: 200,
+            headers: { 'Content-Type': 'application/octet-stream' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page1/index.md',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    ctx.previousResults.set('rendering-strategy', {
+      id: 'rendering-strategy',
+      category: 'page-size',
+      status: 'fail',
+      message: 'SPA',
+      details: { pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }] },
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.totalGroupsFound).toBe(0);
+  });
+
+  it('SPA shell: md fallback skips HTML body disguised as markdown', async () => {
+    const spaHtml =
+      '<html><head><style>' +
+      'x'.repeat(15_000) +
+      '</style></head><body><div id="___gatsby"></div></body></html>';
+
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(spaHtml, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page1.md',
+        () =>
+          new HttpResponse('<!DOCTYPE html><html><body>not markdown</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+      http.get(
+        'http://test.local/docs/page1/index.md',
+        () => new HttpResponse('', { status: 404 }),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    ctx.previousResults.set('rendering-strategy', {
+      id: 'rendering-strategy',
+      category: 'page-size',
+      status: 'fail',
+      message: 'SPA',
+      details: { pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }] },
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.totalGroupsFound).toBe(0);
+  });
+
+  it('SPA shell: md fallback handles fetch error gracefully', async () => {
+    const spaHtml =
+      '<html><head><style>' +
+      'x'.repeat(15_000) +
+      '</style></head><body><div id="___gatsby"></div></body></html>';
+
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(spaHtml, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+      http.get('http://test.local/docs/page1.md', () => HttpResponse.error()),
+      http.get('http://test.local/docs/page1/index.md', () => HttpResponse.error()),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    ctx.previousResults.set('rendering-strategy', {
+      id: 'rendering-strategy',
+      category: 'page-size',
+      status: 'fail',
+      message: 'SPA',
+      details: { pageResults: [{ url: 'http://test.local/docs/page1', status: 'fail' }] },
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.totalGroupsFound).toBe(0);
+  });
+
+  it('does not attempt md fallback when rendering-strategy is pass', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><h1>Hello</h1><p>Server-rendered content.</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const content = `# Docs\n> Summary\n## Links\n- [Page 1](http://test.local/docs/page1): First\n`;
+    const ctx = makeCtx(content);
+    ctx.previousResults.set('rendering-strategy', {
+      id: 'rendering-strategy',
+      category: 'page-size',
+      status: 'pass',
+      message: 'All server-rendered',
+      details: { pageResults: [{ url: 'http://test.local/docs/page1', status: 'pass' }] },
+    });
+    const result = await check.run(ctx);
+    expect(result.details?.totalGroupsFound).toBe(0);
+    const tabbedPages = result.details?.tabbedPages as Array<{ source: string }>;
+    expect(tabbedPages[0].source).toBe('html');
+  });
+
   it('does not try .md fallback for non-SPA HTML', async () => {
     // Regular server-rendered HTML with no tabs
     server.use(

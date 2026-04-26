@@ -283,6 +283,79 @@ describe('llms-txt-directive-html', () => {
     expect(result.details?.foundCount).toBe(1);
   });
 
+  it('detects HTML from content body when content-type is not text/html', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><a href="/llms.txt">Index</a><p>Content</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/plain' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.details?.foundCount).toBe(1);
+  });
+
+  it('skips non-HTML content that does not start with <', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse('# Markdown content\n\nSee llms.txt', {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' },
+          }),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('fail');
+    expect(result.details?.foundCount).toBe(0);
+  });
+
+  it('reports fetch errors alongside successful tests in the suffix', async () => {
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            '<html><body><a href="/llms.txt">Index</a><p>Content</p></body></html>',
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+      http.get('http://test.local/docs/page2', () => HttpResponse.error()),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1', '/docs/page2')));
+    expect(result.details?.fetchErrors).toBe(1);
+    expect(result.message).toContain('1 failed to fetch');
+  });
+
+  it('passes without "near the top" when directive is mid-page', async () => {
+    // Directive at ~20% of page: past the 10% TOP_THRESHOLD but before the 50% DEEP_THRESHOLD
+    const before = '<p>Some filler content here.</p>'.repeat(10);
+    const after = '<p>More documentation content follows.</p>'.repeat(40);
+    server.use(
+      http.get(
+        'http://test.local/docs/page1',
+        () =>
+          new HttpResponse(
+            `<html><body>${before}<a href="/llms.txt">Index</a>${after}</body></html>`,
+            { status: 200, headers: { 'Content-Type': 'text/html' } },
+          ),
+      ),
+    );
+
+    const result = await check.run(makeCtx(llms('/docs/page1')));
+    expect(result.status).toBe('pass');
+    expect(result.message).not.toContain('near the top');
+    expect(result.message).not.toContain('buried');
+  });
+
   it('detects text mention of llms.txt in content area (outside nav)', async () => {
     server.use(
       http.get(

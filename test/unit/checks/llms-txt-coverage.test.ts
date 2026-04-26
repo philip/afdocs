@@ -797,6 +797,170 @@ describe('filterToUnprefixedLocale', () => {
   });
 });
 
+describe('edge cases', () => {
+  test('warns when passThreshold < warnThreshold', async () => {
+    const host = 'cov-threshold-warn.local';
+    const allPages = Array.from({ length: 10 }, (_, i) => `http://${host}/docs/page-${i}`);
+    const llmsPages = allPages.slice(0, 9);
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+    ctx.options.coveragePassThreshold = 50;
+    ctx.options.coverageWarnThreshold = 80;
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(allPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.details?.thresholdWarnings).toBeDefined();
+    const warnings = result.details?.thresholdWarnings as string[];
+    expect(warnings[0]).toContain('warn state is unreachable');
+  });
+
+  test('handles malformed URLs in sitemap gracefully', async () => {
+    const host = 'cov-malformed.local';
+    const goodPages = [`http://${host}/docs/guide`];
+
+    const ctx = makeCtx(host, goodPages, '/docs');
+
+    const sitemapXml = `<?xml version="1.0"?>
+<urlset>
+<url><loc>http://${host}/docs/guide</loc></url>
+<url><loc>not-a-valid-url</loc></url>
+</urlset>`;
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(sitemapXml, {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.coverageRate).toBe(100);
+  });
+
+  test('handles malformed URLs in llms.txt unmatched link check', async () => {
+    const host = 'cov-malformed-llms.local';
+    const sitemapPages = [`http://${host}/docs/guide`];
+
+    const llmsTxt = [
+      '# Docs\n',
+      `- [Guide](http://${host}/docs/guide)`,
+      '- [Bad](not-a-valid-url)',
+    ].join('\n');
+
+    const baseUrl = `http://${host}/docs`;
+    const ctx = createContext(baseUrl, { requestDelay: 0 });
+    const discovered: DiscoveredFile[] = [
+      { url: `http://${host}/llms.txt`, content: llmsTxt, status: 200, redirected: false },
+    ];
+    ctx.previousResults.set('llms-txt-exists', {
+      id: 'llms-txt-exists',
+      category: 'content-discoverability',
+      status: 'pass',
+      message: 'Found',
+      details: { discoveredFiles: discovered },
+    });
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    expect(result.details?.coverageRate).toBe(100);
+  });
+
+  test('does not count llms.txt links outside baseUrl path as unmatched', async () => {
+    const host = 'cov-outside-base.local';
+    const sitemapPages = [`http://${host}/docs/guide`];
+    // llms.txt links include one outside the /docs base path
+    const llmsPages = [`http://${host}/docs/guide`, `http://${host}/other/page`];
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    // /other/page is outside /docs base path, so not counted as unmatched
+    expect(result.details?.unmatchedCount).toBe(0);
+  });
+
+  test('excludes blog/pricing from unmatched llms.txt link check', async () => {
+    const host = 'cov-exclude-unmatched.local';
+    const sitemapPages = [`http://${host}/docs/guide`];
+    const llmsPages = [`http://${host}/docs/guide`, `http://${host}/docs/blog/post-1`];
+
+    const ctx = makeCtx(host, llmsPages, '/docs');
+
+    server.use(
+      http.get(
+        `http://${host}/robots.txt`,
+        () => new HttpResponse(`Sitemap: http://${host}/sitemap.xml`, { status: 200 }),
+      ),
+      http.get(
+        `http://${host}/sitemap.xml`,
+        () =>
+          new HttpResponse(makeSitemap(sitemapPages), {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+          }),
+      ),
+    );
+
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    // /docs/blog/post-1 is excluded by built-in patterns, not counted as unmatched
+    expect(result.details?.unmatchedCount).toBe(0);
+  });
+});
+
 describe('configurable thresholds', () => {
   test('uses custom pass threshold', async () => {
     const host = 'cov-custom-pass.local';
