@@ -315,19 +315,10 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
   const id = 'llms-txt-coverage';
   const category = 'observability';
 
-  // Resolve thresholds: CLI/config overrides → defaults, clamped to [0, 100]
-  const clamp = (v: number) => Math.max(0, Math.min(100, v));
-  const rawPass = ctx.options.coveragePassThreshold ?? DEFAULT_COVERAGE_PASS_THRESHOLD;
-  const rawWarn = ctx.options.coverageWarnThreshold ?? DEFAULT_COVERAGE_WARN_THRESHOLD;
-  const passThreshold = clamp(rawPass) / 100;
-  const warnThreshold = clamp(rawWarn) / 100;
-  const thresholdWarnings: string[] = [];
-  if (passThreshold < warnThreshold) {
-    thresholdWarnings.push(
-      `coveragePassThreshold (${clamp(rawPass)}) is lower than ` +
-        `coverageWarnThreshold (${clamp(rawWarn)}); warn state is unreachable`,
-    );
-  }
+  const passThreshold =
+    (ctx.options.coveragePassThreshold ?? DEFAULT_COVERAGE_PASS_THRESHOLD) / 100;
+  const warnThreshold =
+    (ctx.options.coverageWarnThreshold ?? DEFAULT_COVERAGE_WARN_THRESHOLD) / 100;
 
   // Compile user-supplied exclusion patterns
   const userExclusionMatcher = compileExclusionMatcher(ctx.options.coverageExclusions ?? []);
@@ -561,7 +552,6 @@ async function check(ctx: CheckContext): Promise<CheckResult> {
       unmatchedCount: unmatchedLlmsTxtUrls.length,
       unmatchedPct,
       sitemapWarnings,
-      ...(thresholdWarnings.length > 0 ? { thresholdWarnings } : {}),
     },
   };
 }

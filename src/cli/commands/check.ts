@@ -3,13 +3,13 @@ import { normalizeUrl, runChecks } from '../../runner.js';
 import { formatText } from '../formatters/text.js';
 import { formatJson } from '../formatters/json.js';
 import { formatScorecard } from '../formatters/scorecard.js';
-import type { PageConfigEntry, SamplingStrategy } from '../../types.js';
+import type { PageConfigEntry, RunnerOptions, SamplingStrategy } from '../../types.js';
 import { findConfig, validatePages } from '../../helpers/config.js';
+import { validateRunnerOptions } from '../../validation.js';
 
 // Ensure all checks are registered
 import '../../checks/index.js';
 
-const SAMPLING_STRATEGIES = ['random', 'deterministic', 'curated', 'none'] as const;
 const FORMAT_OPTIONS = ['text', 'json', 'scorecard'] as const;
 
 export function registerCheckCommand(program: Command): void {
@@ -152,21 +152,6 @@ export function registerCheckCommand(program: Command): void {
       }
 
       const sampling = samplingRaw as SamplingStrategy;
-      if (!SAMPLING_STRATEGIES.includes(sampling)) {
-        process.stderr.write(
-          `Error: Invalid sampling strategy "${sampling}". Must be one of: ${SAMPLING_STRATEGIES.join(', ')}\n`,
-        );
-        process.exitCode = 1;
-        return;
-      }
-
-      if (sampling === 'curated' && (!curatedPages || curatedPages.length === 0)) {
-        process.stderr.write(
-          'Error: Curated sampling requires pages. Use --urls or define "pages" in your config file.\n',
-        );
-        process.exitCode = 1;
-        return;
-      }
 
       const maxConcurrency = parseInt(
         String((opts.maxConcurrency as string | undefined) ?? config?.options?.maxConcurrency ?? 3),
@@ -211,37 +196,35 @@ export function registerCheckCommand(program: Command): void {
       const rawCanonical =
         (opts.canonicalOrigin as string | undefined) ?? config?.options?.canonicalOrigin;
       if (rawCanonical) {
+        const normalized = normalizeUrl(rawCanonical);
         try {
-          canonicalOrigin = new URL(normalizeUrl(rawCanonical)).origin;
+          canonicalOrigin = new URL(normalized).origin;
+          const targetOrigin = new URL(url).origin;
+          if (canonicalOrigin === targetOrigin) {
+            process.stderr.write(
+              `Warning: --canonical-origin "${canonicalOrigin}" is the same as the target origin. The flag has no effect.\n`,
+            );
+            canonicalOrigin = undefined;
+          }
         } catch {
-          process.stderr.write(`Error: Invalid --canonical-origin URL "${rawCanonical}".\n`);
-          process.exitCode = 1;
-          return;
-        }
-        const targetOrigin = new URL(url).origin;
-        if (canonicalOrigin === targetOrigin) {
-          process.stderr.write(
-            `Warning: --canonical-origin "${canonicalOrigin}" is the same as the target origin. The flag has no effect.\n`,
-          );
-          canonicalOrigin = undefined;
+          canonicalOrigin = normalized;
         }
       }
 
       let llmsTxtUrl: string | undefined;
       const rawLlmsTxtUrl = (opts.llmsTxtUrl as string | undefined) ?? config?.options?.llmsTxtUrl;
       if (rawLlmsTxtUrl) {
+        const normalized = normalizeUrl(rawLlmsTxtUrl);
         try {
-          llmsTxtUrl = new URL(normalizeUrl(rawLlmsTxtUrl)).toString();
+          llmsTxtUrl = new URL(normalized).toString();
+          const targetOrigin = new URL(url).origin;
+          if (new URL(llmsTxtUrl).origin !== targetOrigin) {
+            process.stderr.write(
+              `Warning: --llms-txt-url origin (${new URL(llmsTxtUrl).origin}) differs from target origin (${targetOrigin}). The flag will still be used as canonical.\n`,
+            );
+          }
         } catch {
-          process.stderr.write(`Error: Invalid --llms-txt-url "${rawLlmsTxtUrl}".\n`);
-          process.exitCode = 1;
-          return;
-        }
-        const targetOrigin = new URL(url).origin;
-        if (new URL(llmsTxtUrl).origin !== targetOrigin) {
-          process.stderr.write(
-            `Warning: --llms-txt-url origin (${new URL(llmsTxtUrl).origin}) differs from target origin (${targetOrigin}). The flag will still be used as canonical.\n`,
-          );
+          llmsTxtUrl = normalized;
         }
       }
 
@@ -279,7 +262,7 @@ export function registerCheckCommand(program: Command): void {
               .filter(Boolean)
           : (config?.options?.parityExclusions ?? undefined);
 
-      const report = await runChecks(url, {
+      const runnerOptions: Partial<RunnerOptions> = {
         checkIds,
         skipCheckIds,
         maxConcurrency,
@@ -301,7 +284,21 @@ export function registerCheckCommand(program: Command): void {
         ...(parityPassThreshold != null && { parityPassThreshold }),
         ...(parityWarnThreshold != null && { parityWarnThreshold }),
         ...(parityExclusions && { parityExclusions }),
-      });
+      };
+
+      const validation = validateRunnerOptions(runnerOptions);
+      if (!validation.valid) {
+        for (const err of validation.errors) {
+          process.stderr.write(`Error: ${err.message}\n`);
+        }
+        process.exitCode = 1;
+        return;
+      }
+      for (const warn of validation.warnings) {
+        process.stderr.write(`Warning: ${warn.message}\n`);
+      }
+
+      const report = await runChecks(url, runnerOptions);
 
       let output: string;
       if (format === 'json') {

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { AgentDocsConfig, PageConfigEntry } from '../types.js';
+import { validateNumber } from '../validation.js';
+import { VALID_SAMPLING_STRATEGIES } from '../constants.js';
 
 const CONFIG_FILENAMES = ['agent-docs.config.yml', 'agent-docs.config.yaml'];
 
@@ -58,12 +60,74 @@ function validateStringArray(value: unknown, field: string, source: string): voi
   }
 }
 
+const NUMERIC_OPTION_RULES: [string, { integer?: boolean; min?: number; max?: number }][] = [
+  ['maxConcurrency', { integer: true, min: 1, max: 100 }],
+  ['requestDelay', { integer: true, min: 0 }],
+  ['requestTimeout', { integer: true, min: 0 }],
+  ['maxLinksToTest', { integer: true, min: 1 }],
+  ['coveragePassThreshold', { integer: true, min: 0, max: 100 }],
+  ['coverageWarnThreshold', { integer: true, min: 0, max: 100 }],
+  ['parityPassThreshold', { integer: true, min: 0, max: 100 }],
+  ['parityWarnThreshold', { integer: true, min: 0, max: 100 }],
+];
+
 function validateOptions(options: Record<string, unknown>, source: string): void {
   if (options.coverageExclusions != null) {
     validateStringArray(options.coverageExclusions, 'options.coverageExclusions', source);
   }
   if (options.parityExclusions != null) {
     validateStringArray(options.parityExclusions, 'options.parityExclusions', source);
+  }
+  if (
+    options.samplingStrategy != null &&
+    !VALID_SAMPLING_STRATEGIES.includes(
+      options.samplingStrategy as string as (typeof VALID_SAMPLING_STRATEGIES)[number],
+    )
+  ) {
+    throw new Error(
+      `${source}: options.samplingStrategy must be one of: ${VALID_SAMPLING_STRATEGIES.join(', ')}`,
+    );
+  }
+  for (const [field, constraints] of NUMERIC_OPTION_RULES) {
+    if (options[field] != null) {
+      const issue = validateNumber(options[field], `options.${field}`, constraints);
+      if (issue) {
+        throw new Error(`${source}: ${issue.message}`);
+      }
+    }
+  }
+  if (options.thresholds != null) {
+    const thresholds = options.thresholds as Record<string, unknown>;
+    if (thresholds.pass != null) {
+      const issue = validateNumber(thresholds.pass, 'options.thresholds.pass', {
+        integer: true,
+        min: 1,
+      });
+      if (issue) throw new Error(`${source}: ${issue.message}`);
+    }
+    if (thresholds.fail != null) {
+      const issue = validateNumber(thresholds.fail, 'options.thresholds.fail', {
+        integer: true,
+        min: 1,
+      });
+      if (issue) throw new Error(`${source}: ${issue.message}`);
+    }
+  }
+}
+
+function validateConfig(parsed: AgentDocsConfig, source: string): void {
+  if (parsed.checks != null) {
+    validateStringArray(parsed.checks, 'checks', source);
+  }
+  if (parsed.skipChecks != null) {
+    validateStringArray(parsed.skipChecks, 'skipChecks', source);
+  }
+  if (parsed.pages) {
+    assertPagesArray(parsed.pages, source);
+    validatePages(parsed.pages, source);
+  }
+  if (parsed.options) {
+    validateOptions(parsed.options as Record<string, unknown>, source);
   }
 }
 
@@ -84,13 +148,7 @@ export async function loadConfig(dir?: string): Promise<AgentDocsConfig> {
         if (!parsed.url) {
           throw new Error(`Config file ${filepath} is missing required "url" field`);
         }
-        if (parsed.pages) {
-          assertPagesArray(parsed.pages, filepath);
-          validatePages(parsed.pages, filepath);
-        }
-        if (parsed.options) {
-          validateOptions(parsed.options as Record<string, unknown>, filepath);
-        }
+        validateConfig(parsed, filepath);
         return parsed;
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue;
@@ -123,13 +181,7 @@ export async function findConfig(
     const filepath = resolve(process.cwd(), explicitPath);
     const content = await readFile(filepath, 'utf-8');
     const parsed = parseYaml(content) as AgentDocsConfig;
-    if (parsed.pages) {
-      assertPagesArray(parsed.pages, filepath);
-      validatePages(parsed.pages, filepath);
-    }
-    if (parsed.options) {
-      validateOptions(parsed.options as Record<string, unknown>, filepath);
-    }
+    validateConfig(parsed, filepath);
     return parsed;
   }
 
@@ -140,13 +192,7 @@ export async function findConfig(
       try {
         const content = await readFile(filepath, 'utf-8');
         const parsed = parseYaml(content) as AgentDocsConfig;
-        if (parsed.pages) {
-          assertPagesArray(parsed.pages, filepath);
-          validatePages(parsed.pages, filepath);
-        }
-        if (parsed.options) {
-          validateOptions(parsed.options as Record<string, unknown>, filepath);
-        }
+        validateConfig(parsed, filepath);
         return parsed;
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue;

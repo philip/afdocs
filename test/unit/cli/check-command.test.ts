@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import * as validationMod from '../../../src/validation.js';
 
 const VALID_LLMS_TXT = `# Test
 
@@ -423,7 +424,7 @@ describe('check command config integration', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
-    expect(output).toContain('Curated sampling requires pages');
+    expect(output).toContain('Curated sampling requires curatedPages to be non-empty');
     expect(process.exitCode).toBe(1);
 
     stderrSpy.mockRestore();
@@ -631,7 +632,7 @@ describe('check command config integration', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
-    expect(output).toContain('Invalid --llms-txt-url');
+    expect(output).toContain('llmsTxtUrl is not a valid URL');
     expect(process.exitCode).toBe(1);
 
     stderrSpy.mockRestore();
@@ -672,6 +673,229 @@ describe('check command config integration', () => {
     const parsed = JSON.parse(stdout.trim());
     expect(parsed.results[0].details.canonicalUrl).toBe('http://other.local/custom/llms.txt');
 
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
+  it('errors when config file is invalid YAML', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const configPath = resolve(CONFIG_TMP, 'bad-config.yml');
+    await writeFile(configPath, ':\ninvalid: [yaml\n');
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run(['node', 'afdocs', 'check', '--config', configPath, '--request-delay', '0']);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Error:');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('parses --skip-checks flag', async () => {
+    server.use(
+      http.get('http://cmd-skip.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-skip.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-skip.local',
+      '--checks',
+      'llms-txt-exists,llms-txt-valid',
+      '--skip-checks',
+      'llms-txt-valid',
+      '--format',
+      'json',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    const skipped = parsed.results.find((r: { id: string }) => r.id === 'llms-txt-valid');
+    expect(skipped.status).toBe('skip');
+
+    writeSpy.mockRestore();
+  });
+
+  it('warns when --canonical-origin matches target origin', async () => {
+    server.use(
+      http.get('http://cmd-canon-same.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-canon-same.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-canon-same.local',
+      '--canonical-origin',
+      'http://cmd-canon-same.local',
+      '--checks',
+      'llms-txt-exists',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const stderr = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(stderr).toContain('same as the target origin');
+    expect(stderr).toContain('no effect');
+
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
+  it('falls through invalid --canonical-origin to validation', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-canon-bad.local',
+      '--canonical-origin',
+      ':::not-a-url:::',
+      '--checks',
+      'llms-txt-exists',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('canonicalOrigin');
+    expect(output).toContain('not a valid URL');
+    expect(process.exitCode).toBe(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it('passes --coverage-exclusions to runner', async () => {
+    server.use(
+      http.get('http://cmd-cov-excl.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-cov-excl.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-cov-excl.local',
+      '--checks',
+      'llms-txt-exists',
+      '--coverage-exclusions',
+      '/docs/ref/**,/docs/changelog/**',
+      '--format',
+      'json',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.results[0].status).toBe('pass');
+
+    writeSpy.mockRestore();
+  });
+
+  it('passes --parity-exclusions to runner', async () => {
+    server.use(
+      http.get('http://cmd-par-excl.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-par-excl.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-par-excl.local',
+      '--checks',
+      'llms-txt-exists',
+      '--parity-exclusions',
+      '.nav-content,[data-human-only]',
+      '--format',
+      'json',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.results[0].status).toBe('pass');
+
+    writeSpy.mockRestore();
+  });
+
+  it('displays validation warnings on stderr', async () => {
+    server.use(
+      http.get('http://cmd-warn.local/llms.txt', () => HttpResponse.text(VALID_LLMS_TXT)),
+      http.get(
+        'http://cmd-warn.local/docs/llms.txt',
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    const spy = vi.spyOn(validationMod, 'validateRunnerOptions').mockReturnValueOnce({
+      valid: true,
+      errors: [],
+      warnings: [{ field: 'testField', message: 'This is a test warning' }],
+    });
+
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const { run } = await import('../../../src/cli/index.js');
+    await run([
+      'node',
+      'afdocs',
+      'check',
+      'http://cmd-warn.local',
+      '--checks',
+      'llms-txt-exists',
+      '--request-delay',
+      '0',
+    ]);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const stderr = stderrSpy.mock.calls.map((c) => c[0]).join('');
+    expect(stderr).toContain('Warning: This is a test warning');
+
+    spy.mockRestore();
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   });
