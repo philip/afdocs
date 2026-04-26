@@ -1,6 +1,6 @@
 # How the Agent-Friendly Docs Score Works
 
-Scoring Version: 0.1.0 · [Agent-Friendly Docs Spec v0.3.0](https://agentdocsspec.com) · March 2026
+Scoring Version: 0.1.0 · [Agent-Friendly Docs Spec v0.5.0](https://agentdocsspec.com) · April 2026
 
 ## What is this score?
 
@@ -23,7 +23,7 @@ The score reflects how well agents can _actually use_ your documentation, not ju
 
 ## What we check
 
-The 23 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows:
+The 23 checks are grouped into seven categories. Each check is assigned a **weight tier** based on its observed impact on agent workflows (3 critical, 8 high, 10 medium, 2 low; max raw score 130):
 
 - **Critical (10 pts)**: Agents cannot function without this. Failure means zero content, zero navigation, or zero access.
 - **High (7 pts)**: Directly limits agent effectiveness. Failure means truncation, dead ends, or agents stuck on a worse path.

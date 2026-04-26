@@ -21,6 +21,7 @@ export {
   DEFAULT_THRESHOLDS,
   CATEGORIES,
   VALID_SAMPLING_STRATEGIES,
+  SPEC_VERSION,
 } from './constants.js';
 export { validateRunnerOptions } from './validation.js';
 export type { ValidationResult, ValidationIssue } from './validation.js';

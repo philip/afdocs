@@ -58,3 +58,6 @@ export const MIN_PAGES_FOR_SCORING = 5;
 
 /** Base URL for the Agent-Friendly Documentation Spec. */
 export const SPEC_BASE_URL = 'https://agentdocsspec.com/spec/';
+
+/** Version of the Agent-Friendly Documentation Spec implemented by this release. */
+export const SPEC_VERSION = 'v0.5.0';

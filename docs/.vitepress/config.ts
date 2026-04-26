@@ -106,6 +106,10 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Migration',
+        items: [{ text: 'v0.17.0', link: '/migration/v0.17.0' }],
+      },
+      {
         text: 'About',
         items: [{ text: 'About AFDocs', link: '/about' }],
       },

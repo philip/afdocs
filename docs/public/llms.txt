@@ -1,6 +1,6 @@
 # AFDocs
 
-> Test your documentation site against the Agent-Friendly Documentation Spec. AFDocs runs 22 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
+> Test your documentation site against the Agent-Friendly Documentation Spec. AFDocs runs 23 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
 
 ## The Score
 
@@ -34,6 +34,10 @@
 - [Programmatic API](https://afdocs.dev/reference/programmatic-api.md): TypeScript API for running checks
 - [Scoring API](https://afdocs.dev/reference/scoring-api.md): computing scores from check results
 - [Config File](https://afdocs.dev/reference/config-file.md): agent-docs.config.yml format and options
+
+## Migration
+
+- [Migrating to v0.17.0](https://afdocs.dev/migration/v0.17.0.md)
 
 ## About
 

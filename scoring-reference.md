@@ -1,9 +1,9 @@
 # Scoring Implementation Reference: Agent-Friendly Docs Scorecard
 
 Scoring Version: 0.1.0
-Agent-Friendly Docs Spec Version: v0.3.0
+Agent-Friendly Docs Spec Version: v0.5.0
 Spec URL: https://agentdocsspec.com
-Date: 03/31/2026
+Date: 04/25/2026
 
 ## Goals
 
@@ -69,7 +69,7 @@ and the empirical evidence sections in each check definition.
 | `section-header-quality`       | Low      | 2      | Refinement for tabbed content; only matters when tabs exist.                                                                                          |
 | `cache-header-hygiene`         | Low      | 2      | Aggressive caching rarely causes acute agent failures.                                                                                                |
 
-**Maximum raw score**: 3(10) + 8(7) + 9(4) + 2(2) = 30 + 56 + 36 + 4 = **126 points**
+**Maximum raw score**: 3(10) + 8(7) + 10(4) + 2(2) = 30 + 56 + 40 + 4 = **130 points**
 
 ---
 

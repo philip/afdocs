@@ -10,7 +10,7 @@ BASE_URL="https://afdocs.dev"
 cat > "$OUTPUT" << 'HEADER'
 # AFDocs
 
-> Test your documentation site against the Agent-Friendly Documentation Spec. AFDocs runs 22 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
+> Test your documentation site against the Agent-Friendly Documentation Spec. AFDocs runs 23 checks across 7 categories to measure how well AI coding agents can discover, navigate, and consume your docs.
 
 ## The Score
 
@@ -58,6 +58,14 @@ echo "- [CLI Reference](${BASE_URL}/reference/cli.md): flags, output formats, sa
 echo "- [Programmatic API](${BASE_URL}/reference/programmatic-api.md): TypeScript API for running checks" >> "$OUTPUT"
 echo "- [Scoring API](${BASE_URL}/reference/scoring-api.md): computing scores from check results" >> "$OUTPUT"
 echo "- [Config File](${BASE_URL}/reference/config-file.md): agent-docs.config.yml format and options" >> "$OUTPUT"
+
+cat >> "$OUTPUT" << 'SECTION'
+
+## Migration
+
+SECTION
+
+echo "- [Migrating to v0.17.0](${BASE_URL}/migration/v0.17.0.md)" >> "$OUTPUT"
 
 cat >> "$OUTPUT" << 'SECTION'
 

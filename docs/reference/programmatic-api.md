@@ -10,7 +10,7 @@ import { runChecks } from 'afdocs';
 const report = await runChecks('https://docs.example.com');
 
 console.log(report.summary);
-// { total: 22, pass: 15, warn: 3, fail: 2, skip: 2, error: 0 }
+// { total: 23, pass: 15, warn: 4, fail: 2, skip: 2, error: 0 }
 
 for (const result of report.results) {
   console.log(`${result.id}: ${result.status} — ${result.message}`);
