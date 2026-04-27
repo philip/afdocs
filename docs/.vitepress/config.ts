@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: 'AFDocs',
   description: 'Test your documentation site against the Agent-Friendly Documentation Spec',
+  cleanUrls: true,
 
   sitemap: {
     hostname: 'https://afdocs.dev',
