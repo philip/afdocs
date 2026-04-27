@@ -181,8 +181,7 @@ function processBody(content) {
   return out.join('\n') + '\n';
 }
 
-const llmsDirective =
-  '> For AI agents: a documentation index is available at /llms.txt\n\n';
+const llmsDirective = '> For AI agents: a documentation index is available at /llms.txt\n\n';
 
 const srcFiles = findMdFiles(docsDir);
 let count = 0;
