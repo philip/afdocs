@@ -1842,6 +1842,118 @@ Use a linter to automatically verify code fence syntax across all your documents
     expect(pageResults[0].missingSegments).toBe(0);
   });
 
+  it('handles single-backtick code spans containing literal backticks', async () => {
+    // CommonMark allows ` ``` ` (single-backtick delimiters with triple-backtick
+    // content). The triple backtick inside is not a closer because it's a
+    // backtick string of length 3, not length 1. The regex must match this
+    // as a valid code span without cascading into distant backtick pairing.
+    const html = `<html><body>
+      <h1>Code Fence Syntax</h1>
+      <p>A backtick fence (<code>\`\`\`</code>) can only be closed by another backtick fence.</p>
+      <p>A tilde fence (<code>~~~</code>) closing a backtick-opened fence leaves it unclosed.</p>
+      <p>Run with <code>--verbose</code> to see which pages have unclosed code fences today.</p>
+      <p>Ensure every opening <code>\`\`\`</code> or <code>~~~</code> has a matching closing fence.</p>
+      <p>Nested code examples are the most common source of fence mismatches in practice.</p>
+      <p>The check validates all code fences across every page discovered during the scan.</p>
+      <p>CommonMark requires the closing delimiter to be the same type as the opening one.</p>
+      <p>Indented code blocks do not require explicit delimiters but are harder to maintain.</p>
+      <p>Some editors provide visual indicators for unclosed fences to help catch mistakes.</p>
+      <p>Always preview your rendered markdown to verify code blocks display correctly here.</p>
+    </body></html>`;
+
+    const markdown =
+      '# Code Fence Syntax\n\n' +
+      'A backtick fence (` ``` `) can only be closed by another backtick fence.\n\n' +
+      'A tilde fence (`~~~`) closing a backtick-opened fence leaves it unclosed.\n\n' +
+      'Run with `--verbose` to see which pages have unclosed code fences today.\n\n' +
+      'Ensure every opening ` ``` ` or `~~~` has a matching closing fence.\n\n' +
+      'Nested code examples are the most common source of fence mismatches in practice.\n\n' +
+      'The check validates all code fences across every page discovered during the scan.\n\n' +
+      'CommonMark requires the closing delimiter to be the same type as the opening one.\n\n' +
+      'Indented code blocks do not require explicit delimiters but are harder to maintain.\n\n' +
+      'Some editors provide visual indicators for unclosed fences to help catch mistakes.\n\n' +
+      'Always preview your rendered markdown to verify code blocks display correctly here.';
+
+    const url = 'http://mcp-singlebacktick.local/docs/fences';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-singlebacktick.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
+  it('strips underscore emphasis at word boundaries without mangling identifiers', async () => {
+    // _emphasis_ in prose (underscores at word boundaries) should be stripped
+    // to match HTML extraction. But mongoc_client_get_database (underscores
+    // adjacent to word characters) must be preserved.
+    const html = `<html><body><main>
+      <h1>Database Driver Guide</h1>
+      <p>In empirical testing, soft 404s performed <em>worse</em> than real 404s for agents.</p>
+      <p>Agents do <em>not</em> read your navigation structure when fetching documentation.</p>
+      <p>Use mongoc_client_get_database to obtain a database handle from the client object.</p>
+      <p>The mongoc_cursor_next function advances the cursor to the <em>next</em> result document.</p>
+      <p>This behavior is <em>intentional</em> and matches the CommonMark specification exactly.</p>
+      <p>Release resources with mongoc_client_destroy when the client is no longer needed here.</p>
+      <p>The response includes a <em>detailed</em> error message explaining what went wrong here.</p>
+      <p>Call mongoc_collection_find_with_opts to query documents with filter options today.</p>
+      <p>Documentation should be <em>clear</em> and concise for both humans and agents reading.</p>
+      <p>The mongoc_collection_insert_one function inserts a single document into collection.</p>
+    </main></body></html>`;
+
+    const markdown = `# Database Driver Guide
+
+In empirical testing, soft 404s performed _worse_ than real 404s for agents.
+
+Agents do _not_ read your navigation structure when fetching documentation.
+
+Use mongoc_client_get_database to obtain a database handle from the client object.
+
+The mongoc_cursor_next function advances the cursor to the _next_ result document.
+
+This behavior is _intentional_ and matches the CommonMark specification exactly.
+
+Release resources with mongoc_client_destroy when the client is no longer needed here.
+
+The response includes a _detailed_ error message explaining what went wrong here.
+
+Call mongoc_collection_find_with_opts to query documents with filter options today.
+
+Documentation should be _clear_ and concise for both humans and agents reading.
+
+The mongoc_collection_insert_one function inserts a single document into collection.`;
+
+    const url = 'http://mcp-underscore-emphasis.local/docs/driver';
+
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-underscore-emphasis.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
   // --- Audience segmentation tests ---
 
   it('strips data-markdown-ignore elements from HTML before comparison', async () => {

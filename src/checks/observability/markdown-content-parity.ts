@@ -439,9 +439,18 @@ function extractMarkdownText(markdown: string): string {
     codeSpans.push(trimmed);
     return `\x00CODE${idx}\x00`;
   });
-  text = text.replace(/(?<!`)`([^`]+)`(?!`)/g, (_match, content) => {
+  // Single-backtick spans: content may include backtick runs of length != 1
+  // (e.g. ` ``` ` where the triple backtick is content, not a closer).
+  // Both opening and closing delimiters require (?<!`) and (?!`) to ensure
+  // they are standalone single backticks, not part of a multi-backtick run.
+  // This prevents bare ``` in prose from cascading into distant backtick pairing.
+  text = text.replace(/(?<!`)`(?!`)((?:[^`]|`{2,})+)(?<!`)`(?!`)/g, (_match, content) => {
     const idx = codeSpans.length;
-    codeSpans.push(content);
+    let trimmed = content;
+    if (trimmed.startsWith(' ') && trimmed.endsWith(' ') && trimmed.trim().length > 0) {
+      trimmed = trimmed.slice(1, -1);
+    }
+    codeSpans.push(trimmed);
     return `\x00CODE${idx}\x00`;
   });
 
@@ -459,10 +468,13 @@ function extractMarkdownText(markdown: string): string {
     // misinterpreted as an emphasis marker)
     .replace(/^[\s]*[-*+]\s+/gm, '')
     .replace(/^[\s]*\d+\.\s+/gm, '')
-    // Remove emphasis markers (* only — underscores are too common in
-    // code identifiers like mongoc_client_get_database and cause false
-    // mismatches when stripped as emphasis)
+    // Remove emphasis markers. * emphasis is stripped unconditionally.
+    // _ emphasis is stripped only at word boundaries (per CommonMark,
+    // _text_ is emphasis only when _ is not adjacent to an alphanumeric).
+    // This preserves code identifiers like mongoc_client_get_database
+    // that appear as plain text (not inside backticks).
     .replace(/(\*{1,3})(.*?)\1/g, '$2')
+    .replace(/(?<!\w)(_{1,3})(.*?)\1(?!\w)/g, '$2')
     // Remove blockquote markers
     .replace(/^>\s?/gm, '')
     // Remove horizontal rules
