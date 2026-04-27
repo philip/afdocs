@@ -114,16 +114,56 @@ function processBody(content) {
     if (inFence) {
       stripped = line;
     } else {
-      // Protect inline code spans before stripping HTML tags.
-      // Otherwise angle brackets inside backtick spans (e.g. Record<string, T>)
-      // get incorrectly stripped as HTML.
+      // Parse CommonMark code spans and extract content without backtick
+      // delimiters, so the plain text matches what HTML renders. Also
+      // protects span content (e.g. Record<string, T>) from HTML stripping.
       const spans = [];
-      const placeholder = line.replace(/`[^`]+`/g, (m) => {
-        spans.push(m);
-        return `\x00${spans.length - 1}\x00`;
-      });
+      let placeholder = '';
+      for (let ci = 0; ci < line.length; ) {
+        if (line[ci] === '`') {
+          let openLen = 0;
+          while (ci + openLen < line.length && line[ci + openLen] === '`') openLen++;
+          let cj = ci + openLen;
+          let found = false;
+          while (cj < line.length) {
+            if (line[cj] === '`') {
+              let closeLen = 0;
+              while (cj + closeLen < line.length && line[cj + closeLen] === '`') closeLen++;
+              if (closeLen === openLen) {
+                let span = line.slice(ci + openLen, cj);
+                if (span.startsWith(' ') && span.endsWith(' ') && span.trim().length > 0) {
+                  span = span.slice(1, -1);
+                }
+                spans.push(span);
+                placeholder += `\x00${spans.length - 1}\x00`;
+                ci = cj + closeLen;
+                found = true;
+                break;
+              }
+              cj += closeLen;
+            } else {
+              cj++;
+            }
+          }
+          if (!found) {
+            placeholder += line.slice(ci, ci + openLen);
+            ci += openLen;
+          }
+        } else {
+          placeholder += line[ci];
+          ci++;
+        }
+      }
       const htmlStripped = placeholder.replace(/<[^>]+>/g, '');
       stripped = htmlStripped.replace(/\x00(\d+)\x00/g, (_, i) => spans[+i]);
+
+      // Strip remaining inline formatting so plain text matches HTML extraction.
+      // Bold: **text** or __text__ (process before italic)
+      stripped = stripped.replace(/\*\*(.+?)\*\*/g, '$1');
+      stripped = stripped.replace(/__(.+?)__/g, '$1');
+      // Italic: *text* or _text_
+      stripped = stripped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
+      stripped = stripped.replace(/(?<!_)_([^_]+)_(?!_)/g, '$1');
     }
     if (/^\s*$/.test(stripped)) {
       if (!prevBlank && started) {
@@ -140,6 +180,9 @@ function processBody(content) {
   while (out.length > 0 && out[out.length - 1] === '') out.pop();
   return out.join('\n') + '\n';
 }
+
+const llmsDirective =
+  '> For AI agents: a documentation index is available at /llms.txt\n\n';
 
 const srcFiles = findMdFiles(docsDir);
 let count = 0;
@@ -160,7 +203,7 @@ for (const src of srcFiles) {
     output = processBody(content);
   }
 
-  writeFileSync(dest, output);
+  writeFileSync(dest, llmsDirective + output);
   count++;
 }
 
