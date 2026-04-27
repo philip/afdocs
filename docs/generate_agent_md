@@ -114,9 +114,9 @@ function processBody(content) {
     if (inFence) {
       stripped = line;
     } else {
-      // Parse CommonMark code spans and extract content without backtick
-      // delimiters, so the plain text matches what HTML renders. Also
-      // protects span content (e.g. Record<string, T>) from HTML stripping.
+      // Protect inline code spans before stripping HTML tags.
+      // Uses CommonMark-compliant parsing so spans like ` ``` `
+      // (backticks inside code) are handled correctly.
       const spans = [];
       let placeholder = '';
       for (let ci = 0; ci < line.length; ) {
@@ -130,11 +130,7 @@ function processBody(content) {
               let closeLen = 0;
               while (cj + closeLen < line.length && line[cj + closeLen] === '`') closeLen++;
               if (closeLen === openLen) {
-                let span = line.slice(ci + openLen, cj);
-                if (span.startsWith(' ') && span.endsWith(' ') && span.trim().length > 0) {
-                  span = span.slice(1, -1);
-                }
-                spans.push(span);
+                spans.push(line.slice(ci, cj + closeLen));
                 placeholder += `\x00${spans.length - 1}\x00`;
                 ci = cj + closeLen;
                 found = true;
@@ -156,14 +152,6 @@ function processBody(content) {
       }
       const htmlStripped = placeholder.replace(/<[^>]+>/g, '');
       stripped = htmlStripped.replace(/\x00(\d+)\x00/g, (_, i) => spans[+i]);
-
-      // Strip remaining inline formatting so plain text matches HTML extraction.
-      // Bold: **text** or __text__ (process before italic)
-      stripped = stripped.replace(/\*\*(.+?)\*\*/g, '$1');
-      stripped = stripped.replace(/__(.+?)__/g, '$1');
-      // Italic: *text* or _text_
-      stripped = stripped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
-      stripped = stripped.replace(/(?<!_)_([^_]+)_(?!_)/g, '$1');
     }
     if (/^\s*$/.test(stripped)) {
       if (!prevBlank && started) {
