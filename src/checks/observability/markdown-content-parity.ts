@@ -405,7 +405,7 @@ function extractMarkdownText(markdown: string): string {
   // heading/link/emphasis/blockquote regexes don't modify literal content
   // that the HTML side preserves as-is inside <pre><code> tags.
   const codeBlocks: string[] = [];
-  text = text.replace(/^```[\w]*\n([\s\S]*?)^```\s*$/gm, (_match, content) => {
+  text = text.replace(/^```[^`\n]*\n([\s\S]*?)^```\s*$/gm, (_match, content) => {
     const idx = codeBlocks.length;
     codeBlocks.push(content);
     return `\x00BLOCK${idx}\x00`;
