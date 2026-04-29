@@ -95,25 +95,25 @@ Checks that test multiple pages use proportional scoring. If `page-size-html` te
 
 These checks sample pages from your site and score based on the pass rate across those pages:
 
-| Check                          | What's measured per page                                            |
-| ------------------------------ | ------------------------------------------------------------------- |
-| `rendering-strategy`           | Whether the page is server-rendered or an SPA shell                 |
-| `page-size-html`               | Whether the HTML-to-text conversion fits within size limits         |
-| `page-size-markdown`           | Whether the markdown version fits within size limits                |
-| `content-start-position`       | How far into the response actual content begins                     |
-| `content-negotiation`          | Whether the server returns markdown for this page                   |
-| `markdown-url-support`         | Whether the `.md` URL variant returns markdown                      |
-| `http-status-codes`            | Whether a fabricated bad URL returns a proper 404                   |
-| `redirect-behavior`            | Whether redirects use standard HTTP methods                         |
-| `auth-gate-detection`          | Whether the page is publicly accessible                             |
-| `llms-txt-directive-html`      | Whether the HTML page includes a directive pointing to llms.txt     |
-| `llms-txt-directive-md`        | Whether the markdown page includes a directive pointing to llms.txt |
-| `tabbed-content-serialization` | Whether tabbed content creates oversized output                     |
-| `section-header-quality`       | Whether tab section headers include variant context                 |
-| `markdown-code-fence-validity` | Whether code fences are properly closed                             |
-| `markdown-content-parity`      | Whether markdown and HTML versions match                            |
-| `cache-header-hygiene`         | Whether cache headers allow timely updates                          |
-| `auth-alternative-access`      | Whether auth-gated pages have alternative access paths              |
+| Check                          | What's measured per page                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------- |
+| `rendering-strategy`           | Whether the page is fully server-rendered, server-rendered but sparse, or an empty SPA shell |
+| `page-size-html`               | Whether the HTML-to-text conversion fits within size limits                                  |
+| `page-size-markdown`           | Whether the markdown version fits within size limits                                         |
+| `content-start-position`       | How far into the response actual content begins                                              |
+| `content-negotiation`          | Whether the server returns markdown for this page                                            |
+| `markdown-url-support`         | Whether the `.md` URL variant returns markdown                                               |
+| `http-status-codes`            | Whether a fabricated bad URL returns a proper 404                                            |
+| `redirect-behavior`            | Whether redirects use standard HTTP methods                                                  |
+| `auth-gate-detection`          | Whether the page is publicly accessible                                                      |
+| `llms-txt-directive-html`      | Whether the HTML page includes a directive pointing to llms.txt                              |
+| `llms-txt-directive-md`        | Whether the markdown page includes a directive pointing to llms.txt                          |
+| `tabbed-content-serialization` | Whether tabbed content creates oversized output                                              |
+| `section-header-quality`       | Whether tab section headers include variant context                                          |
+| `markdown-code-fence-validity` | Whether code fences are properly closed                                                      |
+| `markdown-content-parity`      | Whether markdown and HTML versions match                                                     |
+| `cache-header-hygiene`         | Whether cache headers allow timely updates                                                   |
+| `auth-alternative-access`      | Whether auth-gated pages have alternative access paths                                       |
 
 ### Single-resource checks (all-or-nothing)
 
@@ -150,13 +150,15 @@ Some problems are severe enough that no amount of other passing checks should co
 | Condition                                                                             | Cap    | Why                                                    |
 | ------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
 | `llms-txt-exists` fails                                                               | 59 (D) | Agents lose their primary navigation mechanism.        |
-| `rendering-strategy`: 75%+ SPA shells                                                 | 39 (F) | Most content is invisible to agents.                   |
-| `rendering-strategy`: 50%+ SPA shells                                                 | 59 (D) | Significant content is invisible.                      |
+| `rendering-strategy`: proportion ≤ 0.25                                               | 39 (F) | Most content is invisible to agents.                   |
+| `rendering-strategy`: proportion ≤ 0.50                                               | 59 (D) | Significant content is invisible.                      |
 | `auth-gate-detection`: 75%+ pages gated                                               | 39 (F) | Most documentation is inaccessible.                    |
 | `auth-gate-detection`: 50%+ pages gated                                               | 59 (D) | Significant documentation is inaccessible.             |
 | [No viable path](/interaction-diagnostics#no-viable-path-to-content) diagnostic fires | 39 (F) | Agents have no effective way to access content at all. |
 
 When multiple caps apply, the lowest one wins.
+
+The `rendering-strategy` proportion is `(serverRendered + sparseContent × 0.5) / total`: empty SPA shells count fully against the proportion, while server-rendered-but-sparse pages count at half weight. A site that's entirely SPA shells has proportion 0 (caps at F). A site that's half shells and half full content has proportion 0.5 (caps at D). A site that's entirely sparse-but-rendered has proportion 0.5 (also caps at D, on the assumption that sparse pages are half-broken on average); after the heuristic fix, legitimately short pages no longer count as sparse, so this scenario is much rarer.
 
 The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check is marked as not applicable due to [insufficient data](#insufficient-data). If there isn't enough data to include the check in the score, there isn't enough data to cap the score based on it either.
 
@@ -197,7 +199,7 @@ Note that `markdown-url-support` is intentionally excluded from this coefficient
 
 **Affects**: `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`
 
-If pages are SPA shells, measuring HTML quality is meaningless. This coefficient equals the `rendering-strategy` check's pass proportion: if 90% of pages render correctly, these checks count for 90% of their weight.
+If pages are SPA shells, measuring HTML quality is meaningless; if pages are sparse, HTML quality counts for less because agents have less content to work with. This coefficient equals the same proportion that drives the score caps above: `(serverRendered + sparseContent × 0.5) / total`. Fully server-rendered pages count for full weight, sparse pages count for half, and SPA shells count for nothing.
 
 ### Index truncation coefficient
 

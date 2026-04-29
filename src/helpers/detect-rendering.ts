@@ -99,19 +99,37 @@ export function analyzeRendering(html: string): RenderingAnalysis {
     hasMainContent = mainParagraphs >= 2 || mainCode >= 1;
   }
 
-  // Determine if the page has real content
-  // A page has content if it has enough content signals, regardless of text ratio.
-  // The visibleTextLength clause covers div-soup SSR (Next.js custom renderers,
-  // Archbee, etc.) where prose is wrapped in <div>/<span> rather than <p>/<main>.
-  // Threshold is applied after chrome stripping above, so nav/sidebar text on an
-  // otherwise-empty SPA shell does not satisfy it.
+  // Determine if the page has real content.
+  //
+  // The disjunction below combines several independent positive signals; any
+  // one is enough. All text-length thresholds apply after chrome stripping
+  // (nav/header/footer/aside removed above), so menu and breadcrumb text on
+  // an otherwise-empty SPA shell does not satisfy them.
+  //
+  // - visibleTextLength >= 1500: long page, possibly without semantic markup
+  //   (rare wall-of-text case where no headings parse).
+  // - contentHeadings >= 1 && visibleTextLength >= 500: short doc pages that
+  //   have a heading and a meaningful body. Catches div-soup renderers
+  //   (Archbee, custom Next.js setups) on legitimately short pages —
+  //   integration explainers, glossary entries, single-feature notes — that
+  //   used to be misclassified as sparse because their <500-char body sat
+  //   below the 1500 wall-of-text threshold. True SPA shells fail this
+  //   clause: their post-chrome-strip body is effectively empty (~0 chars),
+  //   nowhere near 500.
+  // - contentHeadings >= 3: multi-section pages (typical reference docs).
+  // - contentParagraphs >= 5: well-structured prose with semantic <p> tags.
+  // - hasMainContent && contentHeadings >= 1: pages with a populated <main>
+  //   region and at least one heading — the canonical doc-page shape.
+  // - codeBlocks >= 3: API references and code-heavy pages.
+  // - !hasSpaMarkers: traditional server-rendered HTML; not a shell candidate.
   const hasContent =
     visibleTextLength >= 1500 ||
+    (contentHeadings >= 1 && visibleTextLength >= 500) ||
     contentHeadings >= 3 ||
     contentParagraphs >= 5 ||
     (hasMainContent && contentHeadings >= 1) ||
     codeBlocks >= 3 ||
-    !hasSpaMarkers; // No SPA markers = traditional server-rendered, assume content
+    !hasSpaMarkers;
 
   return {
     hasContent,

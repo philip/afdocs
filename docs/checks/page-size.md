@@ -37,12 +37,12 @@ When the check warns, the [`sparse-content-html` diagnostic](/interaction-diagno
 
 ### Score impact
 
-This is a Critical check with two score caps:
+This is a Critical check with two score caps based on a weighted proportion: `(serverRendered + sparseContent × 0.5) / total`. Empty SPA shells count fully against the proportion; sparse pages count at half weight.
 
-- At 50%+ SPA shells, the score is [capped at D (59)](/agent-score-calculation#score-caps).
-- At 75%+ SPA shells, the score is [capped at F (39)](/agent-score-calculation#score-caps).
+- When the proportion is at most 0.50, the score is [capped at D (59)](/agent-score-calculation#score-caps).
+- When the proportion is at most 0.25, the score is [capped at F (39)](/agent-score-calculation#score-caps).
 
-The `rendering-strategy` pass rate also drives the [HTML path coefficient](/agent-score-calculation#html-path-coefficient). If 90% of pages render correctly, HTML quality checks (`page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`) count for 90% of their weight.
+The same proportion drives the [HTML path coefficient](/agent-score-calculation#html-path-coefficient). If 90% of pages render correctly with no sparse pages, HTML quality checks (`page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`) count for 90% of their weight.
 
 ---
 

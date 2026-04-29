@@ -248,9 +248,9 @@ For each critical check:
     apply cap (total failure)
   if multi-page AND scoreDisplayMode == 'notApplicable':
     skip (insufficient data to justify a cap)
-  if multi-page AND proportion <= 0.25 (75%+ of pages fail):
+  if multi-page AND proportion <= 0.25:
     cap overall score at 39 (F)
-  if multi-page AND proportion <= 0.50 (50%+ of pages fail):
+  if multi-page AND proportion <= 0.50:
     cap overall score at 59 (D)
 ```
 
@@ -266,11 +266,13 @@ discoverable markdown. It's a significant gap, not a total blocker.
 
 For multi-page critical checks (`rendering-strategy`, `auth-gate-detection`):
 
-| Proportion | Meaning                    | Cap                                     |
-| ---------- | -------------------------- | --------------------------------------- |
-| <= 0.25    | 75%+ of pages affected     | Cap at 39 (F)                           |
-| <= 0.50    | 50%+ of pages affected     | Cap at 59 (D)                           |
-| > 0.50     | Minority of pages affected | No cap; proportional scoring handles it |
+| Proportion | Meaning                                | Cap                                     |
+| ---------- | -------------------------------------- | --------------------------------------- |
+| <= 0.25    | Most pages affected                    | Cap at 39 (F)                           |
+| <= 0.50    | Significant fraction of pages affected | Cap at 59 (D)                           |
+| > 0.50     | Minority of pages affected             | No cap; proportional scoring handles it |
+
+For `rendering-strategy`, the proportion is `(serverRendered + sparseContent × 0.5) / total`: empty SPA shells count fully against the proportion, while server-rendered-but-sparse pages count at half weight. For `auth-gate-detection`, the proportion is the straight pass rate.
 
 ### Diagnostic-Driven Cap: `no-viable-path`
 

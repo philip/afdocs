@@ -76,7 +76,7 @@ If `rendering-strategy` fails, your site is delivering empty JavaScript shells t
 
 If `rendering-strategy` warns, your pages render server-side but have unusually short body content. Spot-check a few of them with `curl` to confirm the full content is in the HTML response. If the pages are legitimately short, no action is needed. If content is missing, your renderer may be hydrating sections client-side; emitting them server-side will fix it.
 
-At 50%+ SPA shells, the score is [capped at D](/agent-score-calculation#score-caps) regardless of everything else.
+When SPA shells (and sparse pages, weighted at half) exceed half the sampled pages, the score is [capped at D](/agent-score-calculation#score-caps) regardless of everything else; when they exceed three quarters, it's capped at F.
 
 **Remove or work around authentication gates**
 

@@ -59,7 +59,7 @@ Whether agents can process your pages without losing content.
 
 | Check                                                                            | Weight        | What it measures                                                                                      |
 | -------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------- |
-| [rendering-strategy](https://agentdocsspec.com/spec/#rendering-strategy)         | Critical (10) | Whether pages use server-side rendering. Client-side (SPA) pages deliver empty shells to agents.      |
+| [rendering-strategy](https://agentdocsspec.com/spec/#rendering-strategy)         | Critical (10) | Whether pages are fully server-rendered, server-rendered but sparse, or empty SPA shells.             |
 | [page-size-markdown](https://agentdocsspec.com/spec/#page-size-markdown)         | High (7)      | Whether markdown pages fit within agent processing limits (~100K characters).                         |
 | [page-size-html](https://agentdocsspec.com/spec/#page-size-html)                 | High (7)      | Whether HTML pages, once converted to text, fit within agent processing limits.                       |
 | [content-start-position](https://agentdocsspec.com/spec/#content-start-position) | Medium (4)    | Whether documentation content starts near the top of the page, or is buried under boilerplate CSS/JS. |
@@ -160,16 +160,18 @@ Some problems are severe enough that no amount of other good behavior should com
 
 ### Critical check caps
 
-| Condition                                          | Cap    | Why                                                                            |
-| -------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
-| `llms-txt-exists` fails                            | 59 (D) | Agents lose primary navigation but may still use HTML/markdown paths directly. |
-| `rendering-strategy`: 75%+ of pages are SPA shells | 39 (F) | Most content is invisible to agents.                                           |
-| `rendering-strategy`: 50%+ of pages are SPA shells | 59 (D) | Significant content is invisible to agents.                                    |
-| `auth-gate-detection`: 75%+ of pages require auth  | 39 (F) | Most documentation is inaccessible.                                            |
-| `auth-gate-detection`: 50%+ of pages require auth  | 59 (D) | Significant documentation is inaccessible.                                     |
-| `no-viable-path` diagnostic fires (see below)      | 39 (F) | Agents have no effective way to access content at all.                         |
+| Condition                                         | Cap    | Why                                                                            |
+| ------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| `llms-txt-exists` fails                           | 59 (D) | Agents lose primary navigation but may still use HTML/markdown paths directly. |
+| `rendering-strategy`: proportion ≤ 0.25           | 39 (F) | Most content is invisible to agents.                                           |
+| `rendering-strategy`: proportion ≤ 0.50           | 59 (D) | Significant content is invisible to agents.                                    |
+| `auth-gate-detection`: 75%+ of pages require auth | 39 (F) | Most documentation is inaccessible.                                            |
+| `auth-gate-detection`: 50%+ of pages require auth | 59 (D) | Significant documentation is inaccessible.                                     |
+| `no-viable-path` diagnostic fires (see below)     | 39 (F) | Agents have no effective way to access content at all.                         |
 
 When multiple caps apply, the lowest one wins.
+
+The `rendering-strategy` proportion is `(serverRendered + sparseContent × 0.5) / total`: empty SPA shells count fully against the proportion, while server-rendered-but-sparse pages count at half weight.
 
 The `rendering-strategy` and `auth-gate-detection` caps do not apply when the check has `scoreDisplayMode: "notApplicable"` (insufficient data). If we don't trust the data enough to include it in the score, we don't trust it enough to cap the score either.
 
@@ -292,7 +294,7 @@ If multiple conditions are met, the highest coefficient applies.
 
 **Affects**: `page-size-html`, `content-start-position`, `tabbed-content-serialization`, `section-header-quality`
 
-If pages are SPA shells, measuring HTML quality is meaningless. This coefficient equals the `rendering-strategy` check's proportion: if 90% of pages render correctly, these checks count for 90% of their weight.
+If pages are SPA shells, measuring HTML quality is meaningless; if pages are sparse, HTML quality counts for less because agents have less content to work with. This coefficient equals the same weighted proportion that drives the score caps above: `(serverRendered + sparseContent × 0.5) / total`. Fully server-rendered pages count for full weight, sparse pages count for half, and SPA shells count for nothing.
 
 ### Index truncation coefficient
 
