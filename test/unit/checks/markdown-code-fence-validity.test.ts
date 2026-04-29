@@ -96,6 +96,31 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.unclosedCount).toBe(1);
   });
 
+  it('does not treat a longer fence line carrying an info string as a closer', async () => {
+    // Per CommonMark §4.5, a closing fence "may not be followed by
+    // anything other than spaces and tabs" — i.e. it cannot have an
+    // info string. Inside an open fence, a longer line that looks like
+    // a fence opener (more backticks plus an info string) is just text,
+    // not a closer; the next bare matching fence line is the closer.
+    //
+    // Realistic case: a docs page explains fence syntax to readers, and
+    // its prose includes a line starting with four backticks as the
+    // illustrated syntax.
+    const md = [
+      '```', // opens the outer fence
+      'In GitHub-flavored markdown you can attach attributes to a fence:',
+      '````md filename="example.md"', // looks like a fence, but is prose inside the open fence
+      'The closing fence matches the opening fence length, with no info.',
+      '```', // closes the outer fence
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
   it('allows valid cross-type nesting (backtick fence containing tilde fence)', async () => {
     // A ``` fence can contain ~~~ fences because they are different delimiter types
     const md = [
