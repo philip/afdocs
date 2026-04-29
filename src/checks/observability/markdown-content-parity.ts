@@ -26,6 +26,9 @@ const STRIP_TAGS = [
   'button',
   'svg',
   'aside',
+  'select',
+  'input',
+  'textarea',
 ];
 
 /**

@@ -2020,6 +2020,68 @@ TLS certificates are verified by default to ensure secure communication channels
     expect(result.details?.segmentationElementsStripped).toBe(1);
   });
 
+  it('strips form-control chrome (select, input, textarea) before comparison', async () => {
+    const html = `<html><body><main>
+      <p>The greet helper takes a name and returns a friendly greeting string.</p>
+      <pre><code>greet('world')</code></pre>
+      <select><option value="js">JavaScript Source</option><option value="ts">TypeScript Source</option></select>
+      <p>Callers import the default export and invoke it with any string argument.</p>
+      <p>The implementation is intentionally minimal so that it has no runtime dependencies.</p>
+      <p>Concatenation uses the plus operator which works for any value coerced to a string.</p>
+      <p>The function returns a new string and never mutates the argument it receives.</p>
+      <p>Errors are not handled; passing undefined produces the string "hi undefined".</p>
+      <p>Tests cover the happy path and one edge case where the input is the empty string.</p>
+      <p>The module has no side effects so tree-shaking removes it when it is unused.</p>
+      <p>Bundlers see this as a pure ES module export and compile it without polyfills.</p>
+      <p>Documentation examples elsewhere on the site reuse this helper for brevity.</p>
+      <p>The greet helper is also re-exported from the package index for convenience.</p>
+    </main></body></html>`;
+
+    const markdown = `The greet helper takes a name and returns a friendly greeting string.
+
+\`\`\`js
+greet('world')
+\`\`\`
+
+Callers import the default export and invoke it with any string argument.
+
+The implementation is intentionally minimal so that it has no runtime dependencies.
+
+Concatenation uses the plus operator which works for any value coerced to a string.
+
+The function returns a new string and never mutates the argument it receives.
+
+Errors are not handled; passing undefined produces the string "hi undefined".
+
+Tests cover the happy path and one edge case where the input is the empty string.
+
+The module has no side effects so tree-shaking removes it when it is unused.
+
+Bundlers see this as a pure ES module export and compile it without polyfills.
+
+Documentation examples elsewhere on the site reuse this helper for brevity.
+
+The greet helper is also re-exported from the package index for convenience.`;
+
+    const url = 'http://mcp-form-controls.local/docs/greet';
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-form-controls.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
   it('uses configurable thresholds (0/0 = informational mode)', async () => {
     // Setting both thresholds to 0 means the check always passes,
     // making it informational for sites with intentional content divergence.
