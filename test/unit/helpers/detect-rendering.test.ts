@@ -157,6 +157,28 @@ describe('analyzeRendering', () => {
     expect(result.hasContent).toBe(false);
   });
 
+  it('passes for div-soup SSR site with substantial visible text but no semantic tags', () => {
+    // Simulates Archbee's Next.js renderer: __next marker, content wrapped in
+    // <div>/<span> rather than <p>/<main>/<h2>, but full prose is server-rendered.
+    const prose =
+      'Callout is your megaphone for shouting at someone. ' +
+      'Use it to highlight important information that readers should not miss. '.repeat(40);
+    const html =
+      '<html><body><div id="__next">' +
+      '<div><h1>Callout</h1></div>' +
+      '<div><span>' +
+      prose +
+      '</span></div>' +
+      '</div></body></html>';
+    const result = analyzeRendering(html);
+    expect(result.hasSpaMarkers).toBe(true);
+    expect(result.spaMarker).toBe('id="__next"');
+    expect(result.contentParagraphs).toBe(0);
+    expect(result.hasMainContent).toBe(false);
+    expect(result.visibleTextLength).toBeGreaterThanOrEqual(1500);
+    expect(result.hasContent).toBe(true);
+  });
+
   it('handles empty HTML', () => {
     const result = analyzeRendering('');
     expect(result.hasContent).toBe(true); // No SPA markers = assume content
