@@ -21,15 +21,17 @@ The rendering strategy is a property of the framework and its configuration, not
 
 ### Results
 
-| Result | Condition                                                                                                 |
-| ------ | --------------------------------------------------------------------------------------------------------- |
-| Pass   | Pages contain substantive server-rendered content (headings, prose, code blocks)                          |
-| Warn   | Some content present but sparse (possible partial hydration or lazy loading)                              |
-| Fail   | SPA shell detected (framework markers like `id="__next"`, minimal visible text, no page-specific content) |
+| Result | Condition                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Pass   | Pages contain substantive server-rendered content (headings, prose, code blocks)                                               |
+| Warn   | Pages render server-side but have unusually short body content (legitimately short pages, or partial hydration / lazy loading) |
+| Fail   | SPA shell detected (framework markers like `id="__next"`, minimal visible text, no page-specific content)                      |
+
+When the check warns, the [`sparse-content-html` diagnostic](/interaction-diagnostics#sparse-content-on-the-html-path) fires if more than 25% of sampled pages are sparse. When the check fails, the [`spa-shell-html-invalid` diagnostic](/interaction-diagnostics#spa-shells-invalidate-html-path) fires if more than 25% of sampled pages are actual shells.
 
 ### How to fix
 
-**If this check warns**, verify that key content is present in the server-rendered HTML response. Some pages may use component-level client rendering or lazy loading for specific sections.
+**If this check warns**, spot-check the affected pages by fetching them with `curl` or another HTTP client that doesn't run JavaScript. If the pages contain their full intended content, no action is needed; some pages are legitimately brief. If content is missing from the server response, the page may use component-level client rendering or lazy loading for specific sections.
 
 **If this check fails**, enable server-side rendering or static site generation in your docs platform. This is typically a configuration change, not a code rewrite.
 

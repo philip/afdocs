@@ -485,18 +485,45 @@ in dependency order: `markdown-undiscoverable` and
 #### `spa-shell-html-invalid`
 
 - **Severity**: info
-- **Triggers when**: `rendering-strategy` fails or warns (proportionally:
-  when >25% of sampled pages are SPA shells).
-- **Message**: {n} of {total} sampled pages use client-side rendering. Agents
-  receive an empty shell for these pages instead of documentation content.
-  Page size and content structure scores for the HTML path are discounted
-  because they are partially measuring shells rather than content.
+- **Triggers when**: `rendering-strategy` does not pass AND >25% of sampled
+  pages are detected as actual SPA shells (framework root element present,
+  no documentation content). Sparse-but-rendered pages do not contribute
+  to this trigger; they are reported separately by `sparse-content-html`.
+- **Message**: {n} of {total} sampled pages are client-side-rendered shells:
+  the HTML response contains a framework root element but no documentation
+  content. Agents using HTTP fetches receive empty pages. Page size and
+  content structure scores for the HTML path are discounted because they
+  are partially measuring shells rather than content.
   {If markdown-url-support passes: "Your markdown path still works for agents
   that can discover it."} {If not: "Agents currently have no alternative path
   to content on affected pages."}
 - **Resolution**: Enable server-side rendering or static generation for
   affected page types. If only specific page templates use client-side content
   loading, target those templates rather than rebuilding the entire site.
+
+#### `sparse-content-html`
+
+- **Severity**: info
+- **Triggers when**: `rendering-strategy` does not pass AND >25% of sampled
+  pages are sparse (server-rendered but with unusually short body content)
+  AND `spa-shell-html-invalid` did not fire. The shell diagnostic is the
+  bigger problem on mixed sites; this diagnostic is suppressed in that case
+  to avoid double-reporting.
+- **Message**: {n} of {total} sampled pages render server-side but have
+  unusually short body content. The HTML response contains real content
+  (headings and visible text), just less than the threshold for a full
+  documentation page. This is often legitimate (short reference pages,
+  integration one-liners, glossary entries), but can also indicate a
+  renderer that is not emitting full content. Page size scoring on the HTML
+  path is discounted for these pages.
+  {If markdown-url-support passes: "Your markdown path still works for agents
+  that can discover it."} {If not: "Agents have no alternative path on
+  affected pages, so any missing content is invisible."}
+- **Resolution**: Verify the affected pages render their full content
+  server-side. If the pages are intentionally brief, no action is needed;
+  this is informational. If content is missing, check whether your renderer
+  is emitting paragraphs, lists, and code blocks server-side rather than
+  hydrating them client-side.
 
 #### `no-viable-path`
 
