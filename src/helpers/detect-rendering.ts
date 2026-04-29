@@ -49,7 +49,14 @@ export function analyzeRendering(html: string): RenderingAnalysis {
   const root = parse(html);
   const body = root.querySelector('body') ?? root;
 
-  for (const el of body.querySelectorAll('script, style, noscript, svg')) {
+  // Strip non-content elements (scripts/styles) and chrome regions
+  // (nav/header/footer/aside + ARIA equivalents). Chrome must be excluded so
+  // visibleTextLength reflects actual content the agent sees, not menus and
+  // breadcrumbs that happen to be server-rendered on otherwise-empty shells.
+  for (const el of body.querySelectorAll(
+    'script, style, noscript, svg, nav, header, footer, aside, ' +
+      '[role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"]',
+  )) {
     el.remove();
   }
 
@@ -93,8 +100,13 @@ export function analyzeRendering(html: string): RenderingAnalysis {
   }
 
   // Determine if the page has real content
-  // A page has content if it has enough content signals, regardless of text ratio
+  // A page has content if it has enough content signals, regardless of text ratio.
+  // The visibleTextLength clause covers div-soup SSR (Next.js custom renderers,
+  // Archbee, etc.) where prose is wrapped in <div>/<span> rather than <p>/<main>.
+  // Threshold is applied after chrome stripping above, so nav/sidebar text on an
+  // otherwise-empty SPA shell does not satisfy it.
   const hasContent =
+    visibleTextLength >= 1500 ||
     contentHeadings >= 3 ||
     contentParagraphs >= 5 ||
     (hasMainContent && contentHeadings >= 1) ||
