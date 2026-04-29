@@ -1663,6 +1663,75 @@ No special tooling is required to create or maintain these index files for sites
     expect(pageResults[0].missingSegments).toBe(0);
   });
 
+  it('protects fenced code blocks with non-word info strings (filename, attributes)', async () => {
+    const html = `<html><body><main>
+      <p>The greet helper takes a name and returns a friendly greeting string.</p>
+      <pre><code>export default function greet(name) { return 'hi ' + name }</code></pre>
+      <p>Good to know: This value must be set at build time and cannot be changed afterwards.</p>
+      <pre><code>const x = 1</code></pre>
+      <p>Callers import the default export and invoke it with any string argument.</p>
+      <p>The implementation is intentionally minimal so that it has no runtime dependencies.</p>
+      <p>Concatenation uses the plus operator which works for any value coerced to a string.</p>
+      <p>The function returns a new string and never mutates the argument it receives.</p>
+      <p>Errors are not handled; passing undefined produces the string "hi undefined".</p>
+      <p>Tests cover the happy path and one edge case where the input is the empty string.</p>
+      <p>The module has no side effects so tree-shaking removes it when it is unused.</p>
+      <p>Bundlers see this as a pure ES module export and compile it without polyfills.</p>
+      <p>Documentation examples elsewhere on the site reuse this helper for brevity.</p>
+      <p>The greet helper is also re-exported from the package index for convenience.</p>
+    </main></body></html>`;
+
+    const markdown = `The greet helper takes a name and returns a friendly greeting string.
+
+\`\`\`js filename="src/index.js"
+export default function greet(name) { return 'hi ' + name }
+\`\`\`
+
+> **Good to know**: This value must be set at build time and cannot be changed afterwards.
+
+\`\`\`tsx {1,3-5} showLineNumbers title="example"
+const x = 1
+\`\`\`
+
+Callers import the default export and invoke it with any string argument.
+
+The implementation is intentionally minimal so that it has no runtime dependencies.
+
+Concatenation uses the plus operator which works for any value coerced to a string.
+
+The function returns a new string and never mutates the argument it receives.
+
+Errors are not handled; passing undefined produces the string "hi undefined".
+
+Tests cover the happy path and one edge case where the input is the empty string.
+
+The module has no side effects so tree-shaking removes it when it is unused.
+
+Bundlers see this as a pure ES module export and compile it without polyfills.
+
+Documentation examples elsewhere on the site reuse this helper for brevity.
+
+The greet helper is also re-exported from the package index for convenience.`;
+
+    const url = 'http://mcp-fence-attrs.local/docs/basepath';
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          }),
+      ),
+    );
+
+    const ctx = makeCtx([{ url, markdown, htmlBody: html }], 'mcp-fence-attrs.local');
+    const result = await check.run(ctx);
+    expect(result.status).toBe('pass');
+    const pageResults = result.details?.pageResults as Array<{ missingSegments: number }>;
+    expect(pageResults[0].missingSegments).toBe(0);
+  });
+
   it('handles double-backtick code spans containing literal backticks', async () => {
     // Markdown uses double-backtick delimiters to show literal triple backticks:
     // `` ``` `` renders as <code>```</code> in HTML
