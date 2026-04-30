@@ -205,6 +205,199 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('handles fences indented inside list items', async () => {
+    // Common docs pattern: a numbered/bulleted step contains a fenced code
+    // block, which the author indents to align with the list-item content
+    // column. Per CommonMark §4.5 the opener may itself be indented up to
+    // 3 spaces; the closer must be the same fence char and at least the
+    // same length, with up to 3 spaces of its own indent.
+    //
+    // Our regex caps fence indent at 3 spaces, but list-item content is
+    // typically indented 2-4 spaces. Real-world authoring tools (and the
+    // CommonMark reference parser) interpret a fence whose indent matches
+    // the list-item content column as a fence belonging to the list item.
+    //
+    // We don't model list structure, so we just need fences indented up to
+    // 3 spaces to be detected. Anything more deeply indented is treated as
+    // an indented code block (correct per spec).
+    const md = [
+      '1. First step:',
+      '',
+      '   ```bash',
+      '   echo "hello"',
+      '   ```',
+      '',
+      '2. Second step.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects fences inside two-digit ordered list items (4-space content column)', async () => {
+    // "10. " puts the list-item content column at 4. Per CommonMark, a fence
+    // inside that list item inherits the 4-space content indent — the fence
+    // line "    ```" is a fence, not an indented code block. Tutorial-style
+    // docs (e.g. multi-step procedures with 10+ steps) hit this regularly.
+    const md = [
+      '10. First step:',
+      '',
+      '    ```bash',
+      '    echo "hello"',
+      '    ```',
+      '',
+      '11. Second step.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects fences inside nested unordered list items', async () => {
+    // Outer list: content column 2. Inner nested list: content column 4.
+    // A fence inside the nested item inherits indent 4.
+    const md = [
+      '- Outer item:',
+      '  - Nested step:',
+      '',
+      '    ```js',
+      '    console.log("hi");',
+      '    ```',
+      '',
+      '- Another outer item.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects unclosed fence inside a deeply-indented list item', async () => {
+    // Inverse: a real authoring bug at 4-space indent should still be flagged.
+    const md = [
+      '10. First step:',
+      '',
+      '    ```bash',
+      '    echo "hello"',
+      '',
+      '11. Second step (fence above is unclosed).',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('fail');
+    expect(result.details?.unclosedCount).toBe(1);
+  });
+
+  it('still treats top-level 4-space-indented backticks as indented code blocks', async () => {
+    // Outside any list/blockquote context, a line with 4 spaces of indent is
+    // an indented code block per CommonMark §4.4 — not a fence. Don't let
+    // the list-aware widening introduce false positives here.
+    const md = [
+      'Some prose.',
+      '',
+      '    ```',
+      '    not a fence — this is an indented code block',
+      '    ```',
+      '',
+      'More prose.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(0);
+  });
+
+  it('accepts backticks in a backtick-fence info string (known minor divergence)', async () => {
+    // Per CommonMark §4.5, a backtick-fence opener's info string may not
+    // contain a backtick (otherwise the line is parsed as inline code, not
+    // a fence). We don't enforce this — we treat ```foo`bar as a valid
+    // opener. The failure mode is benign (we accept what CommonMark
+    // rejects) and the pattern is genuinely rare in real docs.
+    //
+    // Pin current behavior so any future change is deliberate.
+    const md = ['```foo`bar', 'content', '```'].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+  });
+
+  it('treats fences inside <details> HTML blocks as fences (GFM-compatible)', async () => {
+    // Strict CommonMark says a Type 6 HTML block (e.g. opened by <details>)
+    // doesn't parse markdown inside it, so ``` would be literal text. But
+    // GFM, MDX, and most docs renderers (including MongoDB's) DO parse
+    // markdown inside <details>, and authors rely on that. We follow GFM
+    // here: ``` inside <details> is a fence.
+    //
+    // Pin current behavior so a future "strict CommonMark" pass doesn't
+    // accidentally regress this.
+    const md = [
+      '<details>',
+      '<summary>Click me</summary>',
+      '',
+      '```js',
+      'console.log("inside details");',
+      '```',
+      '',
+      '</details>',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('does not treat tab-indented backticks as a fence (per CommonMark indent rules)', async () => {
+    // Per CommonMark §4.5, a fence may be indented 0-3 spaces. A leading tab
+    // expands to 4 spaces of indent, which exceeds the limit — making
+    // \t``` an indented code block, not a fence. This test pins the
+    // current (correct) behavior so a future regex relaxation can't
+    // silently start matching tab-indented fences.
+    const md = ['Some prose.', '', '\t```', '\tnot a fence', '\t```', '', 'More prose.'].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(0);
+  });
+
+  it('handles CRLF line endings (Windows-authored docs)', async () => {
+    // Docs authored on Windows or saved through CRLF-preserving tooling can
+    // arrive with \r\n line endings. The fence regex must still match, or
+    // we silently undercount fences and miss real unclosed-fence bugs.
+    const md = ['# Hello', '', '```js', 'console.log("hi");', '```', ''].join('\r\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects unclosed fences with CRLF line endings', async () => {
+    // Inverse of the previous test: an unclosed fence in CRLF content must
+    // still be flagged, not silently swallowed.
+    const md = ['# Hello', '', '```js', 'console.log("hi");', 'no closer'].join('\r\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('fail');
+    expect(result.details?.unclosedCount).toBe(1);
+  });
+
   it('handles nested-looking fences correctly', async () => {
     // A 4-backtick fence containing a 3-backtick fence
     const md = '# Hello\n\n````\n```\ninner\n```\n````\n';
