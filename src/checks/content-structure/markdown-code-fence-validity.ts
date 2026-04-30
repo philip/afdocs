@@ -65,6 +65,11 @@ function analyzeFences(content: string): { fenceCount: number; issues: FenceIssu
     }
   }
 
+  // Intentional divergence from CommonMark §4.5: the spec says an unclosed
+  // fence is implicitly closed at end of document. We flag it instead, since
+  // a missing closer in published docs is almost always an authoring bug
+  // (and the symptom — the rest of the page rendering as code — is exactly
+  // what this check exists to catch).
   if (openFence) {
     issues.push({
       line: openFence.line,
