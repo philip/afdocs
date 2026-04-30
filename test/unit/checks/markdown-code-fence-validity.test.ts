@@ -317,6 +317,49 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('accepts backticks in a backtick-fence info string (known minor divergence)', async () => {
+    // Per CommonMark §4.5, a backtick-fence opener's info string may not
+    // contain a backtick (otherwise the line is parsed as inline code, not
+    // a fence). We don't enforce this — we treat ```foo`bar as a valid
+    // opener. The failure mode is benign (we accept what CommonMark
+    // rejects) and the pattern is genuinely rare in real docs.
+    //
+    // Pin current behavior so any future change is deliberate.
+    const md = ['```foo`bar', 'content', '```'].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+  });
+
+  it('treats fences inside <details> HTML blocks as fences (GFM-compatible)', async () => {
+    // Strict CommonMark says a Type 6 HTML block (e.g. opened by <details>)
+    // doesn't parse markdown inside it, so ``` would be literal text. But
+    // GFM, MDX, and most docs renderers (including MongoDB's) DO parse
+    // markdown inside <details>, and authors rely on that. We follow GFM
+    // here: ``` inside <details> is a fence.
+    //
+    // Pin current behavior so a future "strict CommonMark" pass doesn't
+    // accidentally regress this.
+    const md = [
+      '<details>',
+      '<summary>Click me</summary>',
+      '',
+      '```js',
+      'console.log("inside details");',
+      '```',
+      '',
+      '</details>',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
   it('does not treat tab-indented backticks as a fence (per CommonMark indent rules)', async () => {
     // Per CommonMark §4.5, a fence may be indented 0-3 spaces. A leading tab
     // expands to 4 spaces of indent, which exceeds the limit — making
