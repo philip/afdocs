@@ -168,6 +168,7 @@ Some problems are severe enough that no amount of other good behavior should com
 | `auth-gate-detection`: 75%+ of pages require auth | 39 (F) | Most documentation is inaccessible.                                            |
 | `auth-gate-detection`: 50%+ of pages require auth | 59 (D) | Significant documentation is inaccessible.                                     |
 | `no-viable-path` diagnostic fires (see below)     | 39 (F) | Agents have no effective way to access content at all.                         |
+| `single-page-sample` diagnostic fires (see below) | 59 (D) | Too few pages discovered to produce a representative site-wide score.          |
 
 When multiple caps apply, the lowest one wins.
 
@@ -242,6 +243,8 @@ Some problems only become visible when you look at multiple checks together. The
 **Triggers when** automatic discovery (`random` or `deterministic` sampling) found fewer than 5 pages to test.
 
 **What it means**: Page-level category scores (page size, content structure, URL stability, etc.) are based on too few pages to be representative. These categories are marked as N/A in the score.
+
+**Score impact**: This diagnostic caps the score at 59 (D). With page-level checks excluded, the remaining signal is too narrow to support a higher grade.
 
 **What to do**: If your site has an llms.txt, ensure it contains working links so the tool can discover more pages. If testing a preview deployment, use `--canonical-origin` to rewrite cross-origin llms.txt links. You can also provide specific pages with `--urls`.
 
