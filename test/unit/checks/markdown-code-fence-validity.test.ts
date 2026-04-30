@@ -205,6 +205,20 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('does not treat tab-indented backticks as a fence (per CommonMark indent rules)', async () => {
+    // Per CommonMark §4.5, a fence may be indented 0-3 spaces. A leading tab
+    // expands to 4 spaces of indent, which exceeds the limit — making
+    // \t``` an indented code block, not a fence. This test pins the
+    // current (correct) behavior so a future regex relaxation can't
+    // silently start matching tab-indented fences.
+    const md = ['Some prose.', '', '\t```', '\tnot a fence', '\t```', '', 'More prose.'].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(0);
+  });
+
   it('handles CRLF line endings (Windows-authored docs)', async () => {
     // Docs authored on Windows or saved through CRLF-preserving tooling can
     // arrive with \r\n line endings. The fence regex must still match, or
