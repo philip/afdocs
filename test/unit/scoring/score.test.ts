@@ -212,6 +212,48 @@ describe('computeScore', () => {
     expect(score.overall).toBeLessThanOrEqual(39);
   });
 
+  it('applies single-page-sample cap at 59', () => {
+    // Reproduces the issue #73 scenario: llms.txt exists and is the right size,
+    // but is structurally invalid. With only 1 page discovered, page-level
+    // checks are excluded as notApplicable, leaving the raw score driven by a
+    // tiny subset of site-wide signal (the issue reported 81/B without a cap).
+    const results: CheckResult[] = [
+      makeResult('llms-txt-exists', 'content-discoverability', 'pass'),
+      makeResult('llms-txt-valid', 'content-discoverability', 'fail'),
+      makeResult('llms-txt-size', 'content-discoverability', 'pass'),
+    ];
+    const score = computeScore(
+      makeReport(results, { samplingStrategy: 'deterministic', testedPages: 1 }),
+    );
+    expect(score.diagnostics.find((d) => d.id === 'single-page-sample')).toBeDefined();
+    expect(score.cap).toBeDefined();
+    expect(score.cap!.cap).toBe(59);
+    expect(score.cap!.checkId).toBe('single-page-sample');
+    expect(score.overall).toBeLessThanOrEqual(59);
+  });
+
+  it('single-page-sample cap loses to no-viable-path cap', () => {
+    // Both diagnostics fire; lowest cap (no-viable-path at 39) should win.
+    // Pass enough site-level checks to push raw score above 39 so the cap is
+    // observable in scoreResult.cap.
+    const results: CheckResult[] = [
+      makeResult('llms-txt-exists', 'content-discoverability', 'fail'),
+      makeResult('rendering-strategy', 'page-size', 'skip'),
+      makeResult('markdown-url-support', 'markdown-availability', 'fail'),
+      makeResult('llms-txt-size', 'content-discoverability', 'pass'),
+      makeResult('auth-gate-detection', 'authentication', 'pass'),
+      makeResult('auth-alternative-access', 'authentication', 'pass'),
+    ];
+    const score = computeScore(
+      makeReport(results, { samplingStrategy: 'deterministic', testedPages: 1 }),
+    );
+    expect(score.diagnostics.find((d) => d.id === 'no-viable-path')).toBeDefined();
+    expect(score.diagnostics.find((d) => d.id === 'single-page-sample')).toBeDefined();
+    expect(score.cap).toBeDefined();
+    expect(score.cap!.cap).toBe(39);
+    expect(score.cap!.checkId).toBe('no-viable-path');
+  });
+
   it('does not apply cap when score is already below cap', () => {
     // All-fail scenario: raw score is 0, cap at 59 wouldn't reduce it
     const results: CheckResult[] = [
@@ -530,7 +572,8 @@ describe('computeScore', () => {
           failBucket: 1,
         }),
       ];
-      // With N/A: only llms-txt-exists counts (pass) -> 100
+      // With N/A: only llms-txt-exists counts (pass) — raw score 100, but
+      // single-page-sample cap pulls it to 59. Verify exclusion via checkScores.
       const scoreNA = computeScore(
         makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
       );
@@ -538,7 +581,8 @@ describe('computeScore', () => {
       const scoreNormal = computeScore(
         makeReport(results, { testedPages: 10, samplingStrategy: 'random' }),
       );
-      expect(scoreNA.overall).toBe(100);
+      expect(scoreNA.checkScores['page-size-html'].scoreDisplayMode).toBe('notApplicable');
+      expect(scoreNA.checkScores['llms-txt-exists'].scoreDisplayMode).toBe('numeric');
       expect(scoreNormal.overall).toBeLessThan(100);
     });
 
@@ -568,12 +612,14 @@ describe('computeScore', () => {
           spaShells: 1,
         }),
       ];
-      // With N/A: rendering-strategy is notApplicable, cap should NOT fire
+      // With N/A: rendering-strategy is notApplicable, so its cap should NOT
+      // fire. (single-page-sample's own 59 cap may still apply, but we're
+      // asserting that the rendering-strategy cap specifically doesn't.)
       const scoreNA = computeScore(
         makeReport(results, { testedPages: 1, samplingStrategy: 'random' }),
       );
       expect(scoreNA.checkScores['rendering-strategy'].scoreDisplayMode).toBe('notApplicable');
-      expect(scoreNA.cap).toBeUndefined();
+      expect(scoreNA.cap?.checkId).not.toBe('rendering-strategy');
 
       // Without N/A: same data, cap SHOULD fire
       const scoreNormal = computeScore(

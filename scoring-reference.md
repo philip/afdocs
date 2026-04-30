@@ -282,6 +282,16 @@ capped at 39 (F). A site where agents have no effective way to access content
 should not score above F regardless of how well the infrastructure checks
 perform.
 
+### Diagnostic-Driven Cap: `single-page-sample`
+
+When the `single-page-sample` diagnostic fires (fewer than
+`MIN_PAGES_FOR_SCORING` pages discovered via random/deterministic sampling),
+all page-level checks are marked `notApplicable` and excluded from scoring.
+The remaining numerator/denominator can produce a misleadingly high overall
+score from a tiny subset of site-wide signal (typically just the llms.txt
+structural checks). To prevent this, the overall score is capped at 59 (D)
+when this diagnostic fires.
+
 When multiple caps apply, the lowest cap wins.
 
 The cap is applied **after** the weighted score calculation but diagnostics
@@ -592,6 +602,9 @@ in dependency order: `markdown-undiscoverable` and
   links so the tool can discover more pages. If testing a preview deployment,
   use --canonical-origin to rewrite cross-origin llms.txt links. You can also
   provide specific pages with --urls.
+- **Score cap**: When this diagnostic fires, the overall score is capped at
+  59 (D). See "Diagnostic-Driven Cap: `single-page-sample`" in the Score Caps
+  section.
 
 #### `cross-origin-llms-txt`
 

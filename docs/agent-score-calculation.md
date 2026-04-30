@@ -147,14 +147,15 @@ Two checks have no warn state and are strictly pass/fail: `http-status-codes` an
 
 Some problems are severe enough that no amount of other passing checks should compensate. When AFDocs detects a critical issue, we cap the score regardless of how well everything else performs.
 
-| Condition                                                                             | Cap    | Why                                                    |
-| ------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
-| `llms-txt-exists` fails                                                               | 59 (D) | Agents lose their primary navigation mechanism.        |
-| `rendering-strategy`: proportion ≤ 0.25                                               | 39 (F) | Most content is invisible to agents.                   |
-| `rendering-strategy`: proportion ≤ 0.50                                               | 59 (D) | Significant content is invisible.                      |
-| `auth-gate-detection`: 75%+ pages gated                                               | 39 (F) | Most documentation is inaccessible.                    |
-| `auth-gate-detection`: 50%+ pages gated                                               | 59 (D) | Significant documentation is inaccessible.             |
-| [No viable path](/interaction-diagnostics#no-viable-path-to-content) diagnostic fires | 39 (F) | Agents have no effective way to access content at all. |
+| Condition                                                                             | Cap    | Why                                                         |
+| ------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| `llms-txt-exists` fails                                                               | 59 (D) | Agents lose their primary navigation mechanism.             |
+| `rendering-strategy`: proportion ≤ 0.25                                               | 39 (F) | Most content is invisible to agents.                        |
+| `rendering-strategy`: proportion ≤ 0.50                                               | 59 (D) | Significant content is invisible.                           |
+| `auth-gate-detection`: 75%+ pages gated                                               | 39 (F) | Most documentation is inaccessible.                         |
+| `auth-gate-detection`: 50%+ pages gated                                               | 59 (D) | Significant documentation is inaccessible.                  |
+| [No viable path](/interaction-diagnostics#no-viable-path-to-content) diagnostic fires | 39 (F) | Agents have no effective way to access content at all.      |
+| [Single-page sample](/interaction-diagnostics#single-page-sample) diagnostic fires    | 59 (D) | Too few pages discovered to produce a representative score. |
 
 When multiple caps apply, the lowest one wins.
 
@@ -169,6 +170,7 @@ When automatic page discovery finds fewer than 5 pages (using `random` or `deter
 - **Page-level checks** (those that test sampled pages like `page-size-html`, `rendering-strategy`, `http-status-codes`, etc.) are marked as "not applicable" and excluded from the score.
 - **Site-level checks** (llms.txt checks, coverage, auth-alternative-access) are scored normally.
 - **Category scores** where all checks are not applicable display as a dash instead of a number.
+- **The overall score is capped at 59 (D)**, since the remaining numerator covers only a narrow slice of site-wide signal and shouldn't drive a higher grade on its own.
 
 This typically happens when a site has no llms.txt or its llms.txt links point to a different origin (common with preview deployments). A [`single-page-sample` diagnostic](/interaction-diagnostics#single-page-sample) fires to explain the situation.
 

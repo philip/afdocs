@@ -208,6 +208,16 @@ function computeCap(
     });
   }
 
+  // Single-page sample: page-level checks were marked notApplicable, so the
+  // remaining score reflects only a tiny subset of site-wide signal.
+  if (triggeredDiagnostics.has('single-page-sample')) {
+    caps.push({
+      cap: 59,
+      checkId: 'single-page-sample',
+      reason: 'Too few pages discovered to produce a representative score.',
+    });
+  }
+
   if (caps.length === 0) return undefined;
 
   // Lowest cap wins

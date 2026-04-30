@@ -94,7 +94,7 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 This diagnostic does not fire when you explicitly choose pages with `--urls`, `--sampling curated`, or `--sampling none`.
 
-**Score impact**: Page-level checks are excluded from the overall score and their categories show as N/A. Only site-level checks (llms.txt checks, coverage, auth-alternative-access) contribute to the score.
+**Score impact**: Page-level checks are excluded from the overall score and their categories show as N/A. Only site-level checks (llms.txt checks, coverage, auth-alternative-access) contribute to the score, and the overall score is capped at 59 (D) so a narrow signal can't produce a misleadingly high grade.
 
 ## All llms.txt links are cross-origin
 
