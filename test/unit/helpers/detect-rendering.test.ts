@@ -179,6 +179,53 @@ describe('analyzeRendering', () => {
     expect(result.hasContent).toBe(true);
   });
 
+  it('passes for div-soup SSR site with a short but real doc page (heading + ~500-1500 chars)', () => {
+    // Simulates Archbee's short integration/explainer pages: __next marker,
+    // single H1, prose wrapped in <div>/<span> rather than <p>, body length
+    // well below the 1500-char wall-of-text threshold but well above an
+    // empty shell. Pages like this ("what is Loom and how to embed it",
+    // "Branches & Reviews", "Figma") are fully server-rendered with real
+    // content; they're just brief.
+    const prose =
+      'Loom is a video messaging tool that lets users record their screen ' +
+      'and camera at the same time. Embed a Loom recording in any Archbee ' +
+      'document by pasting the share URL into a code block. Loom embeds ' +
+      'are useful for onboarding flows, demos, and how-to walkthroughs ' +
+      'where a written explanation alone would be hard to follow. ';
+    const html =
+      '<html><body><div id="__next">' +
+      '<div><h1>Loom</h1></div>' +
+      '<div><span>' +
+      prose.repeat(2) +
+      '</span></div>' +
+      '</div></body></html>';
+    const result = analyzeRendering(html);
+    expect(result.hasSpaMarkers).toBe(true);
+    expect(result.contentHeadings).toBe(1);
+    expect(result.contentParagraphs).toBe(0);
+    expect(result.hasMainContent).toBe(false);
+    expect(result.visibleTextLength).toBeGreaterThanOrEqual(500);
+    expect(result.visibleTextLength).toBeLessThan(1500);
+    expect(result.hasContent).toBe(true);
+  });
+
+  it('still fails for a near-empty SPA shell that has just an H1 and almost no body text', () => {
+    // Guards against the new heading+500-char clause being too permissive.
+    // A real short doc page has at least a few hundred characters of prose;
+    // a true shell with only a server-rendered title and no body should
+    // still fail.
+    const html =
+      '<html><body><div id="__next">' +
+      '<h1>Loading...</h1>' +
+      '<div></div>' +
+      '</div></body></html>';
+    const result = analyzeRendering(html);
+    expect(result.hasSpaMarkers).toBe(true);
+    expect(result.contentHeadings).toBe(1);
+    expect(result.visibleTextLength).toBeLessThan(500);
+    expect(result.hasContent).toBe(false);
+  });
+
   it('handles empty HTML', () => {
     const result = analyzeRendering('');
     expect(result.hasContent).toBe(true); // No SPA markers = assume content

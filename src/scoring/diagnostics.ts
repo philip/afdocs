@@ -115,16 +115,18 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
       const spaShells = (d.spaShells as number) ?? 0;
       const sparseContent = (d.sparseContent as number) ?? 0;
       const total = ((d.serverRendered as number) ?? 0) + sparseContent + spaShells;
-      // Trigger when >25% of pages are SPA shells or sparse
-      return total > 0 && (spaShells + sparseContent) / total > 0.25;
+      // Trigger when >25% of pages are actual SPA shells (empty body post-fetch).
+      // Sparse-but-rendered pages are handled by `sparse-content-html` instead;
+      // conflating the two produced false-positive "client-side rendering"
+      // accusations on sites whose pages are server-rendered but legitimately short.
+      return total > 0 && spaShells / total > 0.25;
     },
     message: (results) => {
       const rs = results.get('rendering-strategy');
       const d = rs?.details;
       const spaShells = (d?.spaShells as number) ?? 0;
       const sparseContent = (d?.sparseContent as number) ?? 0;
-      const affected = spaShells + sparseContent;
-      const total = ((d?.serverRendered as number) ?? 0) + affected;
+      const total = ((d?.serverRendered as number) ?? 0) + sparseContent + spaShells;
 
       const mdSupport = results.get('markdown-url-support');
       const mdNote =
@@ -133,17 +135,71 @@ const DIAGNOSTIC_DEFINITIONS: DiagnosticDefinition[] = [
           : ' Agents currently have no alternative path to content on affected pages.';
 
       return (
-        `${affected} of ${total} sampled pages use client-side rendering. ` +
-        'Agents receive an empty shell for these pages instead of ' +
-        'documentation content. Page size and content structure scores for ' +
-        'the HTML path are discounted because they are partially measuring ' +
-        `shells rather than content.${mdNote}`
+        `${spaShells} of ${total} sampled pages are client-side-rendered ` +
+        'shells: the HTML response contains a framework root element but no ' +
+        'documentation content. Agents using HTTP fetches receive empty pages. ' +
+        'Page size and content structure scores for the HTML path are ' +
+        `discounted because they are partially measuring shells rather than content.${mdNote}`
       );
     },
     resolution:
       'Enable server-side rendering or static generation for affected page ' +
       'types. If only specific page templates use client-side content ' +
       'loading, target those templates rather than rebuilding the entire site.',
+  },
+
+  {
+    id: 'sparse-content-html',
+    severity: 'info',
+    triggers: (results, triggered) => {
+      const rs = results.get('rendering-strategy');
+      if (!rs || rs.status === 'pass' || rs.status === 'skip') return false;
+
+      const d = rs.details;
+      if (!d) return false;
+
+      const spaShells = (d.spaShells as number) ?? 0;
+      const sparseContent = (d.sparseContent as number) ?? 0;
+      const total = ((d.serverRendered as number) ?? 0) + sparseContent + spaShells;
+      if (total === 0) return false;
+
+      // Fire when sparse pages are common AND shells aren't the dominant story.
+      // If `spa-shell-html-invalid` already fired, suppress this one to avoid
+      // double-reporting on mixed sites — the shell diagnostic is the bigger
+      // problem and the resolution covers both.
+      if (triggered.has('spa-shell-html-invalid')) return false;
+      return sparseContent / total > 0.25;
+    },
+    message: (results) => {
+      const rs = results.get('rendering-strategy');
+      const d = rs?.details;
+      const spaShells = (d?.spaShells as number) ?? 0;
+      const sparseContent = (d?.sparseContent as number) ?? 0;
+      const total = ((d?.serverRendered as number) ?? 0) + sparseContent + spaShells;
+
+      const mdSupport = results.get('markdown-url-support');
+      const mdNote =
+        mdSupport?.status === 'pass'
+          ? ' Your markdown path still works for agents that can discover it.'
+          : ' Agents have no alternative path on affected pages, so any missing content is invisible.';
+
+      return (
+        `${sparseContent} of ${total} sampled pages render server-side but ` +
+        'have unusually short body content. The HTML response contains real ' +
+        'content (headings and visible text), just less than the threshold ' +
+        'for a full documentation page. This is often legitimate (short ' +
+        'reference pages, integration one-liners, glossary entries), but ' +
+        'can also indicate a renderer that is not emitting full content. ' +
+        'Page size scoring on the HTML path is discounted for these ' +
+        `pages.${mdNote}`
+      );
+    },
+    resolution:
+      'Verify the affected pages render their full content server-side. If ' +
+      'the pages are intentionally brief, no action is needed; this is ' +
+      'informational. If content is missing, check whether your renderer ' +
+      'is emitting paragraphs, lists, and code blocks server-side rather ' +
+      'than hydrating them client-side.',
   },
 
   {

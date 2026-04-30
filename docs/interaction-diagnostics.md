@@ -36,13 +36,23 @@ These diagnostics appear in the "Interaction Diagnostics" section of the `--form
 
 ## SPA shells invalidate HTML path
 
-**Triggers when** more than 25% of sampled pages use client-side rendering (the `rendering-strategy` check warns or fails).
+**Triggers when** more than 25% of sampled pages are detected as actual SPA shells: pages where the HTML response contains a framework root element (such as `id="__next"` or `id="root"`) but no documentation content.
 
 **What it means**: When humans visit the page in a browser, JavaScript loads the content. Agents don't visit a page in a browser, so they never see the content, only the shell. Page size and content structure scores for the HTML path are discounted because they're partially measuring shells, not actual content.
 
 **What to do**: Enable server-side rendering or static generation for documentation pages. If only specific page templates use client-side content loading, target those templates. The [rendering-strategy check](/checks/page-size#rendering-strategy) explains how AFDocs detects SPA shells.
 
 **Score impact**: The HTML path coefficient scales `page-size-html`, `content-start-position`, `tabbed-content-serialization`, and `section-header-quality` in proportion to the fraction of pages that render correctly. If 60% of pages are SPA shells, these checks count for 40% of their weight. At 50%+ SPA shells, the overall score is also [capped at D or F](/agent-score-calculation#score-caps).
+
+## Sparse content on the HTML path
+
+**Triggers when** more than 25% of sampled pages render server-side but have unusually short body content, AND the SPA-shells diagnostic is not also firing. (When both conditions hold, the SPA-shells diagnostic takes precedence to avoid double-reporting; its resolution covers both.)
+
+**What it means**: The HTML response contains real content (headings and visible text) but less than the threshold for a typical documentation page. This is often legitimate (short reference pages, integration one-liners, glossary entries) and not actually a problem. It can also indicate a renderer that hydrates paragraphs, lists, or code blocks client-side rather than emitting them in the initial HTML, in which case agents would miss the hydrated content.
+
+**What to do**: Spot-check a few of the affected pages by fetching them with `curl` (or any HTTP client that doesn't run JavaScript) and confirm the full content is present. If the pages are intentionally brief, no action is needed. If content is missing from the server response, investigate your renderer's server-side output for paragraphs, lists, and code blocks.
+
+**Score impact**: The HTML path coefficient is discounted for sparse pages at half the rate of full SPA shells. Sparse pages do not contribute to the score cap.
 
 ## No viable path to content
 

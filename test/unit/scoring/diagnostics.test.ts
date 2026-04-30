@@ -152,6 +152,34 @@ describe('diagnostics', () => {
       expect(diags.find((d) => d.id === 'spa-shell-html-invalid')).toBeUndefined();
     });
 
+    it('does not trigger when only sparse content is present (no shells)', () => {
+      // Archbee-style site: server-rendered short pages that the heuristic
+      // classifies as sparse but no actual shells.
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 36,
+          sparseContent: 32,
+          spaShells: 0,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'spa-shell-html-invalid')).toBeUndefined();
+    });
+
+    it('does not trigger when sparse content is dominant but shells are below threshold', () => {
+      // 1 shell out of 20 = 5%, below 25% threshold — should not fire as
+      // shell diagnostic even though sparse-content-html will fire.
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 5,
+          sparseContent: 14,
+          spaShells: 1,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'spa-shell-html-invalid')).toBeUndefined();
+    });
+
     it('includes markdown note when available', () => {
       const results = resultsMap(
         r('rendering-strategy', 'fail', {
@@ -164,6 +192,134 @@ describe('diagnostics', () => {
       const diags = evaluateDiagnostics(results, defaultReport());
       const diag = diags.find((d) => d.id === 'spa-shell-html-invalid');
       expect(diag!.message).toContain('markdown path still works');
+    });
+
+    it('describes shells specifically rather than client-side rendering generally', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'fail', {
+          serverRendered: 5,
+          sparseContent: 0,
+          spaShells: 15,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'spa-shell-html-invalid');
+      expect(diag!.message).toContain('client-side-rendered shells');
+      expect(diag!.message).toContain('15 of 20');
+    });
+  });
+
+  describe('sparse-content-html', () => {
+    it('triggers when >25% of pages are sparse and no shells are present', () => {
+      // Archbee-style: server-rendered short pages
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 36,
+          sparseContent: 32,
+          spaShells: 0,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'sparse-content-html');
+      expect(diag).toBeDefined();
+      expect(diag!.severity).toBe('info');
+      expect(diag!.message).toContain('32 of 68');
+    });
+
+    it('does not accuse the site of client-side rendering', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 36,
+          sparseContent: 32,
+          spaShells: 0,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'sparse-content-html');
+      expect(diag!.message).toContain('render server-side');
+      expect(diag!.message).not.toContain('use client-side rendering');
+      expect(diag!.message).not.toContain('empty shell');
+    });
+
+    it('does not trigger when rendering-strategy passes', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'pass', {
+          serverRendered: 20,
+          sparseContent: 0,
+          spaShells: 0,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'sparse-content-html')).toBeUndefined();
+    });
+
+    it('does not trigger when sparse count is below threshold', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 18,
+          sparseContent: 2,
+          spaShells: 0,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'sparse-content-html')).toBeUndefined();
+    });
+
+    it('is suppressed when spa-shell-html-invalid already fired', () => {
+      // Mixed case: both shells and sparse over threshold. Shell diagnostic
+      // is the bigger problem; sparse is suppressed to avoid double-reporting.
+      const results = resultsMap(
+        r('rendering-strategy', 'fail', {
+          serverRendered: 3,
+          sparseContent: 5,
+          spaShells: 5,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'spa-shell-html-invalid')).toBeDefined();
+      expect(diags.find((d) => d.id === 'sparse-content-html')).toBeUndefined();
+    });
+
+    it('fires when sparse dominates and shells are below threshold', () => {
+      // 1 shell out of 20 = 5%, below 25%. Sparse diagnostic should fire alone.
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 5,
+          sparseContent: 14,
+          spaShells: 1,
+        }),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      expect(diags.find((d) => d.id === 'spa-shell-html-invalid')).toBeUndefined();
+      expect(diags.find((d) => d.id === 'sparse-content-html')).toBeDefined();
+    });
+
+    it('includes markdown note when markdown path is available', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 36,
+          sparseContent: 32,
+          spaShells: 0,
+        }),
+        r('markdown-url-support', 'pass'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'sparse-content-html');
+      expect(diag!.message).toContain('markdown path still works');
+    });
+
+    it('notes no alternative path when markdown unavailable', () => {
+      const results = resultsMap(
+        r('rendering-strategy', 'warn', {
+          serverRendered: 36,
+          sparseContent: 32,
+          spaShells: 0,
+        }),
+        r('markdown-url-support', 'fail'),
+      );
+      const diags = evaluateDiagnostics(results, defaultReport());
+      const diag = diags.find((d) => d.id === 'sparse-content-html');
+      expect(diag!.message).toContain('no alternative path');
     });
   });
 
