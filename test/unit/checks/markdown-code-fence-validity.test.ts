@@ -205,6 +205,118 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('handles fences indented inside list items', async () => {
+    // Common docs pattern: a numbered/bulleted step contains a fenced code
+    // block, which the author indents to align with the list-item content
+    // column. Per CommonMark §4.5 the opener may itself be indented up to
+    // 3 spaces; the closer must be the same fence char and at least the
+    // same length, with up to 3 spaces of its own indent.
+    //
+    // Our regex caps fence indent at 3 spaces, but list-item content is
+    // typically indented 2-4 spaces. Real-world authoring tools (and the
+    // CommonMark reference parser) interpret a fence whose indent matches
+    // the list-item content column as a fence belonging to the list item.
+    //
+    // We don't model list structure, so we just need fences indented up to
+    // 3 spaces to be detected. Anything more deeply indented is treated as
+    // an indented code block (correct per spec).
+    const md = [
+      '1. First step:',
+      '',
+      '   ```bash',
+      '   echo "hello"',
+      '   ```',
+      '',
+      '2. Second step.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects fences inside two-digit ordered list items (4-space content column)', async () => {
+    // "10. " puts the list-item content column at 4. Per CommonMark, a fence
+    // inside that list item inherits the 4-space content indent — the fence
+    // line "    ```" is a fence, not an indented code block. Tutorial-style
+    // docs (e.g. multi-step procedures with 10+ steps) hit this regularly.
+    const md = [
+      '10. First step:',
+      '',
+      '    ```bash',
+      '    echo "hello"',
+      '    ```',
+      '',
+      '11. Second step.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects fences inside nested unordered list items', async () => {
+    // Outer list: content column 2. Inner nested list: content column 4.
+    // A fence inside the nested item inherits indent 4.
+    const md = [
+      '- Outer item:',
+      '  - Nested step:',
+      '',
+      '    ```js',
+      '    console.log("hi");',
+      '    ```',
+      '',
+      '- Another outer item.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects unclosed fence inside a deeply-indented list item', async () => {
+    // Inverse: a real authoring bug at 4-space indent should still be flagged.
+    const md = [
+      '10. First step:',
+      '',
+      '    ```bash',
+      '    echo "hello"',
+      '',
+      '11. Second step (fence above is unclosed).',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('fail');
+    expect(result.details?.unclosedCount).toBe(1);
+  });
+
+  it('still treats top-level 4-space-indented backticks as indented code blocks', async () => {
+    // Outside any list/blockquote context, a line with 4 spaces of indent is
+    // an indented code block per CommonMark §4.4 — not a fence. Don't let
+    // the list-aware widening introduce false positives here.
+    const md = [
+      'Some prose.',
+      '',
+      '    ```',
+      '    not a fence — this is an indented code block',
+      '    ```',
+      '',
+      'More prose.',
+    ].join('\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(0);
+  });
+
   it('does not treat tab-indented backticks as a fence (per CommonMark indent rules)', async () => {
     // Per CommonMark §4.5, a fence may be indented 0-3 spaces. A leading tab
     // expands to 4 spaces of indent, which exceeds the limit — making
