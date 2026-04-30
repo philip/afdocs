@@ -29,7 +29,10 @@ function stripBlockquotePrefix(line: string): string {
 const FENCE_RE = /^( {0,3})((`{3,})|(~{3,}))(.*)?$/;
 
 function analyzeFences(content: string): { fenceCount: number; issues: FenceIssue[] } {
-  const lines = content.split('\n');
+  // Normalize CRLF/CR to LF so the fence regex's `$` anchor matches on
+  // Windows-authored docs. Without this, lines retain a trailing `\r`,
+  // FENCE_RE fails to match, and we silently undercount fences.
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const issues: FenceIssue[] = [];
   let fenceCount = 0;
   let openFence: { line: number; char: string; length: number } | null = null;

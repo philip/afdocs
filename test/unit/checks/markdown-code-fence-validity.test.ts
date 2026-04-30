@@ -205,6 +205,30 @@ describe('markdown-code-fence-validity', () => {
     expect(result.details?.totalFences).toBe(0);
   });
 
+  it('handles CRLF line endings (Windows-authored docs)', async () => {
+    // Docs authored on Windows or saved through CRLF-preserving tooling can
+    // arrive with \r\n line endings. The fence regex must still match, or
+    // we silently undercount fences and miss real unclosed-fence bugs.
+    const md = ['# Hello', '', '```js', 'console.log("hi");', '```', ''].join('\r\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('pass');
+    expect(result.details?.totalFences).toBe(1);
+    expect(result.details?.unclosedCount).toBe(0);
+  });
+
+  it('detects unclosed fences with CRLF line endings', async () => {
+    // Inverse of the previous test: an unclosed fence in CRLF content must
+    // still be flagged, not silently swallowed.
+    const md = ['# Hello', '', '```js', 'console.log("hi");', 'no closer'].join('\r\n');
+    const result = await check.run(
+      makeCtx([{ url: 'http://test.local/page1', content: md, source: 'md-url' }]),
+    );
+    expect(result.status).toBe('fail');
+    expect(result.details?.unclosedCount).toBe(1);
+  });
+
   it('handles nested-looking fences correctly', async () => {
     // A 4-backtick fence containing a 3-backtick fence
     const md = '# Hello\n\n````\n```\ninner\n```\n````\n';
