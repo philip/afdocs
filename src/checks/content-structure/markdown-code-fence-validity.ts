@@ -45,17 +45,18 @@ function analyzeFences(content: string): { fenceCount: number; issues: FenceIssu
 
     const char = match[3] ? '`' : '~';
     const length = (match[3] || match[4]).length;
+    const info = (match[5] || '').trim();
 
     if (!openFence) {
       // Opening fence
       openFence = { line: i + 1, char, length };
       fenceCount++;
     } else {
-      // Potential closing fence: must use same char and be at least as long.
-      // Per CommonMark spec, backtick fences are only closed by backtick fences
-      // and tilde fences are only closed by tilde fences. A different delimiter
-      // type is just content inside the fence, not a closer.
-      if (char === openFence.char && length >= openFence.length) {
+      // Potential closing fence: must use same char, be at least as long,
+      // and per CommonMark §4.5 "may not be followed by anything other than
+      // spaces and tabs" — a fence line carrying an info string is content,
+      // not a closer. Different delimiter types are also just content.
+      if (char === openFence.char && length >= openFence.length && info === '') {
         openFence = null;
       }
     }
